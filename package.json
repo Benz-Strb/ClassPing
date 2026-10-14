@@ -1,0 +1,30 @@
+{
+  "name": "classping",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "dev:web": "npm run dev --workspace @classping/web",
+    "dev:api": "PORT=3001 npm run start:dev --workspace @classping/api",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "redis:up": "docker compose up -d redis",
+    "redis:down": "docker compose down",
+    "dev:mobile": "npm run start --workspace @classping/mobile",
+    "mobile:android": "npm run android --workspace @classping/mobile",
+    "mobile:ios": "npm run ios --workspace @classping/mobile",
+    "typecheck:mobile": "npm run typecheck --workspace @classping/mobile"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2"
+  }
+}
