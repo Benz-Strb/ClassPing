@@ -13,6 +13,14 @@ import { UsersService } from '../users/users.service.js';
 import { IS_PUBLIC_KEY } from './auth.decorators.js';
 import { classifyEmail } from './role-from-email.js';
 
+interface GoogleIdentityData {
+  email?: string;
+  email_verified?: boolean;
+  full_name?: string;
+  name?: string;
+  custom_claims?: { hd?: string };
+}
+
 interface AuthRequest {
   headers: Record<string, string | undefined>;
   user?: unknown;
@@ -45,11 +53,22 @@ export class AuthGuard implements CanActivate {
     if (scheme !== 'Bearer' || !token) throw unauthorized();
 
     const authUser = await this.verify(token);
+    const google = this.googleIdentity(authUser);
 
-    // เชื่อเมลเฉพาะที่ Google ยืนยันแล้ว กันคนสมัครด้วยรหัสผ่านโดยใช้เมลคนอื่น
-    // (เช่นสมัครด้วยเมลแอดมินเพื่อเอาสิทธิ์แอดมิน)
-    const provider = (authUser.app_metadata as { provider?: string }).provider;
-    if (provider !== 'google' || !authUser.email_confirmed_at) {
+    req.user = await this.users.ensureUser({
+      id: authUser.id,
+      email: google.email,
+      fullName: google.full_name ?? google.name ?? null,
+    });
+    return true;
+  }
+
+  // เชื่อเมลจากข้อมูลที่ Google ยืนยันมาเท่านั้น ไม่ใช้ authUser.email
+  // เพราะผู้ใช้เปลี่ยนเองได้ด้วย updateUser และกันคนสมัครด้วยรหัสผ่านโดยใช้เมลคนอื่น
+  private googleIdentity(authUser: User): GoogleIdentityData & { email: string } {
+    const data = authUser.identities?.find((i) => i.provider === 'google')
+      ?.identity_data as GoogleIdentityData | undefined;
+    if (!data?.email || data.email_verified !== true) {
       throw new AppError(
         403,
         'PROVIDER_NOT_ALLOWED',
@@ -57,17 +76,14 @@ export class AuthGuard implements CanActivate {
       );
     }
 
-    if (!classifyEmail(authUser.email ?? '', this.config.adminEmails)) {
+    // hd มาจาก Google เฉพาะบัญชีใน Workspace ของมหาลัย
+    if (
+      data.custom_claims?.hd !== 'dpu.ac.th' ||
+      !classifyEmail(data.email, this.config.adminEmails)
+    ) {
       throw new AppError(403, 'DOMAIN_NOT_ALLOWED', 'ใช้ได้เฉพาะเมล @dpu.ac.th');
     }
-
-    const meta = authUser.user_metadata as { full_name?: string; name?: string };
-    req.user = await this.users.ensureUser({
-      id: authUser.id,
-      email: authUser.email!,
-      fullName: meta.full_name ?? meta.name ?? null,
-    });
-    return true;
+    return { ...data, email: data.email };
   }
 
   private async verify(token: string): Promise<User> {

@@ -40,14 +40,38 @@ const users = {
 
 const config = { adminEmails: [] } as unknown as AppConfig;
 
+// รูปร่างเหมือนข้อมูลจริงที่ Supabase คืนมาหลัง login ด้วย Google Workspace
+const googleIdentity = (email: string, identityData: Record<string, unknown> = {}) => ({
+  provider: 'google',
+  identity_data: {
+    email,
+    email_verified: true,
+    full_name: 'ณัฐวุฒิ',
+    custom_claims: { hd: email.split('@')[1] },
+    ...identityData,
+  },
+});
+
 const googleUser = (email: string, extra: Record<string, unknown> = {}) => ({
   id: 'u1',
   email,
   email_confirmed_at: '2026-10-17T00:00:00Z',
   app_metadata: { provider: 'google', providers: ['google'] },
   user_metadata: {},
+  identities: [googleIdentity(email)],
   ...extra,
 });
+
+function recordingUsers() {
+  const calls: unknown[] = [];
+  const service = {
+    ensureUser: async (input: unknown) => {
+      calls.push(input);
+      return student;
+    },
+  } as unknown as UsersService;
+  return { service, calls };
+}
 
 const okUser = (email: string) => async () => ({
   data: { user: googleUser(email) },
@@ -106,6 +130,7 @@ describe('AuthGuard', () => {
         data: {
           user: googleUser('66112106@dpu.ac.th', {
             app_metadata: { provider: 'email', providers: ['email'] },
+            identities: [{ provider: 'email', identity_data: { email: '66112106@dpu.ac.th' } }],
           }),
         },
         error: null,
@@ -118,11 +143,15 @@ describe('AuthGuard', () => {
     ).toEqual({ status: 403, code: 'PROVIDER_NOT_ALLOWED' });
   });
 
-  it('บัญชีที่เมลยังไม่ยืนยันได้ 403', async () => {
+  it('เมลใน Google identity ที่ Google ยังไม่ยืนยันได้ 403', async () => {
     const guard = new AuthGuard(
       reflector(),
       db(async () => ({
-        data: { user: googleUser('66112106@dpu.ac.th', { email_confirmed_at: null }) },
+        data: {
+          user: googleUser('66112106@dpu.ac.th', {
+            identities: [googleIdentity('66112106@dpu.ac.th', { email_verified: false })],
+          }),
+        },
         error: null,
       })),
       config,
@@ -131,6 +160,58 @@ describe('AuthGuard', () => {
     expect(
       await rejection(guard.canActivate(context({ headers: { authorization: 'Bearer t' } }))),
     ).toEqual({ status: 403, code: 'PROVIDER_NOT_ALLOWED' });
+  });
+
+  it('เปลี่ยนเมลบัญชีเป็นเมลแอดมินด้วย updateUser ไม่ได้สิทธิ์ เพราะเชื่อเมลจาก Google เท่านั้น', async () => {
+    const { service, calls } = recordingUsers();
+    const guard = new AuthGuard(
+      reflector(),
+      db(async () => ({
+        data: {
+          user: googleUser('somsak.kit@dpu.ac.th', {
+            identities: [googleIdentity('attacker@gmail.com')],
+          }),
+        },
+        error: null,
+      })),
+      { adminEmails: ['somsak.kit@dpu.ac.th'] } as unknown as AppConfig,
+      service,
+    );
+    expect(
+      await rejection(guard.canActivate(context({ headers: { authorization: 'Bearer t' } }))),
+    ).toEqual({ status: 403, code: 'DOMAIN_NOT_ALLOWED' });
+    expect(calls).toEqual([]);
+  });
+
+  it('บัญชี Google ที่ไม่ได้อยู่ใน Workspace ของ dpu.ac.th (ไม่มี hd) ได้ 403', async () => {
+    const guard = new AuthGuard(
+      reflector(),
+      db(async () => ({
+        data: {
+          user: googleUser('66112106@dpu.ac.th', {
+            identities: [googleIdentity('66112106@dpu.ac.th', { custom_claims: {} })],
+          }),
+        },
+        error: null,
+      })),
+      config,
+      users,
+    );
+    expect(
+      await rejection(guard.canActivate(context({ headers: { authorization: 'Bearer t' } }))),
+    ).toEqual({ status: 403, code: 'DOMAIN_NOT_ALLOWED' });
+  });
+
+  it('ส่งเมลและชื่อจาก Google identity ไปให้ ensureUser', async () => {
+    const { service, calls } = recordingUsers();
+    const guard = new AuthGuard(
+      reflector(),
+      db(okUser('66112106@dpu.ac.th')),
+      config,
+      service,
+    );
+    await guard.canActivate(context({ headers: { authorization: 'Bearer t' } }));
+    expect(calls).toEqual([{ id: 'u1', email: '66112106@dpu.ac.th', fullName: 'ณัฐวุฒิ' }]);
   });
 
   it('route ที่ติด @Public() ผ่านได้โดยไม่มี token', async () => {
