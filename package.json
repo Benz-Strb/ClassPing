@@ -18,13 +18,16 @@
     "dev:mobile": "npm run start --workspace @classping/mobile",
     "mobile:android": "npm run android --workspace @classping/mobile",
     "mobile:ios": "npm run ios --workspace @classping/mobile",
-    "typecheck:mobile": "npm run typecheck --workspace @classping/mobile"
+    "typecheck:mobile": "npm run typecheck --workspace @classping/mobile",
+    "db:new": "supabase migration new",
+    "db:push": "supabase db push"
   },
   "overrides": {
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@types/react": "~19.2.2"
+    "@types/react": "~19.2.2",
+    "supabase": "^2.121.0"
   }
 }
