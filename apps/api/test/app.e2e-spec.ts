@@ -3,24 +3,39 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { configureApp } from './../src/app.setup.js';
 
-describe('AppController (e2e)', () => {
+describe('API (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    // ค่าปลอมพอให้แอปบูตได้ เคสในไฟล์นี้ไม่ได้เรียก Supabase จริง
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    configureApp(app);
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('GET /health เปิดให้เรียกได้โดยไม่ต้อง login', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/health')
       .expect(200)
-      .expect('Hello World!');
+      .expect({ data: { ok: true } });
+  });
+
+  it('GET /me ไม่มี token ได้ 401 ในรูปแบบ error กลาง', () => {
+    return request(app.getHttpServer())
+      .get('/me')
+      .expect(401)
+      .expect({
+        error: { code: 'UNAUTHORIZED', message: 'กรุณาเข้าสู่ระบบใหม่' },
+      });
   });
 
   afterEach(async () => {
