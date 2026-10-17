@@ -45,6 +45,18 @@ export class AuthGuard implements CanActivate {
     if (scheme !== 'Bearer' || !token) throw unauthorized();
 
     const authUser = await this.verify(token);
+
+    // เชื่อเมลเฉพาะที่ Google ยืนยันแล้ว กันคนสมัครด้วยรหัสผ่านโดยใช้เมลคนอื่น
+    // (เช่นสมัครด้วยเมลแอดมินเพื่อเอาสิทธิ์แอดมิน)
+    const provider = (authUser.app_metadata as { provider?: string }).provider;
+    if (provider !== 'google' || !authUser.email_confirmed_at) {
+      throw new AppError(
+        403,
+        'PROVIDER_NOT_ALLOWED',
+        'กรุณาเข้าสู่ระบบด้วยบัญชี Google ของมหาวิทยาลัย',
+      );
+    }
+
     if (!classifyEmail(authUser.email ?? '', this.config.adminEmails)) {
       throw new AppError(403, 'DOMAIN_NOT_ALLOWED', 'ใช้ได้เฉพาะเมล @dpu.ac.th');
     }

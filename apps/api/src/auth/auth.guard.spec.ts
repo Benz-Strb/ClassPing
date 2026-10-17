@@ -40,8 +40,17 @@ const users = {
 
 const config = { adminEmails: [] } as unknown as AppConfig;
 
+const googleUser = (email: string, extra: Record<string, unknown> = {}) => ({
+  id: 'u1',
+  email,
+  email_confirmed_at: '2026-10-17T00:00:00Z',
+  app_metadata: { provider: 'google', providers: ['google'] },
+  user_metadata: {},
+  ...extra,
+});
+
 const okUser = (email: string) => async () => ({
-  data: { user: { id: 'u1', email, user_metadata: {} } },
+  data: { user: googleUser(email) },
   error: null,
 });
 
@@ -88,6 +97,40 @@ describe('AuthGuard', () => {
     const guard = new AuthGuard(reflector(), db(okUser('66112106@dpu.ac.th')), config, users);
     expect(await guard.canActivate(context(req))).toBe(true);
     expect(req.user).toEqual(student);
+  });
+
+  it('บัญชีที่สมัครด้วยรหัสผ่าน (ไม่ใช่ Google) ได้ 403 แม้เมลจะเป็น @dpu.ac.th', async () => {
+    const guard = new AuthGuard(
+      reflector(),
+      db(async () => ({
+        data: {
+          user: googleUser('66112106@dpu.ac.th', {
+            app_metadata: { provider: 'email', providers: ['email'] },
+          }),
+        },
+        error: null,
+      })),
+      config,
+      users,
+    );
+    expect(
+      await rejection(guard.canActivate(context({ headers: { authorization: 'Bearer t' } }))),
+    ).toEqual({ status: 403, code: 'PROVIDER_NOT_ALLOWED' });
+  });
+
+  it('บัญชีที่เมลยังไม่ยืนยันได้ 403', async () => {
+    const guard = new AuthGuard(
+      reflector(),
+      db(async () => ({
+        data: { user: googleUser('66112106@dpu.ac.th', { email_confirmed_at: null }) },
+        error: null,
+      })),
+      config,
+      users,
+    );
+    expect(
+      await rejection(guard.canActivate(context({ headers: { authorization: 'Bearer t' } }))),
+    ).toEqual({ status: 403, code: 'PROVIDER_NOT_ALLOWED' });
   });
 
   it('route ที่ติด @Public() ผ่านได้โดยไม่มี token', async () => {
