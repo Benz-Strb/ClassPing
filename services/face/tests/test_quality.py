@@ -149,3 +149,15 @@ def test_sharpness_thin_strip_is_zero_without_huge_resize():
     assert sharpness(image, (0.0, 0.0, 4000.0, 2.0)) == 0
     assert sharpness(image, (0.0, 0.0, 3.0, 4000.0)) == 0
     assert time.perf_counter() - start < 0.5
+
+
+@pytest.mark.parametrize("ext", [".bmp", ".tiff", ".webp"])
+def test_decode_accepts_only_jpeg_and_png(ext):
+    # รับแค่รูปแบบที่มือถือและกล้องส่งจริง ลดโอกาสที่ Pillow กับ OpenCV อ่านไฟล์ต่างกัน
+    import cv2
+
+    ok, encoded = cv2.imencode(ext, noise_image(size=64))
+    assert ok
+    with pytest.raises(FaceError) as error:
+        decode_image(encoded.tobytes(), max_bytes=SETTINGS.max_image_bytes)
+    assert code_of(error) == (400, "INVALID_IMAGE")
