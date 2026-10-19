@@ -1,12 +1,22 @@
 import hmac
+import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile
 
-from app.config import Settings
-from app.engine import FaceEngine
+from app.config import Settings, load_settings
+from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import error_response, install_error_handlers
+from app.images import decode_image, read_upload
+from app.quality import pick_enrollment_face, sharpness
 
 PUBLIC_PATHS = {"/health"}
+
+
+def pose_json(face: DetectedFace) -> dict | None:
+    if face.pose is None:
+        return None
+    pitch, yaw, roll = face.pose
+    return {"pitch": pitch, "yaw": yaw, "roll": roll}
 
 
 def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
@@ -31,4 +41,28 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
             }
         }
 
+    # route แบบ def ธรรมดา FastAPI จะรันใน threadpool โมเดลจึงไม่บล็อก event loop
+    @app.post("/faces/enroll")
+    def enroll(image: UploadFile):
+        frame = decode_image(
+            read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
+        )
+        face = pick_enrollment_face(engine.analyze(frame), frame, settings)
+        return {
+            "data": {
+                "embedding": face.embedding.tolist(),
+                "bbox": list(face.bbox),
+                "detScore": face.det_score,
+                "pose": pose_json(face),
+                "sharpness": sharpness(frame, face.bbox),
+                "model": engine.model_name,
+            }
+        }
+
     return app
+
+
+def build_app() -> FastAPI:
+    """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
+    settings = load_settings(os.environ)
+    return create_app(settings, InsightFaceEngine(settings))
