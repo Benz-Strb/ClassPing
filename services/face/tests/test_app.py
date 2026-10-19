@@ -60,3 +60,40 @@ def test_validation_error_envelope(app, client, auth):
     res = client.post("/upload-test", headers=auth, data={})
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "BAD_REQUEST"
+
+
+def test_body_too_large_rejected_before_parsing(client, auth, settings):
+    # ตรวจจาก Content-Length ก่อนอ่าน body ทั้งก้อน
+    res = client.post(
+        "/faces/match",
+        headers={**auth, "Content-Type": "application/json"},
+        content=b"x" * (settings.max_json_bytes + 1),
+    )
+    assert res.status_code == 413
+    assert res.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+
+
+def test_upload_body_too_large_rejected(client, auth, settings):
+    res = client.post(
+        "/faces/enroll",
+        headers={**auth, "Content-Type": "multipart/form-data; boundary=x"},
+        content=b"x" * (settings.max_image_bytes + 70_000),
+    )
+    assert res.status_code == 413
+    assert res.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+
+
+def test_body_without_length_rejected(client, auth):
+    def chunks():
+        yield b'{"probes": [], '
+        yield b'"candidates": []}'
+
+    res = client.post(
+        "/faces/match", headers={**auth, "Content-Type": "application/json"}, content=chunks()
+    )
+    assert res.status_code == 411
+    assert res.json()["error"]["code"] == "LENGTH_REQUIRED"
+
+
+def test_load_settings_max_json_default():
+    assert load_settings({"FACE_SERVICE_TOKEN": "t" * 32}).max_json_bytes == 8 * 1024 * 1024

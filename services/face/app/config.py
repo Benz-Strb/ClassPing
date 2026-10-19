@@ -15,6 +15,7 @@ class Settings:
     enroll_min_sharpness: float = 40.0
     detect_min_face_px: int = 40
     max_image_bytes: int = 5 * 1024 * 1024
+    max_json_bytes: int = 8 * 1024 * 1024
 
 
 def load_settings(env: Mapping[str, str]) -> Settings:
@@ -37,4 +38,5 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         enroll_min_sharpness=get("ENROLL_MIN_SHARPNESS", defaults.enroll_min_sharpness, float),
         detect_min_face_px=get("DETECT_MIN_FACE_PX", defaults.detect_min_face_px, int),
         max_image_bytes=get("MAX_IMAGE_BYTES", defaults.max_image_bytes, int),
+        max_json_bytes=get("MAX_JSON_BYTES", defaults.max_json_bytes, int),
     )
