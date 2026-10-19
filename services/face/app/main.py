@@ -27,6 +27,22 @@ def pose_json(face: DetectedFace) -> dict | None:
     return {"pitch": pitch, "yaw": yaw, "roll": roll}
 
 
+# ส่วนหัว multipart (boundary, ชื่อไฟล์) เผื่อไว้นอกเหนือจากขนาดรูป
+MULTIPART_OVERHEAD = 64 * 1024
+
+
+def check_body_size(request: Request, settings: Settings):
+    """จำกัดขนาด request จาก Content-Length ก่อนอ่าน body กันข้อมูลก้อนใหญ่กินหน่วยความจำ"""
+    length = request.headers.get("content-length")
+    if length is None or not length.isdigit():
+        return error_response(411, "LENGTH_REQUIRED", "ต้องระบุขนาดข้อมูลที่ส่ง")
+    is_upload = request.headers.get("content-type", "").startswith("multipart/")
+    limit = settings.max_image_bytes + MULTIPART_OVERHEAD if is_upload else settings.max_json_bytes
+    if int(length) > limit:
+        return error_response(413, "REQUEST_TOO_LARGE", "ข้อมูลที่ส่งมาใหญ่เกินไป")
+    return None
+
+
 def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
     app = FastAPI(title="ClassPing face service", docs_url=None, redoc_url=None)
     install_error_handlers(app)
@@ -37,6 +53,10 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
             given = request.headers.get("x-face-token", "")
             if not hmac.compare_digest(given.encode(), settings.token.encode()):
                 return error_response(401, "UNAUTHORIZED", "ไม่มีสิทธิ์เรียกระบบตรวจใบหน้า")
+        if request.method == "POST":
+            rejected = check_body_size(request, settings)
+            if rejected is not None:
+                return rejected
         return await call_next(request)
 
     @app.get("/health")
