@@ -71,3 +71,13 @@ def test_model_enroll_group_rejected(model_client, group_image):
     )
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "MULTIPLE_FACES"
+
+
+def test_model_detect_group(model_client, group_image):
+    res = model_client.post(
+        "/faces/detect", headers=AUTH, files={"image": ("g.jpg", jpeg(group_image), "image/jpeg")}
+    )
+    assert res.status_code == 200, res.text
+    faces = res.json()["data"]["faces"]
+    assert len(faces) >= 5
+    assert all(len(face["embedding"]) == 512 for face in faces)
