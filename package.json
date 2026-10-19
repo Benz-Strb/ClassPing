@@ -21,7 +21,7 @@
     "typecheck:mobile": "npm run typecheck --workspace @classping/mobile",
     "db:new": "supabase migration new",
     "db:push": "supabase db push",
-    "dev:face": "cd services/face && uv run uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload",
+    "dev:face": "cd services/face && uv run uvicorn app.main:build_app --factory --env-file .env --host 127.0.0.1 --port 8001",
     "test:face": "cd services/face && uv run pytest",
     "test:face:model": "cd services/face && uv run pytest -m model"
   },
