@@ -7,7 +7,7 @@ from app.config import Settings, load_settings
 from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import error_response, install_error_handlers
 from app.images import decode_image, read_upload
-from app.quality import pick_enrollment_face, sharpness
+from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
 
 PUBLIC_PATHS = {"/health"}
 
@@ -56,6 +56,32 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
                 "pose": pose_json(face),
                 "sharpness": sharpness(frame, face.bbox),
                 "model": engine.model_name,
+            }
+        }
+
+    @app.post("/faces/detect")
+    def detect(image: UploadFile):
+        frame = decode_image(
+            read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
+        )
+        faces = sorted(real_faces(engine.analyze(frame)), key=lambda f: -face_size(f.bbox))
+        usable = [f for f in faces if face_size(f.bbox) >= settings.detect_min_face_px]
+        height, width = frame.shape[:2]
+        return {
+            "data": {
+                "width": width,
+                "height": height,
+                "faces": [
+                    {
+                        "bbox": list(face.bbox),
+                        "detScore": face.det_score,
+                        "embedding": face.embedding.tolist(),
+                        "pose": pose_json(face),
+                    }
+                    for face in usable
+                ],
+                # หน้าเล็กเกินไปเทียบแล้วไม่แม่น นับไว้ให้รู้ว่ากล้องอาจอยู่ไกลไป
+                "skippedSmall": len(faces) - len(usable),
             }
         }
 
