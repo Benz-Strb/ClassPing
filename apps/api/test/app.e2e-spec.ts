@@ -12,6 +12,7 @@ describe('API (e2e)', () => {
     // ค่าปลอมพอให้แอปบูตได้ เคสในไฟล์นี้ไม่ได้เรียก Supabase จริง
     process.env.SUPABASE_URL = 'https://example.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+    process.env.FACE_SERVICE_TOKEN = 'f'.repeat(32);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],

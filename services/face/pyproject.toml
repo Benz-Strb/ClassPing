@@ -1,0 +1,35 @@
+[project]
+name = "classping-face"
+version = "0.1.0"
+description = "ClassPing face service: ตรวจและเทียบใบหน้าด้วย InsightFace"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.146.0",
+    "insightface==2.1",
+    "numpy>=2.5.4",
+    "onnxruntime==1.31.0",
+    "opencv-python>=5.0.0.93",
+    "pillow>=13.0.0",
+    "python-multipart>=0.0.32",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not model'"
+markers = ["model: ใช้โมเดลจริง (โหลดครั้งแรกราว 300 MB)"]
+# Starlette เตือนให้เปลี่ยนไปใช้ httpx2 แต่ยังไม่ได้ตรวจผู้ปล่อยแพ็กเกจ ใช้ httpx ทางการไปก่อน
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+
+[tool.ruff]
+line-length = 100
