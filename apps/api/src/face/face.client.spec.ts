@@ -100,6 +100,18 @@ describe('FaceClient', () => {
     });
   });
 
+  it.each([
+    [422, 'BAD_EMBEDDING'],
+    [413, 'REQUEST_TOO_LARGE'],
+    [404, 'NOT_FOUND'],
+  ])('%i %s เป็นปัญหาฝั่งระบบ ไม่ส่งต่อให้ผู้ใช้ ได้ 503', async (status, code) => {
+    stubFetch(() => json(status, { error: { code, message: 'x' } }));
+    expect(await rejection(new FaceClient(config).detect(image, 'image/jpeg'))).toMatchObject({
+      status: 503,
+      code: 'FACE_SERVICE_UNAVAILABLE',
+    });
+  });
+
   it('ต่อ face service ไม่ได้ได้ 503', async () => {
     stubFetch(() => Promise.reject(new TypeError('fetch failed')));
     expect(
