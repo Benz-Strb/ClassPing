@@ -3,6 +3,7 @@ import { loadConfig } from './config.js';
 const base = (extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
   SUPABASE_URL: 'https://x.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'secret',
+  FACE_SERVICE_TOKEN: 'f'.repeat(32),
   ...extra,
 });
 
@@ -37,5 +38,26 @@ describe('loadConfig', () => {
         base({ ALLOWED_ORIGINS: 'http://localhost:3000, http://a.test' }),
       ).allowedOrigins,
     ).toEqual(['http://localhost:3000', 'http://a.test']);
+  });
+
+  it('ขาด FACE_SERVICE_TOKEN หรือสั้นกว่า 32 ตัวต้อง throw และบอกชื่อตัวแปร', () => {
+    expect(() => loadConfig(base({ FACE_SERVICE_TOKEN: '' }))).toThrow(
+      'FACE_SERVICE_TOKEN',
+    );
+    expect(() => loadConfig(base({ FACE_SERVICE_TOKEN: 'short' }))).toThrow(
+      'FACE_SERVICE_TOKEN',
+    );
+  });
+
+  it('FACE_SERVICE_URL ค่าเริ่มต้นเป็น face service ในเครื่อง', () => {
+    const config = loadConfig(base({}));
+    expect(config.faceServiceUrl).toBe('http://127.0.0.1:8001');
+    expect(config.faceServiceToken).toBe('f'.repeat(32));
+  });
+
+  it('FACE_SERVICE_URL ตัด / ท้ายออก', () => {
+    expect(
+      loadConfig(base({ FACE_SERVICE_URL: 'http://face.test:8001/' })).faceServiceUrl,
+    ).toBe('http://face.test:8001');
   });
 });
