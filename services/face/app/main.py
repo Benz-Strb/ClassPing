@@ -1,15 +1,23 @@
 import hmac
 import os
 
+import numpy as np
 from fastapi import FastAPI, Request, UploadFile
+from pydantic import BaseModel, model_validator
 
 from app.config import Settings, load_settings
 from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
-from app.errors import error_response, install_error_handlers
+from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
+from app.matching import match
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
 
 PUBLIC_PATHS = {"/health"}
+
+# ห้องเรียนหนึ่งไม่เกินราว 50 หน้าต่อเฟรม รายชื่อไม่เกิน 500 คน ลงทะเบียนไม่เกิน 10 มุมต่อคน
+MAX_PROBES = 50
+MAX_CANDIDATES = 500
+MAX_EMBEDDINGS_PER_PERSON = 10
 
 
 def pose_json(face: DetectedFace) -> dict | None:
@@ -85,7 +93,63 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
             }
         }
 
+    @app.post("/faces/match")
+    def match_faces(body: MatchRequest):
+        probes = parse_embeddings(body.probes, engine.embedding_size)
+        candidates = [
+            (c.id, parse_embeddings(c.embeddings, engine.embedding_size)) for c in body.candidates
+        ]
+        return {
+            "data": {
+                "results": [
+                    {
+                        "bestId": r.best_id,
+                        "score": r.score,
+                        "secondId": r.second_id,
+                        "secondScore": r.second_score,
+                    }
+                    for r in match(probes, candidates)
+                ]
+            }
+        }
+
     return app
+
+
+class Candidate(BaseModel):
+    id: str
+    embeddings: list[list[float]]
+
+
+class MatchRequest(BaseModel):
+    probes: list[list[float]]
+    candidates: list[Candidate]
+
+    @model_validator(mode="after")
+    def check_limits(self):
+        too_many = (
+            len(self.probes) > MAX_PROBES
+            or len(self.candidates) > MAX_CANDIDATES
+            or any(len(c.embeddings) > MAX_EMBEDDINGS_PER_PERSON for c in self.candidates)
+        )
+        if too_many:
+            raise FaceError(
+                422,
+                "TOO_MANY_ITEMS",
+                f"ส่งได้ไม่เกิน {MAX_PROBES} หน้า, {MAX_CANDIDATES} คน "
+                f"และ {MAX_EMBEDDINGS_PER_PERSON} มุมต่อคน",
+            )
+        return self
+
+
+def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
+    bad = FaceError(422, "BAD_EMBEDDING", f"ข้อมูลใบหน้าต้องเป็นตัวเลข {size} ค่าที่ไม่เป็นศูนย์")
+    if not rows or any(len(row) != size for row in rows):
+        raise bad
+    vectors = np.asarray(rows, dtype=np.float32)
+    if not np.isfinite(vectors).all() or (np.linalg.norm(vectors, axis=1) == 0).any():
+        raise bad
+    return vectors
 
 
 def build_app() -> FastAPI:
