@@ -30,6 +30,8 @@ package = false
 testpaths = ["tests"]
 addopts = "-m 'not model'"
 markers = ["model: ใช้โมเดลจริง (โหลดครั้งแรกราว 300 MB)"]
+# Starlette เตือนให้เปลี่ยนไปใช้ httpx2 แต่ยังไม่ได้ตรวจผู้ปล่อยแพ็กเกจ ใช้ httpx ทางการไปก่อน
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [tool.ruff]
 line-length = 100
