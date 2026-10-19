@@ -45,6 +45,18 @@ export interface MatchResult {
 
 const TIMEOUT_MS = 10_000;
 
+// ปัญหาของรูปที่ผู้ใช้แก้เองได้ (ถ่ายใหม่) ส่งต่อให้แอปแสดงข้อความ
+// code อื่นจาก service (เช่น BAD_EMBEDDING, REQUEST_TOO_LARGE, 404) เป็นบั๊กหรือตั้งค่าผิดฝั่งระบบ
+const USER_FACING_CODES = new Set([
+  'NO_FACE',
+  'MULTIPLE_FACES',
+  'FACE_TOO_SMALL',
+  'LOW_QUALITY',
+  'BLURRY',
+  'INVALID_IMAGE',
+  'IMAGE_TOO_LARGE',
+]);
+
 const unavailable = () =>
   new AppError(
     503,
@@ -109,11 +121,12 @@ export class FaceClient {
       throw unavailable();
     }
     if (!res.ok) {
-      throw new AppError(
-        res.status,
-        payload.error?.code ?? 'FACE_ERROR',
-        payload.error?.message ?? 'ตรวจใบหน้าไม่สำเร็จ',
-      );
+      const code = payload.error?.code;
+      if (code && USER_FACING_CODES.has(code)) {
+        throw new AppError(res.status, code, payload.error?.message ?? 'ตรวจใบหน้าไม่สำเร็จ');
+      }
+      this.logger.error(`face service ตอบ ${res.status} ${code ?? ''} ที่ ${path}`);
+      throw unavailable();
     }
     // ตอบสำเร็จแต่ไม่มี data แปลว่า service ผิดปกติ (หรือ URL ชี้ไปผิดที่)
     if (payload.data === undefined) {

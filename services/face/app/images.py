@@ -24,7 +24,8 @@ def decode_image(data: bytes, max_bytes: int) -> np.ndarray:
     """แปลงไฟล์รูปเป็นภาพ BGR ในหน่วยความจำ ไม่เขียนลงดิสก์
 
     ตรวจขนาดจาก header ก่อน decode กันไฟล์เล็กที่ขยายแล้วกินหน่วยความจำมหาศาล
-    cv2.imdecode ไม่หมุนรูปตาม EXIF แอปมือถือต้องส่งรูปที่หมุนตรงแล้ว
+    cv2.imdecode หมุนรูปตาม EXIF ให้เอง แอปมือถือส่ง JPEG จากกล้องมาได้เลย
+    ถ้าแอปหมุนพิกเซลเองต้องลบ EXIF Orientation ด้วย ไม่งั้นจะโดนหมุนซ้ำ
     """
     if len(data) > max_bytes:
         raise too_large(f"รูปใหญ่เกิน {max_bytes / (1024 * 1024):g} MB")
