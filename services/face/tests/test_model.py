@@ -81,3 +81,32 @@ def test_model_detect_group(model_client, group_image):
     faces = res.json()["data"]["faces"]
     assert len(faces) >= 5
     assert all(len(face["embedding"]) == 512 for face in faces)
+
+
+def test_model_same_person_scores_high(real_engine, single_image):
+    import cv2
+    import numpy as np
+
+    from app.matching import match
+
+    [original] = real_engine.analyze(single_image)
+    [flipped] = real_engine.analyze(cv2.flip(single_image, 1))
+    [result] = match(np.array([flipped.embedding]), [("me", np.array([original.embedding]))])
+    assert result.score > 0.6
+
+
+def test_model_strangers_score_low(real_engine, single_image, group_image):
+    import numpy as np
+
+    from app.matching import match
+
+    [me] = real_engine.analyze(single_image)
+    others = [
+        face
+        for face in real_engine.analyze(group_image)
+        if float(np.dot(face.embedding, me.embedding)) < 0.9  # ตัดหน้าตัวเองในรูปหมู่ออก
+    ]
+    assert len(others) >= 4
+    for face in others:
+        [result] = match(np.array([face.embedding]), [("me", np.array([me.embedding]))])
+        assert result.score < 0.35
