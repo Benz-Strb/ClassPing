@@ -1,5 +1,3 @@
-// ชนิดข้อมูลตาม response ของ API (apps/api)
-
 export type Role = "student" | "teacher" | "admin";
 
 export interface Me {
@@ -23,7 +21,6 @@ export interface Course {
   teacherId: string;
 }
 
-// absentAfterMin เป็น null = นับขาดตอนหมดคาบ
 export interface Rules {
   lateAfterMin: number;
   absentAfterMin: number | null;
@@ -43,7 +40,7 @@ export interface AddStudentsResult {
   invalid: string[];
 }
 
-// weekday 0 = อาทิตย์ ... 6 = เสาร์, เวลา 'HH:MM'
+// weekday 0 = อาทิตย์
 export interface Schedule {
   id: string;
   courseId: string;
@@ -66,6 +63,7 @@ export interface Override {
 
 export interface SessionView {
   id: string;
+  scheduleId: string | null;
   courseId: string;
   roomId: string;
   roomName: string;

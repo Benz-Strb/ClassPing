@@ -10,6 +10,7 @@ import { SESSIONS_REPO, type SessionRow, type SessionsRepo } from './sessions.re
 
 export interface SessionView {
   id: string;
+  scheduleId: string | null;
   courseId: string;
   roomId: string;
   roomName: string;
@@ -19,7 +20,6 @@ export interface SessionView {
   status: 'upcoming' | 'live' | 'ended';
 }
 
-// สร้างคาบล่วงหน้า วันนี้ + 6 วัน
 const WINDOW_DAYS = 7;
 const MAX_RANGE_DAYS = 31;
 
@@ -39,8 +39,7 @@ export class SessionsService implements SessionSyncer {
     @Inject(CLOCK) private readonly now: Clock,
   ) {}
 
-  // ทำให้คาบในช่วง 7 วันตรงกับตาราง + การเปลี่ยนเฉพาะวัน
-  // คาบที่เริ่มไปแล้วไม่แตะเลย เพราะอาจมีผลเช็คชื่อผูกอยู่ (ลบแล้ว attendance หายตาม)
+  // คาบที่เริ่มแล้วห้ามแตะ ไม่งั้นผลเช็คชื่อหายตาม
   async syncCourse(courseId: string): Promise<void> {
     const now = this.now();
     const from = bangkokDate(now);
@@ -70,12 +69,11 @@ export class SessionsService implements SessionSyncer {
       if (!wanted) toRemove.push(row.id);
       else if (!sameSlot(row, wanted)) toUpdate.push({ id: row.id, session: wanted });
     }
-    // คาบที่ยังไม่จบสร้างได้ (เช่นเพิ่มตารางตอนคาบกำลังเรียน กล้องจะได้เริ่มทันที)
     const toInsert = [...planned.values()].filter(
       (s) => !existingKeys.has(keyOf(s)) && s.endsAt > now,
     );
 
-    // ลบก่อน แก้ แล้วค่อยเพิ่ม กันชน unique (course_id, starts_at) ตอนสลับเวลา
+    // ลบก่อนเพิ่ม กันชน unique (course_id, starts_at)
     if (toRemove.length) await this.repo.remove(toRemove);
     for (const { id, session } of toUpdate) {
       await this.repo.update(id, {
@@ -113,6 +111,7 @@ export class SessionsService implements SessionSyncer {
     const now = this.now();
     return (await this.repo.listByCourse(courseId, from, to)).map((row) => ({
       id: row.id,
+      scheduleId: row.scheduleId,
       courseId: row.courseId,
       roomId: row.roomId,
       roomName: row.roomName,

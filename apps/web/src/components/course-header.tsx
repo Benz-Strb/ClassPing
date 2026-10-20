@@ -7,7 +7,11 @@ import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import type { Course } from "@/lib/types";
 
-const TABS = [{ path: "students", label: "นักศึกษา" }];
+const TABS = [
+  { path: "students", label: "นักศึกษา" },
+  { path: "schedule", label: "ตารางเรียน" },
+  { path: "rules", label: "เกณฑ์" },
+];
 
 export function CourseHeader() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +29,7 @@ export function CourseHeader() {
   return (
     <header className="space-y-3">
       <Link href="/courses" className="text-sm text-blue-600 underline">
-        ← วิชาทั้งหมด
+        วิชาทั้งหมด
       </Link>
       {error ? (
         <p className="text-red-600">{error}</p>
