@@ -48,4 +48,4 @@ def install_error_handlers(app: FastAPI) -> None:
     async def unknown_error(_: Request, exc: Exception):
         # รายละเอียดเก็บใน log อย่างเดียว ไม่ส่งออกไป
         logger.exception("unhandled error", exc_info=exc)
-        return error_response(500, "INTERNAL", "เกิดข้อผิดพลาดภายในระบบตรวจใบหน้า")
+        return error_response(500, "INTERNAL", "ระบบตรวจใบหน้ามีปัญหา")
