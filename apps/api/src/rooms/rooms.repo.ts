@@ -8,7 +8,6 @@ export interface Room {
   name: string;
 }
 
-// ห้องเรียนจัดการโดยแอดมิน (ตอนนี้ใส่ด้วย npm run db:seed:rooms) อาจารย์แค่เลือก
 @Injectable()
 export class RoomsRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}

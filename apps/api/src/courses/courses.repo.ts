@@ -13,7 +13,7 @@ export interface Course {
 
 export type NewCourse = Omit<Course, 'id'>;
 
-// absentAfterMin เป็น null แปลว่านับขาดตอนหมดคาบ
+// absentAfterMin = null คือนับขาดตอนหมดคาบ
 export interface Rules {
   lateAfterMin: number;
   absentAfterMin: number | null;
@@ -69,7 +69,6 @@ const courseRow = (c: Partial<NewCourse>) => ({
   ...(c.teacherId !== undefined && { teacher_id: c.teacherId }),
 });
 
-// คุย Supabase อย่างเดียว กฎทั้งหมดอยู่ใน CoursesService
 @Injectable()
 export class SupabaseCoursesRepo implements CoursesRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}

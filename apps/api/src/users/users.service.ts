@@ -33,7 +33,7 @@ const toAppUser = (row: UserRow): AppUser => ({
 });
 
 const dbError = () =>
-  new AppError(503, 'DB_UNAVAILABLE', 'ฐานข้อมูลไม่พร้อมใช้งาน ลองใหม่อีกครั้ง');
+  new AppError(503, 'DB_UNAVAILABLE', 'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง');
 
 @Injectable()
 export class UsersService {

@@ -23,7 +23,6 @@ import {
   type SchedulesRepo,
 } from './schedules.repo.js';
 
-// สร้าง/แก้ตารางแล้วต้องสร้างคาบใหม่ (SessionsService ในแผนนี้ Task 5)
 export interface SessionSyncer {
   syncCourse(courseId: string): Promise<void>;
 }
@@ -41,7 +40,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const time = z
   .string({ error: 'กรุณาใส่เวลา' })
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'เวลาต้องเป็นรูปแบบ HH:MM เช่น 09:00' });
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'ใส่เวลาแบบ 09:00' });
 const weekday = z
   .number({ error: 'กรุณาเลือกวัน' })
   .int({ error: 'วันไม่ถูกต้อง' })
@@ -52,7 +51,7 @@ const roomId = z.string({ error: 'กรุณาเลือกห้อง' })
 const createSchema = z.object({ weekday, startTime: time, endTime: time, roomId });
 const updateSchema = createSchema.partial();
 const overrideSchema = z.object({
-  cancelled: z.boolean({ error: 'ค่างดสอนไม่ถูกต้อง' }).optional(),
+  cancelled: z.boolean({ error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง' }).optional(),
   roomId: roomId.nullish(),
   startTime: time.nullish(),
   endTime: time.nullish(),
@@ -66,17 +65,17 @@ const roomConflict = (roomName: string, courseCode: string, start: string, end: 
   new AppError(
     409,
     'ROOM_CONFLICT',
-    `${roomName} มีวิชา ${courseCode} ช่วง ${start}–${end} อยู่แล้ว`,
+    `${roomName} มีวิชา ${courseCode} เวลา ${start}-${end} แล้ว`,
   );
 
 function checkTimes(start: string, end: string) {
   if (start >= end) throw badRequest('เวลาเริ่มต้องก่อนเวลาจบ');
   if (start < DAY_START || end > DAY_END) {
-    throw badRequest(`เวลาเรียนต้องอยู่ระหว่าง ${DAY_START}–${DAY_END}`);
+    throw badRequest(`เวลาเรียนต้องอยู่ในช่วง ${DAY_START}-${DAY_END}`);
   }
   const length = minutes(end) - minutes(start);
   if (length < MIN_LENGTH_MIN || length > MAX_LENGTH_MIN) {
-    throw badRequest('คาบเรียนต้องยาว 15 นาทีถึง 6 ชั่วโมง');
+    throw badRequest('คาบต้องยาว 15 นาที ถึง 6 ชั่วโมง');
   }
 }
 
@@ -177,7 +176,7 @@ export class SchedulesService {
         endTime: input.endTime ?? null,
       };
       if (!override.roomId && !override.startTime && !override.endTime) {
-        throw badRequest('เลือกงดสอน หรือเปลี่ยนห้อง/เวลาอย่างน้อยหนึ่งอย่าง');
+        throw badRequest('ยังไม่ได้เลือกว่าจะเปลี่ยนอะไร');
       }
       checkTimes(
         override.startTime ?? schedule.startTime,
@@ -195,12 +194,11 @@ export class SchedulesService {
   async clearOverride(user: AppUser, scheduleId: string, date: string): Promise<void> {
     const schedule = await this.owned(user, scheduleId);
     if (!isDate(date) || !(await this.repo.removeOverride(scheduleId, date))) {
-      throw new AppError(404, 'OVERRIDE_NOT_FOUND', 'ไม่มีการเปลี่ยนแปลงของวันนี้');
+      throw new AppError(404, 'OVERRIDE_NOT_FOUND', 'วันนี้ไม่ได้เปลี่ยนอะไรไว้');
     }
     await this.syncer.syncCourse(schedule.courseId);
   }
 
-  // ตารางของวิชาคนอื่นตอบเหมือนไม่มีตารางนี้
   private async owned(user: AppUser, scheduleId: string): Promise<Schedule> {
     if (!UUID.test(scheduleId)) throw scheduleNotFound();
     const schedule = await this.repo.findById(scheduleId);
@@ -228,11 +226,10 @@ export class SchedulesService {
       throw badRequest('เปลี่ยนล่วงหน้าได้ไม่เกิน 1 ปี');
     }
     if (weekdayOf(date) !== schedule.weekday) {
-      throw new AppError(400, 'WRONG_WEEKDAY', 'วันที่นี้ไม่ใช่วันเรียนของตารางนี้');
+      throw new AppError(400, 'WRONG_WEEKDAY', 'วันนั้นไม่มีเรียนตามตารางนี้');
     }
   }
 
-  // ตารางประจำ: เทียบกับตารางประจำอื่นของห้องเดียวกันในวันเดียวกัน
   private async checkWeeklyConflict(next: {
     id: string | null;
     weekday: number;
@@ -251,7 +248,6 @@ export class SchedulesService {
     if (hit) throw roomConflict(hit.roomName, hit.courseCode, hit.startTime, hit.endTime);
   }
 
-  // เปลี่ยนเฉพาะวัน: วางคาบของวันนั้นทุกวิชา (รวมการเปลี่ยนนี้) แล้วดูว่าห้องชนไหม
   private async checkDayConflict(schedule: Schedule, override: Override) {
     const date = override.onDate;
     const schedules = await this.repo.listByWeekday(schedule.weekday);
