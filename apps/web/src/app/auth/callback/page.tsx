@@ -25,7 +25,7 @@ function Callback() {
 
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       router.replace(
-        error ? `/login?error=${encodeURIComponent(error.message)}` : "/me",
+        error ? `/login?error=${encodeURIComponent(error.message)}` : "/",
       );
     });
   }, [params, router]);
