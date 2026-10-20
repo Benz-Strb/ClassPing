@@ -39,6 +39,10 @@ describe('API (e2e)', () => {
       });
   });
 
+  it.each(['/rooms', '/courses'])('GET %s ต้อง login ก่อน', (path) => {
+    return request(app.getHttpServer()).get(path).expect(401);
+  });
+
   afterEach(async () => {
     await app.close();
   });
