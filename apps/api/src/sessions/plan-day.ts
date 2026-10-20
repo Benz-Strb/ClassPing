@@ -40,6 +40,22 @@ export function bangkokDate(now: Date): string {
   return new Date(now.getTime() + OFFSET_MS).toISOString().slice(0, 10);
 }
 
+// 'YYYY-MM-DD' ที่เป็นวันจริง (2026-02-30 ไม่ผ่าน)
+export function isDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+}
+
+// เวลา 'HH:MM' ตามเวลาไทย
+export function bangkokTime(instant: Date): string {
+  return new Date(instant.getTime() + OFFSET_MS).toISOString().slice(11, 16);
+}
+
 export function addDays(date: string, n: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 }
