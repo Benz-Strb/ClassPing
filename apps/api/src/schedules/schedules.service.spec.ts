@@ -58,6 +58,9 @@ class InMemorySchedulesRepo implements SchedulesRepo {
       (o) => scheduleIds.includes(o.scheduleId) && o.onDate >= from && o.onDate <= to,
     );
   }
+  async listOverridesBetween(from: string, to: string) {
+    return this.overrides.filter((o) => o.onDate >= from && o.onDate <= to);
+  }
   async listOverridesOnDate(date: string) {
     return this.overrides.filter((o) => o.onDate === date);
   }
@@ -128,7 +131,13 @@ function setup() {
     roomNames,
   );
   const synced: string[] = [];
-  const syncer: SessionSyncer = { syncCourse: async (id) => void synced.push(id) };
+  const sync = { fail: false };
+  const syncer: SessionSyncer = {
+    syncCourse: async (id) => {
+      if (sync.fail) throw new Error('db down');
+      synced.push(id);
+    },
+  };
   const service = new SchedulesService(courses, rooms, repo, syncer, () => NOW);
 
   const monday = (overrides: Record<string, unknown> = {}) => ({
@@ -139,7 +148,7 @@ function setup() {
     ...overrides,
   });
 
-  return { owner, otherTeacher, cs101, cs102, roomA, roomB, repo, synced, service, monday };
+  return { owner, otherTeacher, cs101, cs102, roomA, roomB, repo, synced, sync, service, monday };
 }
 
 describe('SchedulesService ตารางประจำ', () => {
@@ -375,5 +384,109 @@ describe('SchedulesService เปลี่ยนเฉพาะวัน', () =>
     expect(
       (await rejection(service.listOverrides(owner, cs101.id, '2026-10-31', '2026-10-01'))).status,
     ).toBe(400);
+  });
+});
+
+describe('SchedulesService กันคาบซ้อนและคาบที่เริ่มแล้ว', () => {
+  const TUESDAY = '2026-10-20';
+
+  it('วิชาเดียวกันเวลาซ้อนกัน แม้คนละห้อง ได้ 409', async () => {
+    const { owner, cs101, roomB, service, monday } = setup();
+    await service.create(owner, cs101.id, monday());
+    expect(
+      await rejection(
+        service.create(owner, cs101.id, monday({ roomId: roomB, startTime: '10:00', endTime: '11:00' })),
+      ),
+    ).toMatchObject({ status: 409, code: 'TIME_CONFLICT' });
+  });
+
+  it('เปลี่ยนเฉพาะวันให้ทับคาบอื่นของวิชาเดียวกัน ได้ 409', async () => {
+    const { owner, cs101, roomB, service, monday } = setup();
+    await service.create(owner, cs101.id, monday());
+    const second = await service.create(
+      owner,
+      cs101.id,
+      monday({ roomId: roomB, startTime: '13:00', endTime: '14:00' }),
+    );
+    expect(
+      await rejection(
+        service.setOverride(owner, second.id, NEXT_MONDAY, { startTime: '11:00', endTime: '13:00' }),
+      ),
+    ).toMatchObject({ status: 409, code: 'TIME_CONFLICT' });
+  });
+
+  it('แก้เวลาตารางประจำ แล้ววันที่ย้ายห้องไว้ไปชนคาบอื่น ได้ 409', async () => {
+    const { owner, otherTeacher, cs101, cs102, roomB, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday());
+    await service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomB });
+    await service.create(otherTeacher, cs102.id, monday({ roomId: roomB, startTime: '13:00', endTime: '16:00' }));
+
+    expect(
+      await rejection(service.update(owner, mine.id, { startTime: '13:00', endTime: '16:00' })),
+    ).toMatchObject({ status: 409, code: 'ROOM_CONFLICT' });
+  });
+
+  it('เพิ่มตารางประจำทับวันที่วิชาอื่นย้ายเข้าห้องนี้ไว้ ได้ 409', async () => {
+    const { owner, otherTeacher, cs101, cs102, roomB, service, monday } = setup();
+    const theirs = await service.create(otherTeacher, cs102.id, monday());
+    await service.setOverride(otherTeacher, theirs.id, NEXT_MONDAY, { roomId: roomB });
+
+    const conflict = await rejection(
+      service.create(owner, cs101.id, monday({ roomId: roomB, startTime: '10:00', endTime: '11:00' })),
+    );
+    expect(conflict).toMatchObject({ status: 409, code: 'ROOM_CONFLICT' });
+    expect(conflict.message).toContain('CS102');
+  });
+
+  it('บันทึกแล้วแต่สร้างคาบไม่สำเร็จ ยังตอบสำเร็จ (รอบทุกชั่วโมงจะสร้างให้)', async () => {
+    const { owner, cs101, sync, service, monday } = setup();
+    sync.fail = true;
+    const schedule = await service.create(owner, cs101.id, monday());
+    expect(await service.list(owner, cs101.id)).toEqual([schedule]);
+    await service.setOverride(owner, schedule.id, NEXT_MONDAY, { cancelled: true });
+  });
+
+  it('คาบวันนี้ที่เริ่มแล้ว งดหรือเปลี่ยนไม่ได้ ได้ 400 SESSION_STARTED', async () => {
+    const { owner, cs101, service, monday } = setup();
+    // ตอนนี้ 10:00 คาบ 09:00-12:00 เริ่มไปแล้ว
+    const schedule = await service.create(owner, cs101.id, monday({ weekday: 2 }));
+    for (const body of [{ cancelled: true }, { startTime: '10:30' }]) {
+      expect(await rejection(service.setOverride(owner, schedule.id, TUESDAY, body))).toMatchObject({
+        status: 400,
+        code: 'SESSION_STARTED',
+      });
+    }
+  });
+
+  it('เลื่อนคาบวันนี้ไปเวลาที่ผ่านมาแล้วไม่ได้ แต่เลื่อนไปเวลาข้างหน้าได้', async () => {
+    const { owner, cs101, service, monday } = setup();
+    const schedule = await service.create(
+      owner,
+      cs101.id,
+      monday({ weekday: 2, startTime: '13:00', endTime: '15:00' }),
+    );
+    expect(
+      await rejection(
+        service.setOverride(owner, schedule.id, TUESDAY, { startTime: '08:00', endTime: '09:00' }),
+      ),
+    ).toMatchObject({ status: 400, code: 'SESSION_STARTED' });
+    await service.setOverride(owner, schedule.id, TUESDAY, { startTime: '14:00', endTime: '15:00' });
+  });
+
+  it('ยกเลิกงดสอนของวันนี้หลังเลยเวลาเริ่มแล้วไม่ได้', async () => {
+    const { owner, cs101, repo, service, monday } = setup();
+    const schedule = await service.create(owner, cs101.id, monday({ weekday: 2 }));
+    await repo.saveOverride({
+      scheduleId: schedule.id,
+      onDate: TUESDAY,
+      cancelled: true,
+      roomId: null,
+      startTime: null,
+      endTime: null,
+    });
+    expect(await rejection(service.clearOverride(owner, schedule.id, TUESDAY))).toMatchObject({
+      status: 400,
+      code: 'SESSION_STARTED',
+    });
   });
 });
