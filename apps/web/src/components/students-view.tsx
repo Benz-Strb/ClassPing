@@ -15,7 +15,6 @@ export function StudentsView() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // เพิ่มค่าเพื่อโหลดรายชื่อใหม่หลังเพิ่ม/เอาออก
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
@@ -45,7 +44,7 @@ export function StudentsView() {
   }
 
   async function remove(code: string) {
-    if (!window.confirm(`เอา ${code} ออกจากวิชานี้?`)) return;
+    if (!window.confirm(`เอา ${code} ออกจากวิชาใช่ไหม`)) return;
     setError(null);
     try {
       await apiFetch(`/courses/${id}/students/${code}`, { method: "DELETE" });
@@ -60,7 +59,7 @@ export function StudentsView() {
       <form onSubmit={add} className="space-y-3 rounded-lg border p-4">
         <h2 className="font-medium">เพิ่มนักศึกษาด้วยรหัส</h2>
         <p className="text-sm text-gray-600">
-          วางได้หลายรหัส คั่นด้วยขึ้นบรรทัดใหม่ เว้นวรรค หรือจุลภาค (ก๊อปจาก Excel ได้)
+          ใส่ได้หลายรหัส เว้นวรรคหรือขึ้นบรรทัดใหม่
         </p>
         <textarea
           required
@@ -110,7 +109,7 @@ export function StudentsView() {
               {roster.map((student) => (
                 <tr key={student.studentCode}>
                   <td className="px-4 py-2 font-mono">{student.studentCode}</td>
-                  <td className="px-4 py-2">{student.fullName ?? "–"}</td>
+                  <td className="px-4 py-2">{student.fullName ?? "-"}</td>
                   <td className="px-4 py-2">
                     {!student.hasLoggedIn ? (
                       <Badge tone="gray">ยังไม่เคย login</Badge>

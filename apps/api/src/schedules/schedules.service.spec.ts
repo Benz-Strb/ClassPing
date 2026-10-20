@@ -191,7 +191,7 @@ describe('SchedulesService ตารางประจำ', () => {
     );
     expect(conflict).toMatchObject({ status: 409, code: 'ROOM_CONFLICT' });
     expect(conflict.message).toContain('CS101');
-    expect(conflict.message).toContain('09:00–12:00');
+    expect(conflict.message).toContain('09:00-12:00');
   });
 
   it('ต่อกันพอดีขอบ / คนละวัน / คนละห้อง ไม่ชน', async () => {

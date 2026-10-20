@@ -3,7 +3,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 
-// นักศึกษาที่เคย login แล้ว (มีแถวใน users)
 export interface StudentAccount {
   studentCode: string;
   userId: string;
@@ -13,7 +12,6 @@ export interface StudentAccount {
 export interface RosterRepo {
   listCodes(courseId: string): Promise<string[]>;
   addCodes(courseId: string, codes: string[]): Promise<void>;
-  // คืน false ถ้าไม่มีรหัสนี้ในวิชา
   removeCode(courseId: string, code: string): Promise<boolean>;
   accountsByCodes(codes: string[]): Promise<StudentAccount[]>;
   faceEnrolledUserIds(userIds: string[]): Promise<string[]>;

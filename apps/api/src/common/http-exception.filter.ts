@@ -49,7 +49,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // ไม่รู้จัก: เก็บรายละเอียดไว้ใน log อย่างเดียว ไม่ส่งออกไปให้ client
     this.logger.error(exception);
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      error: { code: 'INTERNAL', message: 'เกิดข้อผิดพลาดภายในระบบ' },
+      error: { code: 'INTERNAL', message: 'ระบบมีปัญหา ลองใหม่อีกครั้ง' },
     });
   }
 }

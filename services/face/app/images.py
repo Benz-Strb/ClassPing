@@ -42,7 +42,7 @@ def decode_image(data: bytes, max_bytes: int) -> np.ndarray:
     if image_format not in ALLOWED_FORMATS:
         raise invalid()
     if width * height > MAX_PIXELS:
-        raise too_large("รูปมีความละเอียดสูงเกินไป")
+        raise too_large("รูปใหญ่เกินไป")
 
     try:
         image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)

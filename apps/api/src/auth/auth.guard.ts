@@ -29,7 +29,7 @@ interface AuthRequest {
 const unauthorized = () =>
   new AppError(401, 'UNAUTHORIZED', 'กรุณาเข้าสู่ระบบใหม่');
 const unavailable = () =>
-  new AppError(503, 'DB_UNAVAILABLE', 'ระบบยืนยันตัวตนไม่พร้อมใช้งาน ลองใหม่อีกครั้ง');
+  new AppError(503, 'DB_UNAVAILABLE', 'ตรวจสอบการเข้าสู่ระบบไม่ได้ ลองใหม่อีกครั้ง');
 
 // ตรวจ access token ของ Supabase ที่เว็บ/แอปส่งมา แล้วผูกผู้ใช้กับ request
 @Injectable()
