@@ -37,6 +37,7 @@ export interface SchedulesRepo {
   update(id: string, patch: Partial<NewSchedule>): Promise<Schedule>;
   remove(id: string): Promise<void>;
   listOverrides(scheduleIds: string[], from: string, to: string): Promise<Override[]>;
+  listOverridesBetween(from: string, to: string): Promise<Override[]>;
   listOverridesOnDate(date: string): Promise<Override[]>;
   saveOverride(override: Override): Promise<Override>;
   removeOverride(scheduleId: string, date: string): Promise<boolean>;
@@ -174,6 +175,16 @@ export class SupabaseSchedulesRepo implements SchedulesRepo {
       .gte('on_date', from)
       .lte('on_date', to)
       .order('on_date');
+    if (error) throw dbError();
+    return (data as OverrideRow[]).map(toOverride);
+  }
+
+  async listOverridesBetween(from: string, to: string): Promise<Override[]> {
+    const { data, error } = await this.db
+      .from('schedule_overrides')
+      .select(OVERRIDE_COLUMNS)
+      .gte('on_date', from)
+      .lte('on_date', to);
     if (error) throw dbError();
     return (data as OverrideRow[]).map(toOverride);
   }

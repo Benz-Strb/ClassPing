@@ -17,6 +17,7 @@ class InMemorySessionsRepo implements SessionsRepo {
   writes = 0;
 
   async listByCourse(courseId: string, from: string, to: string) {
+    await new Promise((resolve) => setImmediate(resolve));
     return [...this.rows.values()]
       .filter((r) => r.courseId === courseId && r.onDate >= from && r.onDate <= to)
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
@@ -28,15 +29,27 @@ class InMemorySessionsRepo implements SessionsRepo {
       ),
     ];
   }
-  async insert(sessions: PlannedSession[]) {
+  // unique เหมือนใน DB: (course_id, starts_at) และ (schedule_id, on_date)
+  private clash(row: Omit<SessionRow, 'id' | 'roomName'>, ignoreId?: string) {
+    return [...this.rows.values()].some(
+      (r) =>
+        r.id !== ignoreId &&
+        ((r.courseId === row.courseId && r.startsAt.getTime() === row.startsAt.getTime()) ||
+          (row.scheduleId !== null && r.scheduleId === row.scheduleId && r.onDate === row.onDate)),
+    );
+  }
+  async insert(sessions: (PlannedSession | SessionRow)[]) {
+    await new Promise((resolve) => setImmediate(resolve));
     this.writes++;
+    if (sessions.some((s) => this.clash(s))) throw new Error('duplicate key 23505');
     for (const s of sessions) {
       const id = randomUUID();
-      this.rows.set(id, { id, ...s, roomName: `ห้อง ${s.roomId}` });
+      this.rows.set(id, { ...s, id, roomName: `ห้อง ${s.roomId}` });
     }
   }
   async update(id: string, patch: Pick<SessionRow, 'roomId' | 'startsAt' | 'endsAt'>) {
     this.writes++;
+    if (this.clash({ ...this.rows.get(id)!, ...patch }, id)) throw new Error('duplicate key 23505');
     this.rows.set(id, { ...this.rows.get(id)!, ...patch, roomName: `ห้อง ${patch.roomId}` });
   }
   async remove(ids: string[]) {
@@ -73,9 +86,13 @@ function setup() {
 
   const schedules: Schedule[] = [];
   let overrides: Override[] = [];
+  const broken = new Set<string>();
   const schedulesRepo = {
     listAll: async () => schedules,
-    listByCourse: async (courseId: string) => schedules.filter((s) => s.courseId === courseId),
+    listByCourse: async (courseId: string) => {
+      if (broken.has(courseId)) throw new Error('db error');
+      return schedules.filter((s) => s.courseId === courseId);
+    },
     listOverrides: async (ids: string[], from: string, to: string) =>
       overrides.filter((o) => ids.includes(o.scheduleId) && o.onDate >= from && o.onDate <= to),
   } as unknown as SchedulesRepo;
@@ -111,7 +128,7 @@ function setup() {
   const sessions = () => [...repo.rows.values()];
   const setNow = (value: Date) => (now = value);
 
-  return { owner, course, repo, service, addSchedule, setOverride, removeSchedule, sessions, setNow };
+  return { owner, course, repo, service, addSchedule, setOverride, removeSchedule, sessions, setNow, broken };
 }
 
 describe('SessionsService.syncCourse', () => {
@@ -233,6 +250,38 @@ describe('SessionsService.syncAll', () => {
 
     await service.syncAll();
     expect(sessions().map((r) => r.courseId === orphan)).toEqual([false]);
+  });
+});
+
+describe('SessionsService กันพังตอนสร้างคาบ', () => {
+  it('ลบแล้วเพิ่มตารางใหม่ระหว่างคาบ คาบเดิมที่เวลาเดียวกันยังอยู่ และ sync ไม่พัง', async () => {
+    const { course, service, addSchedule, removeSchedule, sessions } = setup();
+    // คาบ 09:00 วันนี้เริ่มไปแล้ว
+    const old = addSchedule({ weekday: 2, startTime: '09:00', endTime: '12:00' });
+    await service.syncCourse(course.id);
+    removeSchedule(old.id);
+    addSchedule({ weekday: 2, startTime: '09:00', endTime: '12:00' });
+
+    await service.syncCourse(course.id);
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it('syncAll วิชาหนึ่งพัง วิชาอื่นยังได้คาบ', async () => {
+    const { course, service, addSchedule, sessions, broken } = setup();
+    const other = randomUUID();
+    broken.add(course.id);
+    addSchedule();
+    addSchedule({ courseId: other });
+
+    await service.syncAll();
+    expect(sessions().map((s) => s.courseId)).toEqual([other]);
+  });
+
+  it('sync วิชาเดียวกันพร้อมกันสองครั้ง ไม่ได้คาบซ้ำและไม่ error', async () => {
+    const { course, service, addSchedule, sessions } = setup();
+    addSchedule();
+    await Promise.all([service.syncCourse(course.id), service.syncCourse(course.id)]);
+    expect(sessions()).toHaveLength(1);
   });
 });
 

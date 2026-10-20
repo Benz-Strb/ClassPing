@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { chunk } from '../common/chunk.js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 
@@ -18,6 +19,9 @@ export interface RosterRepo {
 }
 
 export const ROSTER_REPO = Symbol('ROSTER_REPO');
+
+// Supabase คืนได้ไม่เกิน 1000 แถวต่อครั้ง และ URL ยาวเกินไม่ได้ เลยส่ง id ทีละก้อน
+const BATCH = 50;
 
 @Injectable()
 export class SupabaseRosterRepo implements RosterRepo {
@@ -54,26 +58,31 @@ export class SupabaseRosterRepo implements RosterRepo {
   }
 
   async accountsByCodes(codes: string[]): Promise<StudentAccount[]> {
-    if (!codes.length) return [];
-    const { data, error } = await this.db
-      .from('users')
-      .select('id, full_name, student_id')
-      .in('student_id', codes);
-    if (error) throw dbError();
-    return (data as { id: string; full_name: string | null; student_id: string }[]).map((r) => ({
-      studentCode: r.student_id,
-      userId: r.id,
-      fullName: r.full_name,
-    }));
+    const accounts: StudentAccount[] = [];
+    for (const batch of chunk(codes, BATCH)) {
+      const { data, error } = await this.db
+        .from('users')
+        .select('id, full_name, student_id')
+        .in('student_id', batch);
+      if (error) throw dbError();
+      for (const r of data as { id: string; full_name: string | null; student_id: string }[]) {
+        accounts.push({ studentCode: r.student_id, userId: r.id, fullName: r.full_name });
+      }
+    }
+    return accounts;
   }
 
+  // คนละไม่เกิน 10 มุม ก้อนละ 50 คนจึงไม่เกิน 1000 แถว
   async faceEnrolledUserIds(userIds: string[]): Promise<string[]> {
-    if (!userIds.length) return [];
-    const { data, error } = await this.db
-      .from('face_profiles')
-      .select('user_id')
-      .in('user_id', userIds);
-    if (error) throw dbError();
-    return [...new Set((data as { user_id: string }[]).map((r) => r.user_id))];
+    const found = new Set<string>();
+    for (const batch of chunk(userIds, BATCH)) {
+      const { data, error } = await this.db
+        .from('face_profiles')
+        .select('user_id')
+        .in('user_id', batch);
+      if (error) throw dbError();
+      for (const r of data as { user_id: string }[]) found.add(r.user_id);
+    }
+    return [...found];
   }
 }
