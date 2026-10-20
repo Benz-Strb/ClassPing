@@ -27,6 +27,9 @@ class InMemorySchedulesRepo implements SchedulesRepo {
       roomName: this.roomNames.get(row.roomId) ?? '?',
     };
   }
+  async listAll() {
+    return [...this.schedules.values()].map((s) => this.view(s));
+  }
   async listByCourse(courseId: string) {
     return [...this.schedules.values()].filter((s) => s.courseId === courseId).map((s) => this.view(s));
   }

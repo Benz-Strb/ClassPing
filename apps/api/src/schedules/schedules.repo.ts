@@ -30,6 +30,7 @@ export interface Override {
 }
 
 export interface SchedulesRepo {
+  listAll(): Promise<Schedule[]>;
   listByCourse(courseId: string): Promise<Schedule[]>;
   findById(id: string): Promise<Schedule | null>;
   // ทุกวิชา ใช้ตรวจห้องชน
@@ -106,6 +107,12 @@ const scheduleRow = (s: Partial<NewSchedule>) => ({
 @Injectable()
 export class SupabaseSchedulesRepo implements SchedulesRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
+
+  async listAll(): Promise<Schedule[]> {
+    const { data, error } = await this.db.from('schedules').select(SCHEDULE_COLUMNS);
+    if (error) throw dbError();
+    return (data as unknown as ScheduleRow[]).map(toSchedule);
+  }
 
   async listByCourse(courseId: string): Promise<Schedule[]> {
     const { data, error } = await this.db
