@@ -14,7 +14,6 @@ export default function CoursesPage() {
   const [form, setForm] = useState({ code: "", name: "", section: "" });
   const [saving, setSaving] = useState(false);
 
-  // เพิ่มค่าเพื่อโหลดรายการใหม่หลังสร้างวิชา
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
@@ -52,7 +51,7 @@ export default function CoursesPage() {
       {courses === null ? (
         <p>กำลังโหลด...</p>
       ) : courses.length === 0 ? (
-        <p className="text-gray-600">ยังไม่มีวิชา สร้างวิชาแรกด้านล่าง</p>
+        <p className="text-gray-600">ยังไม่มีวิชา</p>
       ) : (
         <ul className="divide-y rounded-lg border">
           {courses.map((course) => (
@@ -89,7 +88,7 @@ export default function CoursesPage() {
             className="rounded-lg border px-3 py-2"
           />
           <input
-            placeholder="กลุ่มเรียน (ไม่ใส่ก็ได้)"
+            placeholder="กลุ่มเรียน"
             value={form.section}
             onChange={(e) => setForm({ ...form, section: e.target.value })}
             className="rounded-lg border px-3 py-2"

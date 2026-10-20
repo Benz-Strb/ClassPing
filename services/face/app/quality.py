@@ -50,15 +50,15 @@ def pick_enrollment_face(
     """รูปลงทะเบียนต้องมีหน้าเดียวที่ชัดพอ ไม่งั้นบอกเหตุผลให้ถ่ายใหม่"""
     candidates = real_faces(faces)
     if not candidates:
-        raise FaceError(422, "NO_FACE", "ไม่พบใบหน้าในรูป")
+        raise FaceError(422, "NO_FACE", "ไม่เจอหน้าในรูป")
     if len(candidates) > 1:
-        raise FaceError(422, "MULTIPLE_FACES", "พบหลายใบหน้าในรูป ถ่ายให้มีแค่คุณคนเดียว")
+        raise FaceError(422, "MULTIPLE_FACES", "มีหลายคนในรูป ถ่ายให้มีแค่คนเดียว")
 
     face = candidates[0]
     if face_size(face.bbox) < settings.enroll_min_face_px:
-        raise FaceError(422, "FACE_TOO_SMALL", "ใบหน้าเล็กเกินไป ขยับเข้าใกล้กล้อง")
+        raise FaceError(422, "FACE_TOO_SMALL", "หน้าเล็กไป ขยับเข้ามาใกล้กล้องอีกหน่อย")
     if face.det_score < settings.enroll_min_det_score:
-        raise FaceError(422, "LOW_QUALITY", "ใบหน้าไม่ชัด ลองถ่ายในที่สว่างขึ้น")
+        raise FaceError(422, "LOW_QUALITY", "หน้าไม่ชัด ลองถ่ายในที่สว่างกว่านี้")
     if sharpness(image, face.bbox) < settings.enroll_min_sharpness:
-        raise FaceError(422, "BLURRY", "รูปเบลอ ถือกล้องให้นิ่งแล้วถ่ายใหม่")
+        raise FaceError(422, "BLURRY", "รูปเบลอ ถือให้นิ่งแล้วถ่ายใหม่")
     return face

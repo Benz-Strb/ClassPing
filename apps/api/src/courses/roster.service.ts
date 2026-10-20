@@ -20,7 +20,6 @@ export interface AddResult {
   invalid: string[];
 }
 
-// ห้องเรียนใหญ่สุดราว 500 คน (ตรงกับลิมิตของ face service)
 const MAX_CODES_PER_ADD = 500;
 
 const addSchema = z.object({
@@ -74,7 +73,7 @@ export class RosterService {
     }
   }
 
-  // ไม่ตรวจสิทธิ์ ใช้ภายใน (แผน 5 เลือกนักศึกษาที่จะเอาไปเทียบหน้า)
+  // ใช้ภายใน ไม่ได้ตรวจสิทธิ์
   async enrolledUserIds(courseId: string): Promise<string[]> {
     const accounts = await this.repo.accountsByCodes(await this.repo.listCodes(courseId));
     return accounts.map((a) => a.userId);

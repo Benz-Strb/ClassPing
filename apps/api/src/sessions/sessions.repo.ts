@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 
-// scheduleId เป็น null เมื่อตารางประจำถูกลบไปแล้ว (คาบที่เกิดขึ้นแล้วยังเก็บไว้)
+// scheduleId = null ถ้าตารางถูกลบไปแล้ว
 export interface NewSessionRow {
   scheduleId: string | null;
   courseId: string;
@@ -50,7 +50,6 @@ const toSession = (row: Row): SessionRow => ({
   roomName: row.rooms?.name ?? '',
 });
 
-// คุย Supabase อย่างเดียว กฎทั้งหมดอยู่ใน SessionsService
 @Injectable()
 export class SupabaseSessionsRepo implements SessionsRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}

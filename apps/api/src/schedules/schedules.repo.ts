@@ -3,10 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 
-// เวลาเป็น 'HH:MM' เวลาไทย
 export interface NewSchedule {
   courseId: string;
-  // 0 = อาทิตย์ ... 6 = เสาร์
+  // 0 = อาทิตย์
   weekday: number;
   startTime: string;
   endTime: string;
@@ -19,7 +18,7 @@ export interface Schedule extends NewSchedule {
   roomName: string;
 }
 
-// ค่า null แปลว่าใช้ค่าเดิมของตารางประจำ
+// null = ใช้ค่าเดิม
 export interface Override {
   scheduleId: string;
   onDate: string;
@@ -33,16 +32,13 @@ export interface SchedulesRepo {
   listAll(): Promise<Schedule[]>;
   listByCourse(courseId: string): Promise<Schedule[]>;
   findById(id: string): Promise<Schedule | null>;
-  // ทุกวิชา ใช้ตรวจห้องชน
   listByWeekday(weekday: number): Promise<Schedule[]>;
   insert(schedule: NewSchedule): Promise<Schedule>;
   update(id: string, patch: Partial<NewSchedule>): Promise<Schedule>;
   remove(id: string): Promise<void>;
   listOverrides(scheduleIds: string[], from: string, to: string): Promise<Override[]>;
-  // ทุกวิชา ใช้ตรวจห้องชน
   listOverridesOnDate(date: string): Promise<Override[]>;
   saveOverride(override: Override): Promise<Override>;
-  // คืน false ถ้าไม่มีการเปลี่ยนของวันนั้น
   removeOverride(scheduleId: string, date: string): Promise<boolean>;
 }
 
@@ -72,7 +68,7 @@ const SCHEDULE_COLUMNS =
   'id, course_id, weekday, start_time, end_time, room_id, rooms(name), courses(code)';
 const OVERRIDE_COLUMNS = 'schedule_id, on_date, cancelled, room_id, start_time, end_time';
 
-// Postgres ส่งคอลัมน์ time มาเป็น 'HH:MM:SS'
+// Postgres คืน time เป็น HH:MM:SS
 const hhmm = (time: string) => time.slice(0, 5);
 
 const toSchedule = (row: ScheduleRow): Schedule => ({
@@ -103,7 +99,6 @@ const scheduleRow = (s: Partial<NewSchedule>) => ({
   ...(s.roomId !== undefined && { room_id: s.roomId }),
 });
 
-// คุย Supabase อย่างเดียว กฎทั้งหมดอยู่ใน SchedulesService
 @Injectable()
 export class SupabaseSchedulesRepo implements SchedulesRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}

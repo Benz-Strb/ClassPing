@@ -8,7 +8,6 @@ import { handleApiError } from "@/lib/auth-error";
 import { supabase } from "@/lib/supabase";
 import type { Me } from "@/lib/types";
 
-// login แล้ว: อาจารย์/แอดมินไปหน้าวิชา นักศึกษาใช้แอปมือถือ
 export default function Home() {
   const router = useRouter();
   const [state, setState] = useState<"loading" | "guest" | "student">("loading");
@@ -37,7 +36,7 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
       {state === "student" ? (
         <>
-          <p>นักศึกษาใช้แอป ClassPing บนมือถือเพื่อลงทะเบียนใบหน้าและดูการเข้าเรียน</p>
+          <p>บัญชีนักศึกษาใช้งานผ่านแอปมือถือ</p>
           <Link href="/me" className="text-blue-600 underline">
             ดูบัญชีของฉัน
           </Link>

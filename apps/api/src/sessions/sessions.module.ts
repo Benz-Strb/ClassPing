@@ -7,8 +7,7 @@ import { SessionsController } from './sessions.controller.js';
 import { SESSIONS_REPO, SupabaseSessionsRepo } from './sessions.repo.js';
 import { SessionsService } from './sessions.service.js';
 
-// ใช้ SchedulesRepo ตรง ๆ (ไม่ import SchedulesModule) เพราะ SchedulesModule ต้องใช้
-// SessionsService เป็นตัวสร้างคาบ ถ้า import กันไปมาจะเป็นวงกลม
+// ไม่ import SchedulesModule เพราะจะวนกัน
 @Module({
   imports: [CoursesModule],
   controllers: [SessionsController],

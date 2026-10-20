@@ -5,7 +5,6 @@ import { parseBody } from '../common/validate.js';
 import type { AppUser } from '../users/users.service.js';
 import { COURSES_REPO, type Course, type CoursesRepo, type Rules } from './courses.repo.js';
 
-// ค่าตาม spec: ตัดสาย 15 นาที ยังไม่ตั้งเวลาตัดขาด นอกห้องเกิน 15 นาทีถือว่าโดด
 export const DEFAULT_RULES: Rules = {
   lateAfterMin: 15,
   absentAfterMin: null,
@@ -23,7 +22,6 @@ const name = z
   .trim()
   .min(1, { error: 'กรุณาใส่ชื่อวิชา' })
   .max(200, { error: 'ชื่อวิชายาวเกิน 200 ตัว' });
-// กลุ่มเรียนว่างเก็บเป็น null
 const section = z
   .string()
   .trim()
@@ -32,7 +30,6 @@ const section = z
   .transform((v) => v || null);
 
 const createSchema = z.object({ code, name, section });
-// แก้ได้เฉพาะรหัส ชื่อ กลุ่ม (ช่องอื่นเช่น teacherId ถูกตัดทิ้ง)
 const updateSchema = z.object({
   code: code.optional(),
   name: name.optional(),
@@ -42,9 +39,9 @@ const updateSchema = z.object({
 const minutes = (label: string, min: number) =>
   z
     .number({ error: `${label}ต้องเป็นตัวเลข` })
-    .int({ error: `${label}ต้องเป็นจำนวนเต็มนาที` })
-    .min(min, { error: `${label}ต้องอยู่ระหว่าง ${min}–240 นาที` })
-    .max(240, { error: `${label}ต้องอยู่ระหว่าง ${min}–240 นาที` });
+    .int({ error: `${label}ต้องเป็นจำนวนนาทีเต็ม` })
+    .min(min, { error: `${label}ใส่ได้ ${min} ถึง 240 นาที` })
+    .max(240, { error: `${label}ใส่ได้ ${min} ถึง 240 นาที` });
 
 const rulesSchema = z
   .object({
@@ -75,8 +72,7 @@ export class CoursesService {
     return course;
   }
 
-  // ทุก route ที่รับ courseId ต้องผ่านตัวนี้ก่อน
-  // วิชาของคนอื่นตอบเหมือนไม่มีวิชานี้ ไม่บอกว่ามีอยู่
+  // วิชาของคนอื่นตอบเหมือนหาไม่เจอ
   async getOwned(user: AppUser, courseId: string): Promise<Course> {
     if (!UUID.test(courseId)) throw notFound();
     const course = await this.repo.findById(courseId);
