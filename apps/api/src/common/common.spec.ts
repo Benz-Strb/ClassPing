@@ -58,7 +58,7 @@ describe('HttpExceptionFilter', () => {
     filter.catch(new Error('secret stack detail'), host);
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({
-      error: { code: 'INTERNAL', message: 'เกิดข้อผิดพลาดภายในระบบ' },
+      error: { code: 'INTERNAL', message: 'ระบบมีปัญหา ลองใหม่อีกครั้ง' },
     });
   });
 });
