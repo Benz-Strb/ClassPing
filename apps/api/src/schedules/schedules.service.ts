@@ -1,0 +1,279 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { z } from 'zod';
+import { AppError } from '../common/app-error.js';
+import { CLOCK, type Clock } from '../common/clock.js';
+import { parseBody } from '../common/validate.js';
+import { CoursesService } from '../courses/courses.service.js';
+import { RoomsRepo } from '../rooms/rooms.repo.js';
+import {
+  addDays,
+  bangkokDate,
+  bangkokTime,
+  daysBetween,
+  isDate,
+  overlaps,
+  planDay,
+  weekdayOf,
+} from '../sessions/plan-day.js';
+import type { AppUser } from '../users/users.service.js';
+import {
+  SCHEDULES_REPO,
+  type Override,
+  type Schedule,
+  type SchedulesRepo,
+} from './schedules.repo.js';
+
+// สร้าง/แก้ตารางแล้วต้องสร้างคาบใหม่ (SessionsService ในแผนนี้ Task 5)
+export interface SessionSyncer {
+  syncCourse(courseId: string): Promise<void>;
+}
+
+export const SESSION_SYNCER = Symbol('SESSION_SYNCER');
+
+const DAY_START = '07:00';
+const DAY_END = '22:00';
+const MIN_LENGTH_MIN = 15;
+const MAX_LENGTH_MIN = 6 * 60;
+const MAX_RANGE_DAYS = 31;
+const MAX_AHEAD_DAYS = 365;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const time = z
+  .string({ error: 'กรุณาใส่เวลา' })
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'เวลาต้องเป็นรูปแบบ HH:MM เช่น 09:00' });
+const weekday = z
+  .number({ error: 'กรุณาเลือกวัน' })
+  .int({ error: 'วันไม่ถูกต้อง' })
+  .min(0, { error: 'วันไม่ถูกต้อง' })
+  .max(6, { error: 'วันไม่ถูกต้อง' });
+const roomId = z.string({ error: 'กรุณาเลือกห้อง' });
+
+const createSchema = z.object({ weekday, startTime: time, endTime: time, roomId });
+const updateSchema = createSchema.partial();
+const overrideSchema = z.object({
+  cancelled: z.boolean({ error: 'ค่างดสอนไม่ถูกต้อง' }).optional(),
+  roomId: roomId.nullish(),
+  startTime: time.nullish(),
+  endTime: time.nullish(),
+});
+
+const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+
+const badRequest = (message: string) => new AppError(400, 'BAD_REQUEST', message);
+const scheduleNotFound = () => new AppError(404, 'SCHEDULE_NOT_FOUND', 'ไม่พบตารางเรียนนี้');
+const roomConflict = (roomName: string, courseCode: string, start: string, end: string) =>
+  new AppError(
+    409,
+    'ROOM_CONFLICT',
+    `${roomName} มีวิชา ${courseCode} ช่วง ${start}–${end} อยู่แล้ว`,
+  );
+
+function checkTimes(start: string, end: string) {
+  if (start >= end) throw badRequest('เวลาเริ่มต้องก่อนเวลาจบ');
+  if (start < DAY_START || end > DAY_END) {
+    throw badRequest(`เวลาเรียนต้องอยู่ระหว่าง ${DAY_START}–${DAY_END}`);
+  }
+  const length = minutes(end) - minutes(start);
+  if (length < MIN_LENGTH_MIN || length > MAX_LENGTH_MIN) {
+    throw badRequest('คาบเรียนต้องยาว 15 นาทีถึง 6 ชั่วโมง');
+  }
+}
+
+@Injectable()
+export class SchedulesService {
+  constructor(
+    private readonly courses: CoursesService,
+    private readonly rooms: RoomsRepo,
+    @Inject(SCHEDULES_REPO) private readonly repo: SchedulesRepo,
+    @Inject(SESSION_SYNCER) private readonly syncer: SessionSyncer,
+    @Inject(CLOCK) private readonly now: Clock,
+  ) {}
+
+  async list(user: AppUser, courseId: string): Promise<Schedule[]> {
+    await this.courses.getOwned(user, courseId);
+    return this.repo.listByCourse(courseId);
+  }
+
+  async create(user: AppUser, courseId: string, body: unknown): Promise<Schedule> {
+    await this.courses.getOwned(user, courseId);
+    const input = parseBody(createSchema, body);
+    checkTimes(input.startTime, input.endTime);
+    await this.checkRoom(input.roomId);
+    await this.checkWeeklyConflict({ ...input, id: null });
+
+    const schedule = await this.repo.insert({ ...input, courseId });
+    await this.syncer.syncCourse(courseId);
+    return schedule;
+  }
+
+  async update(user: AppUser, scheduleId: string, body: unknown): Promise<Schedule> {
+    const current = await this.owned(user, scheduleId);
+    const patch = parseBody(updateSchema, body);
+    const next = { ...current, ...patch };
+    checkTimes(next.startTime, next.endTime);
+    if (patch.roomId) await this.checkRoom(patch.roomId);
+    await this.checkWeeklyConflict(next);
+
+    const schedule = await this.repo.update(scheduleId, patch);
+    await this.syncer.syncCourse(current.courseId);
+    return schedule;
+  }
+
+  async remove(user: AppUser, scheduleId: string): Promise<void> {
+    const current = await this.owned(user, scheduleId);
+    await this.repo.remove(scheduleId);
+    await this.syncer.syncCourse(current.courseId);
+  }
+
+  async listOverrides(
+    user: AppUser,
+    courseId: string,
+    from: string,
+    to: string,
+  ): Promise<Override[]> {
+    await this.courses.getOwned(user, courseId);
+    if (!isDate(from) || !isDate(to) || from > to) {
+      throw badRequest('ช่วงวันที่ไม่ถูกต้อง');
+    }
+    if (daysBetween(from, to) > MAX_RANGE_DAYS) {
+      throw badRequest(`ดูได้ครั้งละไม่เกิน ${MAX_RANGE_DAYS} วัน`);
+    }
+    const schedules = await this.repo.listByCourse(courseId);
+    return this.repo.listOverrides(
+      schedules.map((s) => s.id),
+      from,
+      to,
+    );
+  }
+
+  async setOverride(
+    user: AppUser,
+    scheduleId: string,
+    date: string,
+    body: unknown,
+  ): Promise<Override> {
+    const schedule = await this.owned(user, scheduleId);
+    this.checkOverrideDate(schedule, date);
+    const input = parseBody(overrideSchema, body);
+
+    let override: Override;
+    if (input.cancelled) {
+      override = {
+        scheduleId,
+        onDate: date,
+        cancelled: true,
+        roomId: null,
+        startTime: null,
+        endTime: null,
+      };
+    } else {
+      override = {
+        scheduleId,
+        onDate: date,
+        cancelled: false,
+        roomId: input.roomId ?? null,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
+      };
+      if (!override.roomId && !override.startTime && !override.endTime) {
+        throw badRequest('เลือกงดสอน หรือเปลี่ยนห้อง/เวลาอย่างน้อยหนึ่งอย่าง');
+      }
+      checkTimes(
+        override.startTime ?? schedule.startTime,
+        override.endTime ?? schedule.endTime,
+      );
+      if (override.roomId) await this.checkRoom(override.roomId);
+      await this.checkDayConflict(schedule, override);
+    }
+
+    const saved = await this.repo.saveOverride(override);
+    await this.syncer.syncCourse(schedule.courseId);
+    return saved;
+  }
+
+  async clearOverride(user: AppUser, scheduleId: string, date: string): Promise<void> {
+    const schedule = await this.owned(user, scheduleId);
+    if (!isDate(date) || !(await this.repo.removeOverride(scheduleId, date))) {
+      throw new AppError(404, 'OVERRIDE_NOT_FOUND', 'ไม่มีการเปลี่ยนแปลงของวันนี้');
+    }
+    await this.syncer.syncCourse(schedule.courseId);
+  }
+
+  // ตารางของวิชาคนอื่นตอบเหมือนไม่มีตารางนี้
+  private async owned(user: AppUser, scheduleId: string): Promise<Schedule> {
+    if (!UUID.test(scheduleId)) throw scheduleNotFound();
+    const schedule = await this.repo.findById(scheduleId);
+    if (!schedule) throw scheduleNotFound();
+    try {
+      await this.courses.getOwned(user, schedule.courseId);
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'COURSE_NOT_FOUND') throw scheduleNotFound();
+      throw error;
+    }
+    return schedule;
+  }
+
+  private async checkRoom(id: string) {
+    if (!UUID.test(id) || !(await this.rooms.findById(id))) {
+      throw new AppError(400, 'ROOM_NOT_FOUND', 'ไม่พบห้องนี้');
+    }
+  }
+
+  private checkOverrideDate(schedule: Schedule, date: string) {
+    if (!isDate(date)) throw badRequest('วันที่ไม่ถูกต้อง');
+    const today = bangkokDate(this.now());
+    if (date < today) throw new AppError(400, 'DATE_IN_PAST', 'เปลี่ยนวันที่ผ่านไปแล้วไม่ได้');
+    if (date > addDays(today, MAX_AHEAD_DAYS)) {
+      throw badRequest('เปลี่ยนล่วงหน้าได้ไม่เกิน 1 ปี');
+    }
+    if (weekdayOf(date) !== schedule.weekday) {
+      throw new AppError(400, 'WRONG_WEEKDAY', 'วันที่นี้ไม่ใช่วันเรียนของตารางนี้');
+    }
+  }
+
+  // ตารางประจำ: เทียบกับตารางประจำอื่นของห้องเดียวกันในวันเดียวกัน
+  private async checkWeeklyConflict(next: {
+    id: string | null;
+    weekday: number;
+    startTime: string;
+    endTime: string;
+    roomId: string;
+  }) {
+    const others = await this.repo.listByWeekday(next.weekday);
+    const hit = others.find(
+      (s) =>
+        s.id !== next.id &&
+        s.roomId === next.roomId &&
+        s.startTime < next.endTime &&
+        next.startTime < s.endTime,
+    );
+    if (hit) throw roomConflict(hit.roomName, hit.courseCode, hit.startTime, hit.endTime);
+  }
+
+  // เปลี่ยนเฉพาะวัน: วางคาบของวันนั้นทุกวิชา (รวมการเปลี่ยนนี้) แล้วดูว่าห้องชนไหม
+  private async checkDayConflict(schedule: Schedule, override: Override) {
+    const date = override.onDate;
+    const schedules = await this.repo.listByWeekday(schedule.weekday);
+    const overrides = (await this.repo.listOverridesOnDate(date)).filter(
+      (o) => o.scheduleId !== schedule.id,
+    );
+    const sessions = planDay(date, schedules, [...overrides, override]);
+    const mine = sessions.find((s) => s.scheduleId === schedule.id);
+    if (!mine) return;
+
+    const hit = sessions.find(
+      (s) => s.scheduleId !== schedule.id && s.roomId === mine.roomId && overlaps(s, mine),
+    );
+    if (hit) {
+      const other = schedules.find((s) => s.id === hit.scheduleId);
+      const roomName = (await this.rooms.findById(mine.roomId))?.name ?? 'ห้องนี้';
+      throw roomConflict(
+        roomName,
+        other?.courseCode ?? 'อื่น',
+        bangkokTime(hit.startsAt),
+        bangkokTime(hit.endsAt),
+      );
+    }
+  }
+}
