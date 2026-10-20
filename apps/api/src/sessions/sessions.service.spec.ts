@@ -254,6 +254,7 @@ describe('SessionsService.listForCourse', () => {
     ]);
     expect(list[0]).toMatchObject({
       courseId: course.id,
+      scheduleId: expect.any(String),
       roomName: 'ห้อง A',
       startsAt: '2026-10-20T00:00:00.000Z',
       endsAt: '2026-10-20T01:00:00.000Z',
