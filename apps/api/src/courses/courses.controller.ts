@@ -1,13 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
 import type { Course, Rules } from './courses.repo.js';
 import { CoursesService } from './courses.service.js';
+import { RosterService, type AddResult, type RosterEntry } from './roster.service.js';
 
 @Controller('courses')
 @Roles('teacher')
 export class CoursesController {
-  constructor(private readonly courses: CoursesService) {}
+  constructor(
+    private readonly courses: CoursesService,
+    private readonly roster: RosterService,
+  ) {}
 
   @Get()
   list(@CurrentUser() user: AppUser): Promise<Course[]> {
@@ -45,5 +49,30 @@ export class CoursesController {
     @Body() body: unknown,
   ): Promise<Rules> {
     return this.courses.setRules(user, id, body);
+  }
+
+  @Get(':id/students')
+  students(@CurrentUser() user: AppUser, @Param('id') id: string): Promise<RosterEntry[]> {
+    return this.roster.list(user, id);
+  }
+
+  @Post(':id/students')
+  addStudents(
+    @CurrentUser() user: AppUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<AddResult> {
+    return this.roster.add(user, id, body);
+  }
+
+  @Delete(':id/students/:code')
+  @HttpCode(200)
+  async removeStudent(
+    @CurrentUser() user: AppUser,
+    @Param('id') id: string,
+    @Param('code') code: string,
+  ): Promise<{ removed: string }> {
+    await this.roster.remove(user, id, code);
+    return { removed: code };
   }
 }
