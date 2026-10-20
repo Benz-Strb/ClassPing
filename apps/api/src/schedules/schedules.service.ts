@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
@@ -14,6 +14,8 @@ import {
   overlaps,
   planDay,
   weekdayOf,
+  type OverrideLike,
+  type ScheduleLike,
 } from '../sessions/plan-day.js';
 import type { AppUser } from '../users/users.service.js';
 import {
@@ -67,6 +69,12 @@ const roomConflict = (roomName: string, courseCode: string, start: string, end: 
     'ROOM_CONFLICT',
     `${roomName} มีวิชา ${courseCode} เวลา ${start}-${end} แล้ว`,
   );
+const timeConflict = (start: string, end: string) =>
+  new AppError(409, 'TIME_CONFLICT', `วิชานี้มีเรียนเวลา ${start}-${end} อยู่แล้ว`);
+const sessionStarted = () =>
+  new AppError(400, 'SESSION_STARTED', 'คาบวันนี้เลยเวลาเริ่มแล้ว แก้ไม่ได้');
+
+const NEW_SCHEDULE = 'new';
 
 function checkTimes(start: string, end: string) {
   if (start >= end) throw badRequest('เวลาเริ่มต้องก่อนเวลาจบ');
@@ -81,6 +89,8 @@ function checkTimes(start: string, end: string) {
 
 @Injectable()
 export class SchedulesService {
+  private readonly logger = new Logger(SchedulesService.name);
+
   constructor(
     private readonly courses: CoursesService,
     private readonly rooms: RoomsRepo,
@@ -99,10 +109,10 @@ export class SchedulesService {
     const input = parseBody(createSchema, body);
     checkTimes(input.startTime, input.endTime);
     await this.checkRoom(input.roomId);
-    await this.checkWeeklyConflict({ ...input, id: null });
+    await this.checkWeeklyConflict({ ...input, id: null, courseId });
 
     const schedule = await this.repo.insert({ ...input, courseId });
-    await this.syncer.syncCourse(courseId);
+    await this.sync(courseId);
     return schedule;
   }
 
@@ -115,14 +125,14 @@ export class SchedulesService {
     await this.checkWeeklyConflict(next);
 
     const schedule = await this.repo.update(scheduleId, patch);
-    await this.syncer.syncCourse(current.courseId);
+    await this.sync(current.courseId);
     return schedule;
   }
 
   async remove(user: AppUser, scheduleId: string): Promise<void> {
     const current = await this.owned(user, scheduleId);
     await this.repo.remove(scheduleId);
-    await this.syncer.syncCourse(current.courseId);
+    await this.sync(current.courseId);
   }
 
   async listOverrides(
@@ -183,20 +193,22 @@ export class SchedulesService {
         override.endTime ?? schedule.endTime,
       );
       if (override.roomId) await this.checkRoom(override.roomId);
-      await this.checkDayConflict(schedule, override);
     }
+    await this.checkNotStarted(schedule, date, override);
+    if (!override.cancelled) await this.checkDayConflict(schedule, override);
 
     const saved = await this.repo.saveOverride(override);
-    await this.syncer.syncCourse(schedule.courseId);
+    await this.sync(schedule.courseId);
     return saved;
   }
 
   async clearOverride(user: AppUser, scheduleId: string, date: string): Promise<void> {
     const schedule = await this.owned(user, scheduleId);
-    if (!isDate(date) || !(await this.repo.removeOverride(scheduleId, date))) {
-      throw new AppError(404, 'OVERRIDE_NOT_FOUND', 'วันนี้ไม่ได้เปลี่ยนอะไรไว้');
-    }
-    await this.syncer.syncCourse(schedule.courseId);
+    const notFound = () => new AppError(404, 'OVERRIDE_NOT_FOUND', 'วันนี้ไม่ได้เปลี่ยนอะไรไว้');
+    if (!isDate(date)) throw notFound();
+    await this.checkNotStarted(schedule, date, null);
+    if (!(await this.repo.removeOverride(scheduleId, date))) throw notFound();
+    await this.sync(schedule.courseId);
   }
 
   private async owned(user: AppUser, scheduleId: string): Promise<Schedule> {
@@ -230,22 +242,63 @@ export class SchedulesService {
     }
   }
 
+  // บันทึกไปแล้ว ถ้าสร้างคาบไม่สำเร็จ รอบทุกชั่วโมงจะสร้างให้เอง
+  private async sync(courseId: string) {
+    try {
+      await this.syncer.syncCourse(courseId);
+    } catch (error) {
+      this.logger.warn(`สร้างคาบของวิชา ${courseId} ไม่สำเร็จ: ${String(error)}`);
+    }
+  }
+
+  // คาบวันนี้ที่เลยเวลาเริ่มแล้ว (ทั้งเวลาเดิมและเวลาใหม่) แก้ไม่ได้
+  private async checkNotStarted(schedule: Schedule, date: string, next: Override | null) {
+    const now = this.now();
+    if (date !== bangkokDate(now)) return;
+    const current = (await this.repo.listOverridesOnDate(date)).filter(
+      (o) => o.scheduleId === schedule.id,
+    );
+    const [before] = planDay(date, [schedule], current);
+    const [after] = planDay(date, [schedule], next ? [next] : []);
+    if ((before && before.startsAt <= now) || (after && after.startsAt <= now)) {
+      throw sessionStarted();
+    }
+  }
+
   private async checkWeeklyConflict(next: {
     id: string | null;
+    courseId: string;
     weekday: number;
     startTime: string;
     endTime: string;
     roomId: string;
   }) {
-    const others = await this.repo.listByWeekday(next.weekday);
+    const others = (await this.repo.listByWeekday(next.weekday)).filter((s) => s.id !== next.id);
     const hit = others.find(
       (s) =>
-        s.id !== next.id &&
-        s.roomId === next.roomId &&
+        (s.roomId === next.roomId || s.courseId === next.courseId) &&
         s.startTime < next.endTime &&
         next.startTime < s.endTime,
     );
-    if (hit) throw roomConflict(hit.roomName, hit.courseCode, hit.startTime, hit.endTime);
+    if (hit?.roomId === next.roomId) {
+      throw roomConflict(hit.roomName, hit.courseCode, hit.startTime, hit.endTime);
+    }
+    if (hit) throw timeConflict(hit.startTime, hit.endTime);
+
+    // วันที่มีการเปลี่ยนเฉพาะวันไว้ ต้องเช็กทีละวันด้วย
+    const mine: ScheduleLike = { ...next, id: next.id ?? NEW_SCHEDULE };
+    const today = bangkokDate(this.now());
+    const overrides = (
+      await this.repo.listOverridesBetween(today, addDays(today, MAX_AHEAD_DAYS))
+    ).filter((o) => weekdayOf(o.onDate) === next.weekday);
+    for (const date of new Set(overrides.map((o) => o.onDate))) {
+      await this.checkDate(
+        date,
+        [...others, mine],
+        overrides.filter((o) => o.onDate === date),
+        mine.id,
+      );
+    }
   }
 
   private async checkDayConflict(schedule: Schedule, override: Override) {
@@ -254,22 +307,33 @@ export class SchedulesService {
     const overrides = (await this.repo.listOverridesOnDate(date)).filter(
       (o) => o.scheduleId !== schedule.id,
     );
-    const sessions = planDay(date, schedules, [...overrides, override]);
-    const mine = sessions.find((s) => s.scheduleId === schedule.id);
+    await this.checkDate(date, schedules, [...overrides, override], schedule.id);
+  }
+
+  // วางคาบของวันนั้นทุกวิชา แล้วดูว่าคาบของตารางนี้ไปทับห้องหรือทับวิชาเดียวกันไหม
+  private async checkDate(
+    date: string,
+    schedules: (ScheduleLike & { courseCode?: string })[],
+    overrides: OverrideLike[],
+    scheduleId: string,
+  ) {
+    const sessions = planDay(date, schedules, overrides);
+    const mine = sessions.find((s) => s.scheduleId === scheduleId);
     if (!mine) return;
 
     const hit = sessions.find(
-      (s) => s.scheduleId !== schedule.id && s.roomId === mine.roomId && overlaps(s, mine),
+      (s) =>
+        s.scheduleId !== scheduleId &&
+        (s.roomId === mine.roomId || s.courseId === mine.courseId) &&
+        overlaps(s, mine),
     );
-    if (hit) {
-      const other = schedules.find((s) => s.id === hit.scheduleId);
-      const roomName = (await this.rooms.findById(mine.roomId))?.name ?? 'ห้องนี้';
-      throw roomConflict(
-        roomName,
-        other?.courseCode ?? 'อื่น',
-        bangkokTime(hit.startsAt),
-        bangkokTime(hit.endsAt),
-      );
-    }
+    if (!hit) return;
+    const start = bangkokTime(hit.startsAt);
+    const end = bangkokTime(hit.endsAt);
+    if (hit.roomId !== mine.roomId) throw timeConflict(start, end);
+
+    const other = schedules.find((s) => s.id === hit.scheduleId);
+    const roomName = (await this.rooms.findById(mine.roomId))?.name ?? 'ห้องนี้';
+    throw roomConflict(roomName, other?.courseCode ?? '', start, end);
   }
 }

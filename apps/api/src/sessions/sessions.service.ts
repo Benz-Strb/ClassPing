@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { CoursesService } from '../courses/courses.service.js';
@@ -32,6 +32,10 @@ const sameSlot = (a: SessionRow, b: PlannedSession) =>
 
 @Injectable()
 export class SessionsService implements SessionSyncer {
+  private readonly logger = new Logger(SessionsService.name);
+  // sync ของวิชาเดียวกันต้องต่อคิว ไม่งั้นสองรอบอ่านพร้อมกันแล้วเพิ่มคาบซ้ำ
+  private readonly queues = new Map<string, Promise<void>>();
+
   constructor(
     private readonly courses: CoursesService,
     @Inject(SCHEDULES_REPO) private readonly schedules: SchedulesRepo,
@@ -39,8 +43,21 @@ export class SessionsService implements SessionSyncer {
     @Inject(CLOCK) private readonly now: Clock,
   ) {}
 
+  syncCourse(courseId: string): Promise<void> {
+    const run = (this.queues.get(courseId) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => this.syncNow(courseId));
+    this.queues.set(courseId, run);
+    void run
+      .finally(() => {
+        if (this.queues.get(courseId) === run) this.queues.delete(courseId);
+      })
+      .catch(() => undefined);
+    return run;
+  }
+
   // คาบที่เริ่มแล้วห้ามแตะ ไม่งั้นผลเช็คชื่อหายตาม
-  async syncCourse(courseId: string): Promise<void> {
+  private async syncNow(courseId: string): Promise<void> {
     const now = this.now();
     const from = bangkokDate(now);
     const to = addDays(from, WINDOW_DAYS - 1);
@@ -62,15 +79,31 @@ export class SessionsService implements SessionSyncer {
     const existingKeys = new Set(existing.map(keyOf));
     const toRemove: string[] = [];
     const toUpdate: { id: string; session: PlannedSession }[] = [];
+    // เวลาเริ่มของแถวที่จะเหลืออยู่ ใช้กันชน unique (course_id, starts_at)
+    const taken = new Map<string, number>();
 
     for (const row of existing) {
-      if (row.startsAt <= now) continue;
       const wanted = row.scheduleId ? planned.get(keyOf(row)) : undefined;
-      if (!wanted) toRemove.push(row.id);
-      else if (!sameSlot(row, wanted)) toUpdate.push({ id: row.id, session: wanted });
+      if (row.startsAt <= now || (wanted && sameSlot(row, wanted))) {
+        taken.set(row.id, row.startsAt.getTime());
+      } else if (!wanted) {
+        toRemove.push(row.id);
+      } else {
+        toUpdate.push({ id: row.id, session: wanted });
+      }
+    }
+    const isTaken = (time: Date, exceptId?: string) =>
+      [...taken].some(([id, t]) => id !== exceptId && t === time.getTime());
+    for (const { id, session } of [...toUpdate]) {
+      if (isTaken(session.startsAt, id)) {
+        toUpdate.splice(toUpdate.findIndex((u) => u.id === id), 1);
+        toRemove.push(id);
+      } else {
+        taken.set(id, session.startsAt.getTime());
+      }
     }
     const toInsert = [...planned.values()].filter(
-      (s) => !existingKeys.has(keyOf(s)) && s.endsAt > now,
+      (s) => !existingKeys.has(keyOf(s)) && s.endsAt > now && !isTaken(s.startsAt),
     );
 
     // ลบก่อนเพิ่ม กันชน unique (course_id, starts_at)
@@ -90,7 +123,11 @@ export class SessionsService implements SessionSyncer {
     const withSchedules = (await this.schedules.listAll()).map((s) => s.courseId);
     const withSessions = await this.repo.courseIdsInRange(from, addDays(from, WINDOW_DAYS - 1));
     for (const courseId of new Set([...withSchedules, ...withSessions])) {
-      await this.syncCourse(courseId);
+      try {
+        await this.syncCourse(courseId);
+      } catch (error) {
+        this.logger.warn(`สร้างคาบของวิชา ${courseId} ไม่สำเร็จ: ${String(error)}`);
+      }
     }
   }
 
