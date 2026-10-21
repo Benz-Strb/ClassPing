@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { AppError } from '../common/app-error.js';
+import type { EnrollResult, FaceClient, FacePose } from '../face/face.client.js';
 import type { AppUser, UsersService } from '../users/users.service.js';
 import type { EnrollmentRepo, FaceRow } from './enrollment.repo.js';
 import { EnrollmentService } from './enrollment.service.js';
-import { POSES, type Pose } from './pose-check.js';
+import { PITCH_UP_SIGN, POSES, YAW_LEFT_SIGN, type Pose } from './pose-check.js';
 
 // face_profiles + users + Storage ปลอมในหน่วยความจำ
 class InMemoryEnrollmentRepo implements EnrollmentRepo {
@@ -64,8 +66,43 @@ function storeRow(repo: InMemoryEnrollmentRepo, userId: string, pose: Pose) {
   return repo.savePose(userId, { pose, imagePath, embedding: [1, 0], model: 'buffalo_l' });
 }
 
+// มุมที่ผ่านของแต่ละท่า สร้างจากทิศของผู้ใช้
+const ANGLE: Record<Pose, FacePose> = {
+  front: { pitch: 0, yaw: 0, roll: 0 },
+  left: { pitch: 0, yaw: 25 * YAW_LEFT_SIGN, roll: 0 },
+  right: { pitch: 0, yaw: -25 * YAW_LEFT_SIGN, roll: 0 },
+  up: { pitch: 20 * PITCH_UP_SIGN, yaw: 0, roll: 0 },
+  down: { pitch: -20 * PITCH_UP_SIGN, yaw: 0, roll: 0 },
+};
+
+// face service ปลอม: ตั้งผลครั้งถัดไปได้ ค่าเริ่มต้นคือหน้าคนเดียวกับ storeRow ([1, 0])
+class FakeFace {
+  next: Partial<EnrollResult> | Error = {};
+  calls = 0;
+  async enroll(): Promise<EnrollResult> {
+    this.calls++;
+    if (this.next instanceof Error) throw this.next;
+    return {
+      embedding: [0.9, 0.1],
+      bbox: [0, 0, 200, 200],
+      detScore: 0.9,
+      pose: ANGLE.front,
+      sharpness: 100,
+      model: 'buffalo_l',
+      ...this.next,
+    };
+  }
+}
+
+const jpeg = (size = 1000) => ({
+  buffer: Buffer.alloc(size, 1),
+  mimetype: 'image/jpeg',
+  size,
+});
+
 function setup() {
   const repo = new InMemoryEnrollmentRepo();
+  const face = new FakeFace();
   const consented: string[] = [];
   const users = {
     setConsent: async (userId: string) => {
@@ -73,7 +110,8 @@ function setup() {
       return student({ id: userId });
     },
   } as unknown as UsersService;
-  return { repo, consented, service: new EnrollmentService(repo, users) };
+  const service = new EnrollmentService(repo, users, face as unknown as FaceClient);
+  return { repo, face, consented, service };
 }
 
 describe('EnrollmentService.consent', () => {
@@ -163,5 +201,200 @@ describe('EnrollmentService.reset', () => {
       status: 404,
       code: 'USER_NOT_FOUND',
     });
+  });
+});
+
+describe('EnrollmentService.savePose', () => {
+  // ถ่ายท่านี้ให้ผ่าน (ตั้งมุมให้ตรงท่า)
+  async function shoot(service: EnrollmentService, face: FakeFace, me: AppUser, pose: Pose) {
+    face.next = { pose: ANGLE[pose] };
+    return service.savePose(me, pose, jpeg());
+  }
+
+  // ทุกกรณีที่ไม่ผ่านต้องไม่มีแถวหรือไฟล์ใหม่
+  async function expectNothingStored(repo: InMemoryEnrollmentRepo, me: AppUser, files: number) {
+    expect(repo.files.size).toBe(files);
+    expect((await repo.listByUser(me.id)).length).toBe(files);
+  }
+
+  it('ถ่ายหน้าตรงสำเร็จ', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    expect(await shoot(service, face, me, 'front')).toEqual({ done: ['front'], complete: false });
+    expect(repo.files.size).toBe(1);
+    const [path] = repo.files.keys();
+    expect(path).toMatch(new RegExp(`^${me.id}/front-[0-9a-f-]{36}\\.jpg$`));
+  });
+
+  it('ครบ 5 ท่าแล้ว complete และส่งอีกได้ 409 ALREADY_ENROLLED', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    let status;
+    for (const pose of POSES) status = await shoot(service, face, me, pose);
+    expect(status).toEqual({ done: [...POSES], complete: true });
+
+    expect(await rejection(shoot(service, face, me, 'left'))).toMatchObject({
+      status: 409,
+      code: 'ALREADY_ENROLLED',
+    });
+    expect(repo.files.size).toBe(5);
+  });
+
+  it('ถ่ายท่าเดิมซ้ำ แทนที่แถวเดิมและลบไฟล์เก่า', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    await storeRow(repo, me.id, 'left');
+
+    await shoot(service, face, me, 'left');
+
+    const rows = await repo.listByUser(me.id);
+    expect(rows.filter((r) => r.pose === 'left')).toHaveLength(1);
+    expect(repo.files.has(`${me.id}/left-old.jpg`)).toBe(false);
+    expect(repo.files.size).toBe(2);
+  });
+
+  it('ไม่มีรหัสนักศึกษาได้ 403 NOT_A_STUDENT', async () => {
+    const { service, face } = setup();
+    const err = await rejection(service.savePose(student({ studentId: null }), 'front', jpeg()));
+    expect(err).toMatchObject({ status: 403, code: 'NOT_A_STUDENT' });
+    expect(face.calls).toBe(0);
+  });
+
+  it('ยังไม่ยินยอมได้ 403 CONSENT_REQUIRED', async () => {
+    const { service, repo } = setup();
+    const me = student({ pdpaConsentAt: null });
+    expect(await rejection(service.savePose(me, 'front', jpeg()))).toMatchObject({
+      status: 403,
+      code: 'CONSENT_REQUIRED',
+    });
+    await expectNothingStored(repo, me, 0);
+  });
+
+  it('ชื่อท่าที่ไม่มีได้ 404', async () => {
+    const { service } = setup();
+    expect(await rejection(service.savePose(student(), 'side', jpeg()))).toMatchObject({
+      status: 404,
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('ยังไม่มีหน้าตรงได้ 409 FRONT_FIRST', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    expect(await rejection(shoot(service, face, me, 'left'))).toMatchObject({
+      status: 409,
+      code: 'FRONT_FIRST',
+    });
+    await expectNothingStored(repo, me, 0);
+  });
+
+  it('ไม่แนบไฟล์ได้ 400 IMAGE_REQUIRED', async () => {
+    const { service } = setup();
+    expect(await rejection(service.savePose(student(), 'front', undefined))).toMatchObject({
+      status: 400,
+      code: 'IMAGE_REQUIRED',
+    });
+  });
+
+  it.each(['image/heic', 'image/gif', 'application/pdf'])(
+    'ไฟล์ %s ได้ 400 UNSUPPORTED_IMAGE',
+    async (mimetype) => {
+      const { service, face } = setup();
+      const err = await rejection(service.savePose(student(), 'front', { ...jpeg(), mimetype }));
+      expect(err).toMatchObject({ status: 400, code: 'UNSUPPORTED_IMAGE' });
+      expect(face.calls).toBe(0);
+    },
+  );
+
+  it('ส่ง error ที่ผู้ใช้แก้ได้จาก face service ต่อตามเดิม', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    face.next = new AppError(422, 'MULTIPLE_FACES', 'มีหลายคนในรูป ถ่ายให้มีแค่คนเดียว');
+    expect(await rejection(service.savePose(me, 'front', jpeg()))).toMatchObject({
+      status: 422,
+      code: 'MULTIPLE_FACES',
+    });
+    await expectNothingStored(repo, me, 0);
+  });
+
+  it('face service ไม่คืนมุมหน้าได้ 503', async () => {
+    const { service, face } = setup();
+    face.next = { pose: null };
+    expect(await rejection(service.savePose(student(), 'front', jpeg()))).toMatchObject({
+      status: 503,
+      code: 'FACE_SERVICE_UNAVAILABLE',
+    });
+  });
+
+  it('ท่าไม่ตรงได้ 422 WRONG_POSE พร้อมคำบอก', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    face.next = { pose: ANGLE.right };
+    expect(await rejection(service.savePose(me, 'left', jpeg()))).toEqual({
+      status: 422,
+      code: 'WRONG_POSE',
+      message: 'หันซ้ายอีกนิด',
+    });
+    await expectNothingStored(repo, me, 1);
+  });
+
+  it('คนละคนกับหน้าตรงได้ 422 NOT_SAME_PERSON', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    face.next = { pose: ANGLE.left, embedding: [0, 1] };
+    expect(await rejection(service.savePose(me, 'left', jpeg()))).toMatchObject({
+      status: 422,
+      code: 'NOT_SAME_PERSON',
+    });
+    await expectNothingStored(repo, me, 1);
+  });
+
+  it('ถ่ายหน้าตรงใหม่ต้องเป็นคนเดียวกับท่าที่มีอยู่', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    await storeRow(repo, me.id, 'left');
+    face.next = { pose: ANGLE.front, embedding: [0, 1] };
+    expect(await rejection(service.savePose(me, 'front', jpeg()))).toMatchObject({
+      code: 'NOT_SAME_PERSON',
+    });
+    expect(repo.files.has(`${me.id}/front-old.jpg`)).toBe(true);
+  });
+
+  it('บันทึกแถวไม่สำเร็จ ลบไฟล์ใหม่ทิ้ง ไฟล์เก่ายังอยู่ ได้ 503', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    repo.savePose = async () => {
+      throw new AppError(503, 'DB_UNAVAILABLE', 'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง');
+    };
+    expect(await rejection(shoot(service, face, me, 'front'))).toMatchObject({
+      status: 503,
+      code: 'DB_UNAVAILABLE',
+    });
+    expect([...repo.files.keys()]).toEqual([`${me.id}/front-old.jpg`]);
+  });
+
+  it('อัปโหลดไฟล์ไม่สำเร็จ ไม่บันทึกแถว', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    repo.uploadImage = async () => {
+      throw new AppError(503, 'DB_UNAVAILABLE', 'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง');
+    };
+    expect(await rejection(shoot(service, face, me, 'front'))).toMatchObject({ status: 503 });
+    expect(await repo.listByUser(me.id)).toEqual([]);
+  });
+
+  it('ลบไฟล์เก่าไม่สำเร็จก็ยังนับว่าถ่ายผ่าน', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    repo.removeImages = async () => {
+      throw new Error('storage down');
+    };
+    expect(await shoot(service, face, me, 'front')).toEqual({ done: ['front'], complete: false });
   });
 });

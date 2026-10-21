@@ -1,7 +1,19 @@
-import { Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
-import { EnrollmentService, type FaceStatus } from './enrollment.service.js';
+import { EnrollmentService, type FaceStatus, type UploadedImage } from './enrollment.service.js';
+import { MAX_IMAGE_BYTES, UploadErrorsInterceptor } from './upload-errors.interceptor.js';
 
 @Controller()
 export class EnrollmentController {
@@ -16,6 +28,19 @@ export class EnrollmentController {
   @Get('me/face')
   status(@CurrentUser() user: AppUser): Promise<FaceStatus> {
     return this.enrollment.status(user);
+  }
+
+  @Put('me/face/:pose')
+  @UseInterceptors(
+    UploadErrorsInterceptor,
+    FileInterceptor('image', { limits: { fileSize: MAX_IMAGE_BYTES, files: 1 } }),
+  )
+  savePose(
+    @CurrentUser() user: AppUser,
+    @Param('pose') pose: string,
+    @UploadedFile() file: UploadedImage | undefined,
+  ): Promise<FaceStatus> {
+    return this.enrollment.savePose(user, pose, file);
   }
 
   @Delete('users/:id/face')
