@@ -21,14 +21,13 @@ export function classifyEmail(
   const [local, domain] = parts;
   if (!local || domain !== ALLOWED_DOMAIN) return null;
 
+  const studentId = /^\d+$/.test(local) ? local : null;
+
+  // แอดมินที่เป็นนักศึกษาด้วยยังเก็บรหัสไว้ ลงทะเบียนใบหน้าได้
   const admins = adminEmails.map((e) => e.trim().toLowerCase());
   if (admins.includes(email)) {
-    return { email, role: 'admin', studentId: null };
+    return { email, role: 'admin', studentId };
   }
 
-  if (/^\d+$/.test(local)) {
-    return { email, role: 'student', studentId: local };
-  }
-
-  return { email, role: 'teacher', studentId: null };
+  return { email, role: studentId ? 'student' : 'teacher', studentId };
 }

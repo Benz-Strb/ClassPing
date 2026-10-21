@@ -16,6 +16,7 @@
     "redis:up": "docker compose up -d redis",
     "redis:down": "docker compose down",
     "dev:mobile": "npm run start --workspace @classping/mobile",
+    "dev:mobile:share": "npm run share --workspace @classping/mobile",
     "mobile:android": "npm run android --workspace @classping/mobile",
     "mobile:ios": "npm run ios --workspace @classping/mobile",
     "typecheck:mobile": "npm run typecheck --workspace @classping/mobile",

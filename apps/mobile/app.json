@@ -23,7 +23,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ใช้กล้องถ่ายหน้าเพื่อลงทะเบียนใบหน้า",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }
