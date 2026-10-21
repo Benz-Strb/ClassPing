@@ -1,6 +1,7 @@
 import {
   checkPose,
   cosine,
+  isComplete,
   isPose,
   PITCH_UP_SIGN,
   POSES,
@@ -22,6 +23,18 @@ describe('POSES', () => {
     expect(isPose('left')).toBe(true);
     expect(isPose('side')).toBe(false);
     expect(isPose('')).toBe(false);
+  });
+});
+
+describe('isComplete', () => {
+  it('ครบ 5 ท่าถึงนับว่าลงทะเบียนแล้ว', () => {
+    expect(isComplete(['front', 'left', 'right'])).toBe(false);
+    expect(isComplete(['down', 'up', 'right', 'left', 'front'])).toBe(true);
+  });
+
+  it('ท่าซ้ำหรือชื่อแปลกไม่นับ', () => {
+    expect(isComplete(['front', 'front', 'left', 'right', 'up'])).toBe(false);
+    expect(isComplete(['front', 'left', 'right', 'up', 'side'])).toBe(false);
   });
 });
 

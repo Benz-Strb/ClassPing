@@ -29,6 +29,15 @@ describe('classifyEmail', () => {
     ).toBe('admin');
   });
 
+  it('แอดมินที่เมลเป็นตัวเลขยังได้รหัสนักศึกษา ลงทะเบียนใบหน้าได้', () => {
+    expect(classifyEmail('66112106@dpu.ac.th', ['66112106@dpu.ac.th'])).toEqual({
+      email: '66112106@dpu.ac.th',
+      role: 'admin',
+      studentId: '66112106',
+    });
+    expect(classifyEmail('somsak.kit@dpu.ac.th', ['somsak.kit@dpu.ac.th'])?.studentId).toBeNull();
+  });
+
   it.each([
     'a@gmail.com',
     'x@dpu.ac.th.evil.com',
