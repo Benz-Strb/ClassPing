@@ -23,12 +23,25 @@ export interface UploadedImage {
 
 const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png' };
 
+// ดูจากไบต์แรกของไฟล์ ไม่เชื่อ Content-Type ที่แอปบอกมาอย่างเดียว
+const MAGIC: Record<string, number[]> = {
+  'image/jpeg': [0xff, 0xd8, 0xff],
+  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+};
+
+function looksLike(mime: string, bytes: Buffer): boolean {
+  const magic = MAGIC[mime];
+  return !!magic && bytes.length >= magic.length && magic.every((b, i) => bytes[i] === b);
+}
+
 export interface FaceStatus {
   done: Pose[];
   complete: boolean;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const frontFirst = (message = 'ถ่ายหน้าตรงก่อน') => new AppError(409, 'FRONT_FIRST', message);
 
 const notAStudent = () =>
   new AppError(403, 'NOT_A_STUDENT', 'ลงทะเบียนใบหน้าได้เฉพาะบัญชีนักศึกษา');
@@ -67,7 +80,7 @@ export class EnrollmentService {
     if (!isPose(poseName)) throw new AppError(404, 'NOT_FOUND', 'ไม่มีท่านี้');
     const pose = poseName;
 
-    const rows = await this.repo.listByUser(user.id);
+    let rows = await this.repo.listByUser(user.id);
     if (isComplete(rows.map((r) => r.pose))) {
       throw new AppError(
         409,
@@ -75,14 +88,15 @@ export class EnrollmentService {
         'ลงทะเบียนใบหน้าไปแล้ว ถ้าต้องการลงใหม่ติดต่อผู้ดูแลระบบ',
       );
     }
-    const front = rows.find((r) => r.pose === 'front');
-    if (pose !== 'front' && !front) {
-      throw new AppError(409, 'FRONT_FIRST', 'ถ่ายหน้าตรงก่อน');
+    if (pose !== 'front' && !rows.some((r) => r.pose === 'front')) {
+      throw frontFirst();
     }
 
     if (!file) throw new AppError(400, 'IMAGE_REQUIRED', 'ยังไม่ได้แนบรูป');
     const ext = EXTENSIONS[file.mimetype];
-    if (!ext) throw new AppError(400, 'UNSUPPORTED_IMAGE', 'ส่งได้เฉพาะรูป JPG หรือ PNG');
+    if (!ext || !looksLike(file.mimetype, file.buffer)) {
+      throw new AppError(400, 'UNSUPPORTED_IMAGE', 'ส่งได้เฉพาะรูป JPG หรือ PNG');
+    }
 
     const result = await this.face.enroll(file.buffer, file.mimetype);
     if (!result.pose) {
@@ -96,7 +110,15 @@ export class EnrollmentService {
     const angle = checkPose(pose, result.pose);
     if (!angle.ok) throw new AppError(422, 'WRONG_POSE', angle.hint);
 
+    // เปลี่ยนโมเดลตรวจหน้าแล้ว ท่าเก่าเทียบกับรูปใหม่ไม่ได้ ล้างทิ้งแล้วเริ่มจากหน้าตรงใหม่
+    if (rows.some((r) => r.model !== result.model)) {
+      await this.removeQuietly(await this.repo.deleteByUser(user.id));
+      rows = [];
+      if (pose !== 'front') throw frontFirst('ระบบตรวจใบหน้าเปลี่ยนรุ่น ถ่ายหน้าตรงใหม่อีกครั้ง');
+    }
+
     // ท่าอื่นเทียบกับหน้าตรง ถ้าถ่ายหน้าตรงใหม่ให้เทียบกับทุกท่าที่มี
+    const front = rows.find((r) => r.pose === 'front');
     const others = pose === 'front' ? rows.filter((r) => r.pose !== 'front') : [front!];
     if (others.some((r) => cosine(r.embedding, result.embedding) < SAME_PERSON_MIN)) {
       throw new AppError(
@@ -128,13 +150,22 @@ export class EnrollmentService {
     return { done: POSES.filter((p) => done.has(p)), complete: isComplete(done) };
   }
 
-  // แอดมินล้างใบหน้าให้ลงทะเบียนใหม่ หรือเมื่อนักศึกษาขอถอนความยินยอม
-  async reset(userId: string): Promise<void> {
+  // แอดมินล้างใบหน้าให้ลงทะเบียนใหม่ ถ้านักศึกษาขอถอนความยินยอมให้ส่ง withdraw ด้วย
+  async reset(userId: string, { withdraw = false } = {}): Promise<void> {
     if (!UUID.test(userId) || !(await this.repo.userExists(userId))) {
       throw new AppError(404, 'USER_NOT_FOUND', 'ไม่พบผู้ใช้นี้');
     }
-    // แถวหายแล้วคือรีเซ็ตแล้ว ไฟล์ที่ลบไม่ออกไม่มีอะไรชี้ถึง
-    await this.removeQuietly(await this.repo.deleteByUser(userId));
+    const rowPaths = await this.repo.deleteByUser(userId);
+    if (withdraw) await this.users.clearConsent(userId);
+
+    // ลบทุกไฟล์ในโฟลเดอร์ของคนนี้ ไม่ใช่แค่ไฟล์ที่แถวชี้ถึง ไฟล์ค้างจากการถ่ายซ้ำก็ต้องหายด้วย
+    // ลบไม่ครบให้ error แอดมินกดซ้ำได้ รอบหน้าจะหาไฟล์จากโฟลเดอร์เจออีก
+    try {
+      const paths = new Set([...rowPaths, ...(await this.repo.listImages(userId))]);
+      await this.repo.removeImages([...paths]);
+    } catch {
+      throw new AppError(503, 'FACE_IMAGES_LEFT', 'ลบรูปใบหน้าไม่ครบ ลองรีเซ็ตอีกครั้ง');
+    }
   }
 
   private async removeQuietly(paths: string[]): Promise<void> {

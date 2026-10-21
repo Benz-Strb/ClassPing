@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -46,8 +47,12 @@ export class EnrollmentController {
   @Delete('users/:id/face')
   @Roles('admin')
   @HttpCode(200)
-  async reset(@Param('id') id: string): Promise<{ reset: true }> {
-    await this.enrollment.reset(id);
-    return { reset: true };
+  async reset(
+    @Param('id') id: string,
+    @Query('withdraw') withdraw?: string,
+  ): Promise<{ reset: true; withdrawn: boolean }> {
+    const withdrawn = withdraw === '1';
+    await this.enrollment.reset(id, { withdraw: withdrawn });
+    return { reset: true, withdrawn };
   }
 }

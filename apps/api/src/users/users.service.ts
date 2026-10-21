@@ -102,4 +102,15 @@ export class UsersService {
     if (selectError || !data) throw dbError();
     return toAppUser(data as UserRow);
   }
+
+  // ถอนความยินยอม ครั้งหน้าเปิดแอปจะต้องกดยินยอมใหม่ก่อนถ่ายรูป
+  async clearConsent(userId: string): Promise<void> {
+    const { error } = await this.db
+      .from('users')
+      .update({ pdpa_consent_at: null })
+      .eq('id', userId)
+      .select('id')
+      .single();
+    if (error) throw dbError();
+  }
 }
