@@ -20,7 +20,6 @@ export function LoginScreen({ error: initialError }: Props) {
     try {
       // ใน Expo Go จะได้ exp://<ip>:8081/--/... ต้องอยู่ใน Redirect URLs ของ Supabase
       const redirectTo = AuthSession.makeRedirectUri();
-      console.log('redirectTo', redirectTo);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
