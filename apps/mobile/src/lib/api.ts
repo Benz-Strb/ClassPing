@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { supabase } from './supabase';
 
 export class ApiError extends Error {
@@ -10,7 +11,17 @@ export class ApiError extends Error {
   }
 }
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001';
+// ปกติเรียก API ผ่าน Metro (/api) ที่โหลดแอปมา ใช้ได้ทั้งในวง Wi-Fi และผ่าน tunnel
+// ตั้ง EXPO_PUBLIC_API_URL เมื่ออยากชี้ไปที่อื่น
+function apiUrl() {
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
+  const host = Constants.expoConfig?.hostUri;
+  if (!host) return 'http://localhost:3001';
+  // ผ่าน tunnel จะไม่มีพอร์ตและเป็น https
+  return `${host.includes(':') ? 'http' : 'https'}://${host}/api`;
+}
+
+const API_URL = apiUrl();
 
 // เรียก API ของ ClassPing พร้อมแนบ token ของคนที่ login อยู่ (แบบเดียวกับฝั่งเว็บ)
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -28,7 +39,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   try {
     res = await fetch(`${API_URL}${path}`, { ...init, headers });
   } catch {
-    throw new ApiError(0, 'NETWORK', 'ต่อเซิร์ฟเวอร์ไม่ได้ ตรวจว่ามือถืออยู่ Wi-Fi เดียวกับเครื่องที่รัน API');
+    throw new ApiError(0, 'NETWORK', 'ต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง');
   }
   const body = await res.json().catch(() => null);
 
