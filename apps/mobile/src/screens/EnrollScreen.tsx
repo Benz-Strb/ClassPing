@@ -19,14 +19,17 @@ const POSES: Pose[] = ['front', 'left', 'right', 'up', 'down'];
 
 const HINT: Record<Pose, string> = {
   front: 'มองตรงกล้อง ให้หน้าอยู่ในวงกลม',
-  left: 'หันหน้าไปทางซ้ายช้าๆ',
-  right: 'หันหน้าไปทางขวาช้าๆ',
-  up: 'เงยหน้าช้าๆ',
-  down: 'ก้มหน้าช้าๆ',
+  left: 'หันหน้าไปทางซ้าย แล้วค้างไว้',
+  right: 'หันหน้าไปทางขวา แล้วค้างไว้',
+  up: 'เงยหน้าเล็กน้อย แล้วค้างไว้',
+  down: 'ก้มหน้าเล็กน้อย แล้วค้างไว้',
 };
 
 // มุมกลางของเส้นโค้งแต่ละทิศ (0 = ขวา หมุนตามเข็ม) ภาพกล้องหน้ากลับซ้ายขวาแล้ว ซ้ายของผู้ใช้จึงอยู่ซ้ายจอ
 const ARC_AT: Partial<Record<Pose, number>> = { up: -90, right: 0, down: 90, left: 180 };
+
+// ถ่ายแค่ 1280x720 พอ รูปเต็มจากกล้องใหญ่ ถ่ายและส่งช้า ทำให้ข้อความตามท่าไม่ทัน
+const PICTURE_SIZE = '1280x720';
 
 const GREY = 'rgba(255,255,255,0.35)';
 const BLUE = '#3b82f6';
@@ -54,6 +57,7 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
   const camera = useRef<CameraView>(null);
   const { width, height } = useWindowDimensions();
   const [ready, setReady] = useState(false);
+  const [pictureSize, setPictureSize] = useState<string>();
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [done, setDone] = useState(initialDone);
   const doneRef = useRef(initialDone);
@@ -91,7 +95,8 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
             callbacks.current.onComplete(status);
             return;
           }
-          await wait(800);
+          // ให้เวลาเปลี่ยนท่า รูปที่ถ่ายเร็วไปจะยังเป็นท่าเดิมแล้วโดนตีกลับ
+          await wait(1200);
         } catch (e) {
           if (cancelled) return;
           if (e instanceof ApiError && e.status === 422) {
@@ -168,7 +173,12 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
         ref={camera}
         style={StyleSheet.absoluteFill}
         facing="front"
-        onCameraReady={() => setReady(true)}
+        pictureSize={pictureSize}
+        onCameraReady={async () => {
+          const sizes = await camera.current?.getAvailablePictureSizesAsync().catch(() => [] as string[]);
+          if (sizes?.includes(PICTURE_SIZE)) setPictureSize(PICTURE_SIZE);
+          setReady(true);
+        }}
       />
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip]}>
         <View
