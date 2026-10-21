@@ -38,6 +38,12 @@ function fakeDb(initial: Row[] = []) {
           rows.set(id, { ...rows.get(id)!, ...patch });
           return selectOne(id);
         },
+        // update ... where id = ? and <col> is null
+        is: async (col: keyof Row, value: null) => {
+          const row = rows.get(id);
+          if (row && row[col] === value) rows.set(id, { ...row, ...patch });
+          return { error: null };
+        },
       }),
     }),
   };
@@ -115,5 +121,68 @@ describe('UsersService.ensureUser', () => {
       fullName: null,
     });
     expect(upserts[0].options).toEqual({ onConflict: 'id', ignoreDuplicates: true });
+  });
+});
+
+describe('UsersService.ensureUser กับรหัสนักศึกษา', () => {
+  it('แอดมินที่แถวเดิมยังไม่มีรหัสนักศึกษา login แล้วได้รหัสตามเมล', async () => {
+    const { db, rows } = fakeDb([
+      {
+        id: 'u1',
+        email: '66112106@dpu.ac.th',
+        full_name: null,
+        role: 'admin',
+        student_id: null,
+        pdpa_consent_at: null,
+      },
+    ]);
+    const user = await new UsersService(db, config(['66112106@dpu.ac.th'])).ensureUser({
+      id: 'u1',
+      email: '66112106@dpu.ac.th',
+      fullName: null,
+    });
+    expect(user.studentId).toBe('66112106');
+    expect(user.role).toBe('admin');
+    expect(rows.get('u1')?.student_id).toBe('66112106');
+  });
+});
+
+describe('UsersService.setConsent', () => {
+  const row: Row = {
+    id: 'u1',
+    email: '66112106@dpu.ac.th',
+    full_name: null,
+    role: 'student',
+    student_id: '66112106',
+    pdpa_consent_at: null,
+  };
+
+  it('ตั้งเวลายินยอมครั้งแรก', async () => {
+    const { db } = fakeDb([row]);
+    const user = await new UsersService(db, config()).setConsent('u1');
+    expect(user.pdpaConsentAt).not.toBeNull();
+  });
+
+  it('กดยินยอมซ้ำ เวลาเดิมไม่เปลี่ยน', async () => {
+    const { db } = fakeDb([{ ...row, pdpa_consent_at: '2026-10-01T00:00:00.000Z' }]);
+    const user = await new UsersService(db, config()).setConsent('u1');
+    expect(user.pdpaConsentAt).toBe('2026-10-01T00:00:00.000Z');
+  });
+});
+
+describe('UsersService.clearConsent', () => {
+  it('ล้างเวลายินยอม', async () => {
+    const { db, rows } = fakeDb([
+      {
+        id: 'u1',
+        email: '66112106@dpu.ac.th',
+        full_name: null,
+        role: 'student',
+        student_id: '66112106',
+        pdpa_consent_at: '2026-10-01T00:00:00.000Z',
+      },
+    ]);
+    await new UsersService(db, config()).clearConsent('u1');
+    expect(rows.get('u1')!.pdpa_consent_at).toBeNull();
   });
 });

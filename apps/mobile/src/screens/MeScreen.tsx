@@ -2,14 +2,9 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError, apiFetch } from '../lib/api';
 import { supabase } from '../lib/supabase';
-
-interface Me {
-  id: string;
-  email: string;
-  fullName: string | null;
-  role: 'student' | 'teacher' | 'admin';
-  studentId: string | null;
-}
+import type { FaceStatus, Me } from '../lib/types';
+import { ConsentScreen } from './ConsentScreen';
+import { EnrollScreen } from './EnrollScreen';
 
 const ROLE_LABEL: Record<Me['role'], string> = {
   student: 'นักศึกษา',
@@ -22,28 +17,36 @@ interface Props {
   onRejected: (message: string) => void;
 }
 
+const signOut = () => supabase.auth.signOut();
+
+// นักศึกษาต้องยินยอมก่อน แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
 export function MeScreen({ onRejected }: Props) {
   const [me, setMe] = useState<Me | null>(null);
+  const [face, setFace] = useState<FaceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<Me>('/me')
-      .then(setMe)
-      .catch(async (e: unknown) => {
-        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-          await supabase.auth.signOut();
-          onRejected(e.code === 'DOMAIN_NOT_ALLOWED' ? 'ใช้ได้เฉพาะเมล @dpu.ac.th' : e.message);
-          return;
-        }
-        setError(e instanceof Error ? e.message : 'เรียกระบบไม่สำเร็จ');
-      });
+    (async () => {
+      const user = await apiFetch<Me>('/me');
+      // บัญชีที่ไม่มีรหัสนักศึกษาไม่ต้องลงทะเบียนใบหน้า
+      const status = user.studentId ? await apiFetch<FaceStatus>('/me/face') : null;
+      setMe(user);
+      setFace(status);
+    })().catch(async (e: unknown) => {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        await signOut();
+        onRejected(e.code === 'DOMAIN_NOT_ALLOWED' ? 'ใช้ได้เฉพาะเมล @dpu.ac.th' : e.message);
+        return;
+      }
+      setError(e instanceof Error ? e.message : 'เรียกระบบไม่สำเร็จ');
+    });
   }, [onRejected]);
 
   if (error) {
     return (
       <View style={styles.container}>
         <Text style={styles.error}>{error}</Text>
-        <Pressable style={styles.button} onPress={() => supabase.auth.signOut()}>
+        <Pressable style={styles.button} onPress={signOut}>
           <Text>ออกจากระบบ</Text>
         </Pressable>
       </View>
@@ -57,13 +60,38 @@ export function MeScreen({ onRejected }: Props) {
     );
   }
 
+  if (me.studentId && !me.pdpaConsentAt) {
+    return <ConsentScreen onAccepted={setMe} onSignOut={signOut} />;
+  }
+
+  if (face && !face.complete) {
+    return (
+      <EnrollScreen
+        done={face.done}
+        onComplete={setFace}
+        onUnauthorized={async (message) => {
+          await signOut();
+          onRejected(message);
+        }}
+        onSignOut={signOut}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{me.fullName ?? me.email}</Text>
       <Text>{me.email}</Text>
       <Text>บทบาท: {ROLE_LABEL[me.role]}</Text>
       {me.studentId && <Text>รหัสนักศึกษา: {me.studentId}</Text>}
-      <Pressable style={styles.button} onPress={() => supabase.auth.signOut()}>
+      {face ? (
+        <Text style={face.complete ? styles.ok : styles.pending}>
+          {face.complete ? 'ลงทะเบียนใบหน้าแล้ว' : 'ยังไม่ได้ลงทะเบียนใบหน้า'}
+        </Text>
+      ) : (
+        <Text style={styles.pending}>บัญชีนี้ใช้งานบนเว็บ</Text>
+      )}
+      <Pressable style={styles.button} onPress={signOut}>
         <Text>ออกจากระบบ</Text>
       </Pressable>
     </View>
@@ -74,5 +102,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 24, gap: 10, backgroundColor: '#fff' },
   title: { fontSize: 20, fontWeight: '600' },
   error: { color: '#dc2626' },
+  ok: { color: '#15803d', marginTop: 8 },
+  pending: { color: '#6b7280', marginTop: 8 },
   button: { borderWidth: 1, borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 8 },
 });
