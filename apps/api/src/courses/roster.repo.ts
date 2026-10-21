@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { chunk } from '../common/chunk.js';
 import { dbError } from '../common/db-error.js';
+import { isComplete } from '../enrollment/pose-check.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 
 export interface StudentAccount {
@@ -72,17 +73,19 @@ export class SupabaseRosterRepo implements RosterRepo {
     return accounts;
   }
 
-  // คนละไม่เกิน 10 มุม ก้อนละ 50 คนจึงไม่เกิน 1000 แถว
+  // ลงทะเบียนครบทุกท่าแล้วเท่านั้น คนละไม่เกิน 5 แถว ก้อนละ 50 คนจึงไม่เกิน 1000 แถว
   async faceEnrolledUserIds(userIds: string[]): Promise<string[]> {
-    const found = new Set<string>();
+    const poses = new Map<string, string[]>();
     for (const batch of chunk(userIds, BATCH)) {
       const { data, error } = await this.db
         .from('face_profiles')
-        .select('user_id')
+        .select('user_id, pose')
         .in('user_id', batch);
       if (error) throw dbError();
-      for (const r of data as { user_id: string }[]) found.add(r.user_id);
+      for (const r of data as { user_id: string; pose: string }[]) {
+        poses.set(r.user_id, [...(poses.get(r.user_id) ?? []), r.pose]);
+      }
     }
-    return [...found];
+    return [...poses].filter(([, list]) => isComplete(list)).map(([id]) => id);
   }
 }
