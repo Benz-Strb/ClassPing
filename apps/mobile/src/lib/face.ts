@@ -11,12 +11,11 @@ interface Photo {
   height: number;
 }
 
-// ย่อรูปก่อนส่ง รูปเต็มจากกล้องหน้าใหญ่เกินลิมิต 5 MB ได้
+// ย่อรูปก่อนส่ง รูปเต็มจากกล้องหน้าใหญ่เกินลิมิต 5 MB ได้ ถ้าเล็กพออยู่แล้วส่งไปเลย
 async function shrink(photo: Photo): Promise<string> {
+  if (Math.max(photo.width, photo.height) <= MAX_SIDE) return photo.uri;
   const context = ImageManipulator.manipulate(photo.uri);
-  if (Math.max(photo.width, photo.height) > MAX_SIDE) {
-    context.resize(photo.width >= photo.height ? { width: MAX_SIDE } : { height: MAX_SIDE });
-  }
+  context.resize(photo.width >= photo.height ? { width: MAX_SIDE } : { height: MAX_SIDE });
   const image = await context.renderAsync();
   const result = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
   return result.uri;

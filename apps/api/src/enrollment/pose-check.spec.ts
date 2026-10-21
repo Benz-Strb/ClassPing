@@ -58,7 +58,7 @@ describe('checkPose', () => {
   });
 
   it('หันข้างแต่เงยหรือก้มมากไป', () => {
-    const pose = { ...turnLeft(25), pitch: 30 };
+    const pose = { ...turnLeft(25), pitch: 35 };
     expect(checkPose('left', pose)).toEqual({ ok: false, hint: 'มองระดับเดียวกับกล้อง' });
   });
 
@@ -72,17 +72,22 @@ describe('checkPose', () => {
   });
 
   it('เงยหรือก้มแต่หันข้างมากไป', () => {
-    const pose = { ...lookUp(20), yaw: 30 };
+    const pose = { ...lookUp(20), yaw: 35 };
     expect(checkPose('up', pose)).toEqual({ ok: false, hint: 'หันหน้าตรงกล้อง' });
   });
 
   it('ขอบของช่วงมุมนับว่าผ่าน', () => {
-    expect(checkPose('up', lookUp(10)).ok).toBe(true);
-    expect(checkPose('up', lookUp(35)).ok).toBe(true);
-    expect(checkPose('up', lookUp(9.9)).ok).toBe(false);
-    expect(checkPose('up', lookUp(35.1)).ok).toBe(false);
-    expect(checkPose('left', turnLeft(15)).ok).toBe(true);
-    expect(checkPose('left', turnLeft(45)).ok).toBe(true);
+    expect(checkPose('up', lookUp(8)).ok).toBe(true);
+    expect(checkPose('up', lookUp(45)).ok).toBe(true);
+    expect(checkPose('up', lookUp(7.9)).ok).toBe(false);
+    expect(checkPose('up', lookUp(45.1)).ok).toBe(false);
+    expect(checkPose('down', lookDown(30)).ok).toBe(true);
+    expect(checkPose('down', lookDown(30.1)).ok).toBe(false);
+    expect(checkPose('left', turnLeft(12)).ok).toBe(true);
+    expect(checkPose('left', turnLeft(55)).ok).toBe(true);
+    expect(checkPose('left', turnLeft(11.9)).ok).toBe(false);
+    expect(checkPose('left', turnLeft(55.1)).ok).toBe(false);
+    expect(checkPose('left', { ...turnLeft(25), pitch: 30 }).ok).toBe(true);
   });
 });
 
