@@ -43,6 +43,14 @@ describe('API (e2e)', () => {
     return request(app.getHttpServer()).get(path).expect(401);
   });
 
+  it.each([
+    ['post', '/me/consent'],
+    ['get', '/me/face'],
+    ['delete', '/users/00000000-0000-0000-0000-000000000000/face'],
+  ] as const)('%s %s ต้อง login ก่อน', (method, path) => {
+    return request(app.getHttpServer())[method](path).expect(401);
+  });
+
   afterEach(async () => {
     await app.close();
   });

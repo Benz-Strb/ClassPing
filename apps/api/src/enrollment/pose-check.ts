@@ -7,6 +7,12 @@ export function isPose(value: string): value is Pose {
   return (POSES as readonly string[]).includes(value);
 }
 
+// ครบทุกท่าถึงนับว่าลงทะเบียนใบหน้าแล้ว ใช้ทั้งในแอปและหน้ารายชื่อของอาจารย์
+export function isComplete(poses: Iterable<string>): boolean {
+  const done = new Set(poses);
+  return POSES.every((pose) => done.has(pose));
+}
+
 // เครื่องหมายของ yaw/pitch ตอนผู้ใช้หันซ้าย (ซ้ายของตัวเอง) / เงยหน้า วัดจากกล้อง MacBook
 // เงย = pitch บวก แน่นอน ส่วนซ้าย = yaw ลบ ยังไม่ชัวร์ ต้องเช็กกับมือถือจริงอีกรอบ
 export const YAW_LEFT_SIGN = -1;

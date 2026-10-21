@@ -71,9 +71,14 @@ export class UsersService {
     if (error || !data) throw dbError();
     const row = data as UserRow;
 
-    if (classified.role === 'admin' && row.role !== 'admin') {
+    // แถวที่สร้างไว้ก่อนแอดมินได้รหัสนักศึกษา ให้เติมรหัสตอน login ครั้งถัดไป
+    const patch: Partial<UserRow> = {};
+    if (classified.role === 'admin' && row.role !== 'admin') patch.role = 'admin';
+    if (classified.studentId && !row.student_id) patch.student_id = classified.studentId;
+
+    if (Object.keys(patch).length) {
       const updated = await users
-        .update({ role: 'admin' })
+        .update(patch)
         .eq('id', authUser.id)
         .select('*')
         .single();
@@ -82,5 +87,19 @@ export class UsersService {
     }
 
     return toAppUser(row);
+  }
+
+  // กดยินยอมซ้ำไม่ทับเวลาเดิม
+  async setConsent(userId: string): Promise<AppUser> {
+    const users = this.db.from('users');
+    const { error } = await users
+      .update({ pdpa_consent_at: new Date().toISOString() })
+      .eq('id', userId)
+      .is('pdpa_consent_at', null);
+    if (error) throw dbError();
+
+    const { data, error: selectError } = await users.select('*').eq('id', userId).single();
+    if (selectError || !data) throw dbError();
+    return toAppUser(data as UserRow);
   }
 }
