@@ -4,6 +4,7 @@ import { ApiError, apiFetch } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import type { FaceStatus, Me } from '../lib/types';
 import { ConsentScreen } from './ConsentScreen';
+import { EnrollScreen } from './EnrollScreen';
 
 const ROLE_LABEL: Record<Me['role'], string> = {
   student: 'นักศึกษา',
@@ -18,7 +19,7 @@ interface Props {
 
 const signOut = () => supabase.auth.signOut();
 
-// เลือกหน้าตามสถานะ: ยังไม่ยินยอม → หน้ายินยอม, ยังลงทะเบียนไม่ครบ → หน้าถ่ายรูป, ครบแล้ว → ข้อมูลบัญชี
+// นักศึกษาต้องยินยอมก่อน แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
 export function MeScreen({ onRejected }: Props) {
   const [me, setMe] = useState<Me | null>(null);
   const [face, setFace] = useState<FaceStatus | null>(null);
@@ -61,6 +62,20 @@ export function MeScreen({ onRejected }: Props) {
 
   if (me.studentId && !me.pdpaConsentAt) {
     return <ConsentScreen onAccepted={setMe} onSignOut={signOut} />;
+  }
+
+  if (face && !face.complete) {
+    return (
+      <EnrollScreen
+        done={face.done}
+        onComplete={setFace}
+        onUnauthorized={async (message) => {
+          await signOut();
+          onRejected(message);
+        }}
+        onSignOut={signOut}
+      />
+    );
   }
 
   return (

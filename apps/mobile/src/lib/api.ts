@@ -19,7 +19,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (init.body && !headers.has('Content-Type')) {
+  // FormData ต้องให้ fetch ใส่ boundary เอง
+  if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
