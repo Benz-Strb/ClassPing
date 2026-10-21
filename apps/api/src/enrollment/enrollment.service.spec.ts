@@ -8,18 +8,14 @@ import { PITCH_UP_SIGN, POSES, YAW_LEFT_SIGN, type Pose } from './pose-check.js'
 
 // face_profiles + users + Storage ปลอมในหน่วยความจำ
 class InMemoryEnrollmentRepo implements EnrollmentRepo {
-  rows = new Map<string, Map<Pose, FaceRow & { model: string }>>();
+  rows = new Map<string, Map<Pose, FaceRow>>();
   files = new Map<string, Buffer>();
   userIds = new Set<string>();
 
   async listByUser(userId: string) {
-    return [...(this.rows.get(userId)?.values() ?? [])].map(({ pose, imagePath, embedding }) => ({
-      pose,
-      imagePath,
-      embedding,
-    }));
+    return [...(this.rows.get(userId)?.values() ?? [])];
   }
-  async savePose(userId: string, row: FaceRow & { model: string }) {
+  async savePose(userId: string, row: FaceRow) {
     const poses = this.rows.get(userId) ?? new Map();
     poses.set(row.pose, row);
     this.rows.set(userId, poses);
@@ -34,6 +30,9 @@ class InMemoryEnrollmentRepo implements EnrollmentRepo {
   }
   async removeImages(paths: string[]) {
     paths.forEach((p) => this.files.delete(p));
+  }
+  async listImages(userId: string) {
+    return [...this.files.keys()].filter((p) => p.startsWith(`${userId}/`));
   }
   async userExists(userId: string) {
     return this.userIds.has(userId);
@@ -94,24 +93,29 @@ class FakeFace {
   }
 }
 
-const jpeg = (size = 1000) => ({
-  buffer: Buffer.alloc(size, 1),
-  mimetype: 'image/jpeg',
-  size,
-});
+// ขึ้นต้นด้วยไบต์ของ JPEG จริง เนื้อที่เหลือไม่สำคัญเพราะ face service เป็นของปลอม
+const jpeg = (size = 1000) => {
+  const buffer = Buffer.alloc(size, 1);
+  buffer.set([0xff, 0xd8, 0xff]);
+  return { buffer, mimetype: 'image/jpeg', size };
+};
 
 function setup() {
   const repo = new InMemoryEnrollmentRepo();
   const face = new FakeFace();
   const consented: string[] = [];
+  const withdrawn: string[] = [];
   const users = {
     setConsent: async (userId: string) => {
       consented.push(userId);
       return student({ id: userId });
     },
+    clearConsent: async (userId: string) => {
+      withdrawn.push(userId);
+    },
   } as unknown as UsersService;
   const service = new EnrollmentService(repo, users, face as unknown as FaceClient);
-  return { repo, face, consented, service };
+  return { repo, face, consented, withdrawn, service };
 }
 
 describe('EnrollmentService.consent', () => {
@@ -183,16 +187,48 @@ describe('EnrollmentService.reset', () => {
     await expect(service.reset(id)).resolves.toBeUndefined();
   });
 
-  it('ลบไฟล์ไม่สำเร็จก็ยังนับว่ารีเซ็ตแล้ว', async () => {
+  it('ลบไฟล์ที่ไม่มีแถวชี้ถึงด้วย แต่ไม่แตะโฟลเดอร์คนอื่น', async () => {
+    const { service, repo } = setup();
+    const me = student();
+    const other = randomUUID();
+    repo.userIds.add(me.id);
+    await storeRow(repo, me.id, 'front');
+    repo.files.set(`${me.id}/left-orphan.jpg`, Buffer.from('x'));
+    repo.files.set(`${other}/front-x.jpg`, Buffer.from('x'));
+
+    await service.reset(me.id);
+
+    expect([...repo.files.keys()]).toEqual([`${other}/front-x.jpg`]);
+  });
+
+  it('ลบไฟล์ไม่สำเร็จได้ 503 กดรีเซ็ตซ้ำแล้วไฟล์หายครบ', async () => {
     const { service, repo } = setup();
     const me = student();
     repo.userIds.add(me.id);
     await storeRow(repo, me.id, 'front');
+    const remove = repo.removeImages.bind(repo);
     repo.removeImages = async () => {
       throw new Error('storage down');
     };
-    await expect(service.reset(me.id)).resolves.toBeUndefined();
+    expect(await rejection(service.reset(me.id))).toMatchObject({
+      status: 503,
+      code: 'FACE_IMAGES_LEFT',
+    });
     expect(await repo.listByUser(me.id)).toEqual([]);
+
+    repo.removeImages = remove;
+    await service.reset(me.id);
+    expect(repo.files.size).toBe(0);
+  });
+
+  it('รีเซ็ตธรรมดาไม่ล้างความยินยอม ส่ง withdraw ถึงล้าง', async () => {
+    const { service, repo, withdrawn } = setup();
+    const me = student();
+    repo.userIds.add(me.id);
+    await service.reset(me.id);
+    expect(withdrawn).toEqual([]);
+    await service.reset(me.id, { withdraw: true });
+    expect(withdrawn).toEqual([me.id]);
   });
 
   it.each(['not-a-uuid', randomUUID()])('ไม่มีผู้ใช้ %s ได้ 404 USER_NOT_FOUND', async (id) => {
@@ -306,6 +342,55 @@ describe('EnrollmentService.savePose', () => {
       expect(face.calls).toBe(0);
     },
   );
+
+  it('บอกว่าเป็น JPEG แต่เนื้อไฟล์ไม่ใช่ ได้ 400 UNSUPPORTED_IMAGE', async () => {
+    const { service, face } = setup();
+    const fake = { buffer: Buffer.from('GIF89a........'), mimetype: 'image/jpeg', size: 14 };
+    const err = await rejection(service.savePose(student(), 'front', fake));
+    expect(err).toMatchObject({ status: 400, code: 'UNSUPPORTED_IMAGE' });
+    expect(face.calls).toBe(0);
+  });
+
+  it('PNG จริงผ่าน', async () => {
+    const { service } = setup();
+    const buffer = Buffer.alloc(100, 1);
+    buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const status = await service.savePose(student(), 'front', {
+      buffer,
+      mimetype: 'image/png',
+      size: 100,
+    });
+    expect(status.done).toEqual(['front']);
+  });
+
+  it('เปลี่ยนโมเดลแล้วถ่ายท่าอื่น ได้ 409 FRONT_FIRST และท่าเก่าถูกล้าง', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    await storeRow(repo, me.id, 'left');
+    face.next = { pose: ANGLE.right, model: 'new_model' };
+
+    expect(await rejection(service.savePose(me, 'right', jpeg()))).toMatchObject({
+      status: 409,
+      code: 'FRONT_FIRST',
+    });
+    expect(await repo.listByUser(me.id)).toEqual([]);
+    expect(repo.files.size).toBe(0);
+  });
+
+  it('เปลี่ยนโมเดลแล้วถ่ายหน้าตรงใหม่ ผ่านโดยไม่เทียบกับท่าเก่า', async () => {
+    const { service, face, repo } = setup();
+    const me = student();
+    await storeRow(repo, me.id, 'front');
+    await storeRow(repo, me.id, 'left');
+    // เวกเตอร์คนละแบบกับของเก่า ถ้าเอาไปเทียบจะไม่ผ่าน
+    face.next = { pose: ANGLE.front, model: 'new_model', embedding: [0, 1] };
+
+    const status = await service.savePose(me, 'front', jpeg());
+
+    expect(status).toEqual({ done: ['front'], complete: false });
+    expect((await repo.listByUser(me.id)).map((r) => r.model)).toEqual(['new_model']);
+  });
 
   it('ส่ง error ที่ผู้ใช้แก้ได้จาก face service ต่อตามเดิม', async () => {
     const { service, face, repo } = setup();

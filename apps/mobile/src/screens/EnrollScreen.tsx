@@ -107,6 +107,16 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
             callbacks.current.onUnauthorized(e.message);
             return;
           }
+          // ต้องเริ่มจากหน้าตรงใหม่ เช่น ระบบตรวจใบหน้าเปลี่ยนรุ่น
+          if (e instanceof ApiError && e.code === 'FRONT_FIRST') {
+            const status = await apiFetch<FaceStatus>('/me/face').catch(() => null);
+            if (status && !cancelled) {
+              doneRef.current = status.done;
+              setDone(status.done);
+              setMessage(e.message);
+              continue;
+            }
+          }
           // ลงทะเบียนครบจากเครื่องอื่นไปแล้ว
           if (e instanceof ApiError && e.code === 'ALREADY_ENROLLED') {
             const status = await apiFetch<FaceStatus>('/me/face').catch(() => null);

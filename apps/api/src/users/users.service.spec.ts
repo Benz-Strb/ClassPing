@@ -169,3 +169,20 @@ describe('UsersService.setConsent', () => {
     expect(user.pdpaConsentAt).toBe('2026-10-01T00:00:00.000Z');
   });
 });
+
+describe('UsersService.clearConsent', () => {
+  it('ล้างเวลายินยอม', async () => {
+    const { db, rows } = fakeDb([
+      {
+        id: 'u1',
+        email: '66112106@dpu.ac.th',
+        full_name: null,
+        role: 'student',
+        student_id: '66112106',
+        pdpa_consent_at: '2026-10-01T00:00:00.000Z',
+      },
+    ]);
+    await new UsersService(db, config()).clearConsent('u1');
+    expect(rows.get('u1')!.pdpa_consent_at).toBeNull();
+  });
+});
