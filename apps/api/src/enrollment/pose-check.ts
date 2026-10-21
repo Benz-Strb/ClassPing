@@ -13,19 +13,21 @@ export function isComplete(poses: Iterable<string>): boolean {
   return POSES.every((pose) => done.has(pose));
 }
 
-// เครื่องหมายของ yaw/pitch ตอนผู้ใช้หันซ้าย (ซ้ายของตัวเอง) / เงยหน้า วัดจากกล้อง MacBook
-// เงย = pitch บวก แน่นอน ส่วนซ้าย = yaw ลบ ยังไม่ชัวร์ ต้องเช็กกับมือถือจริงอีกรอบ
-export const YAW_LEFT_SIGN = -1;
+// เครื่องหมายของ yaw/pitch ตอนผู้ใช้หันซ้าย (ซ้ายของตัวเอง) / เงยหน้า
+// วัดจากรูปที่ iPhone ส่งมาจริง หันซ้ายได้ yaw เป็นบวก
+export const YAW_LEFT_SIGN = 1;
 export const PITCH_UP_SIGN = 1;
 
-// องศา ปรับได้หลังลองกับมือถือจริง
+// องศา เพดานอิงคำแนะนำรูปสำหรับเทียบหน้าของ AWS Rekognition (เงย < 45 ก้ม < 30)
+// หันข้างให้ถึง 55 ตามช่วงที่ใช้กันในระบบให้หันหน้า (35-55) รูปที่ 55 ยังเทียบกับหน้าตรงได้ดี
 const FRONT_MAX = 12;
-const TURN_MIN = 15;
-const TURN_MAX = 45;
-const TILT_MIN = 10;
-const TILT_MAX = 35;
+const TURN_MIN = 12;
+const TURN_MAX = 55;
+const TILT_MIN = 8;
+const UP_MAX = 45;
+const DOWN_MAX = 30;
 // ตอนหันข้างหรือเงย/ก้ม แกนอีกแกนเอียงได้ไม่เกินนี้
-const OTHER_AXIS_MAX = 20;
+const OTHER_AXIS_MAX = 30;
 
 // มุมต่างกันแต่เป็นคนเดียวกันได้คะแนนต่ำกว่าตอนเช็คชื่อ (หน้าตรงคนเดียวกันได้ > 0.6, คนอื่น < 0.35)
 export const SAME_PERSON_MIN = 0.4;
@@ -54,7 +56,7 @@ export function checkPose(expected: Pose, { yaw, pitch }: FacePose): PoseCheck {
   const up = expected === 'up';
   const tilted = pitch * PITCH_UP_SIGN * (up ? 1 : -1);
   if (tilted < TILT_MIN) return fail(up ? 'เงยหน้าอีกนิด' : 'ก้มหน้าอีกนิด');
-  if (tilted > TILT_MAX) return fail(up ? 'เงยมากไป' : 'ก้มมากไป');
+  if (tilted > (up ? UP_MAX : DOWN_MAX)) return fail(up ? 'เงยมากไป' : 'ก้มมากไป');
   return pass;
 }
 
