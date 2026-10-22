@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
 import { dbError } from '../common/db-error.js';
+import { looksLike } from '../common/image-type.js';
 import { FaceClient } from '../face/face.client.js';
 import { UsersService, type AppUser } from '../users/users.service.js';
 import { ENROLLMENT_REPO, type EnrollmentRepo } from './enrollment.repo.js';
@@ -22,17 +23,6 @@ export interface UploadedImage {
 }
 
 const EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png' };
-
-// ดูจากไบต์แรกของไฟล์ ไม่เชื่อ Content-Type ที่แอปบอกมาอย่างเดียว
-const MAGIC: Record<string, number[]> = {
-  'image/jpeg': [0xff, 0xd8, 0xff],
-  'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
-};
-
-function looksLike(mime: string, bytes: Buffer): boolean {
-  const magic = MAGIC[mime];
-  return !!magic && bytes.length >= magic.length && magic.every((b, i) => bytes[i] === b);
-}
 
 export interface FaceStatus {
   done: Pose[];
