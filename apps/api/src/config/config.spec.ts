@@ -60,4 +60,39 @@ describe('loadConfig', () => {
       loadConfig(base({ FACE_SERVICE_URL: 'http://face.test:8001/' })).faceServiceUrl,
     ).toBe('http://face.test:8001');
   });
+
+  it('ค่าเริ่มต้นของ Redis เกณฑ์คะแนน และกล้อง', () => {
+    const config = loadConfig(base({}));
+    expect(config.redisHost).toBe('127.0.0.1');
+    expect(config.redisPort).toBe(6379);
+    expect(config.matchAcceptMin).toBe(0.5);
+    expect(config.matchReviewMin).toBe(0.36);
+    expect(config.cameraOpenBeforeMin).toBe(0);
+    expect(config.matchLog).toBe(false);
+  });
+
+  it('อ่านเกณฑ์คะแนนและ MATCH_LOG จาก env', () => {
+    const config = loadConfig(
+      base({ MATCH_ACCEPT_MIN: '0.55', MATCH_REVIEW_MIN: '0.4', MATCH_LOG: '1' }),
+    );
+    expect(config.matchAcceptMin).toBe(0.55);
+    expect(config.matchReviewMin).toBe(0.4);
+    expect(config.matchLog).toBe(true);
+  });
+
+  it('เกณฑ์คะแนนไม่ใช่ตัวเลข นอกช่วง 0-1 หรือเกณฑ์รอตรวจไม่ต่ำกว่าเกณฑ์บันทึก ต้อง throw', () => {
+    expect(() => loadConfig(base({ MATCH_ACCEPT_MIN: 'abc' }))).toThrow('MATCH_ACCEPT_MIN');
+    expect(() => loadConfig(base({ MATCH_ACCEPT_MIN: '1.2' }))).toThrow('MATCH_ACCEPT_MIN');
+    expect(() =>
+      loadConfig(base({ MATCH_ACCEPT_MIN: '0.5', MATCH_REVIEW_MIN: '0.6' })),
+    ).toThrow('MATCH_REVIEW_MIN');
+  });
+
+  it('CAMERA_OPEN_BEFORE_MIN และ REDIS_PORT ต้องเป็นจำนวนเต็มไม่ติดลบ', () => {
+    expect(loadConfig(base({ CAMERA_OPEN_BEFORE_MIN: '10' })).cameraOpenBeforeMin).toBe(10);
+    expect(() => loadConfig(base({ CAMERA_OPEN_BEFORE_MIN: '-1' }))).toThrow(
+      'CAMERA_OPEN_BEFORE_MIN',
+    );
+    expect(() => loadConfig(base({ REDIS_PORT: 'x' }))).toThrow('REDIS_PORT');
+  });
 });
