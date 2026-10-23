@@ -1,3 +1,4 @@
+import type { AppConfig } from '../config/config.js';
 import { randomUUID } from 'node:crypto';
 import type { Course, CoursesRepo } from '../courses/courses.repo.js';
 import { CoursesService } from '../courses/courses.service.js';
@@ -99,7 +100,7 @@ async function rejection(promise: Promise<unknown>) {
   throw new Error('คาดว่าจะ throw แต่ไม่ throw');
 }
 
-function setup() {
+function setup(openBeforeMin = 0) {
   const owner = user();
   const otherTeacher = user();
   const course = (teacherId: string, code: string): Course => ({
@@ -138,7 +139,9 @@ function setup() {
       synced.push(id);
     },
   };
-  const service = new SchedulesService(courses, rooms, repo, syncer, () => NOW);
+  const service = new SchedulesService(courses, rooms, repo, syncer, () => NOW, {
+    cameraOpenBeforeMin: openBeforeMin,
+  } as AppConfig);
 
   const monday = (overrides: Record<string, unknown> = {}) => ({
     weekday: 1,
@@ -471,6 +474,25 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
       ),
     ).toMatchObject({ status: 400, code: 'SESSION_STARTED' });
     await service.setOverride(owner, schedule.id, TUESDAY, { startTime: '14:00', endTime: '15:00' });
+  });
+
+  it('กล้องเปิดก่อนคาบแล้ว (20 นาที) งดหรือเปลี่ยนไม่ได้ ส่วนคาบที่กล้องยังไม่เปิดยังแก้ได้', async () => {
+    const { owner, cs101, service, monday } = setup(20);
+    // ตอนนี้ 10:00
+    const soon = await service.create(
+      owner,
+      cs101.id,
+      monday({ weekday: 2, startTime: '10:15', endTime: '10:45' }),
+    );
+    const later = await service.create(
+      owner,
+      cs101.id,
+      monday({ weekday: 2, startTime: '10:45', endTime: '11:30' }),
+    );
+    expect(
+      await rejection(service.setOverride(owner, soon.id, TUESDAY, { cancelled: true })),
+    ).toMatchObject({ status: 400, code: 'SESSION_STARTED' });
+    await service.setOverride(owner, later.id, TUESDAY, { cancelled: true });
   });
 
   it('ยกเลิกงดสอนของวันนี้หลังเลยเวลาเริ่มแล้วไม่ได้', async () => {

@@ -30,8 +30,11 @@ export class UnknownCleanupRunner implements OnModuleDestroy {
   async run() {
     try {
       const before = new Date(this.now().getTime() - KEEP_DAYS * 24 * HOUR_MS);
-      const paths = await this.repo.deleteUnknownBefore(before);
-      if (paths.length) await this.repo.removeCaptures(paths);
+      // ลบไฟล์ก่อน ถ้าพังแถวยังอยู่ให้รอบถัดไปลองใหม่ รูปจะไม่ค้างแบบไม่มีใครรู้
+      const expired = await this.repo.unknownBefore(before);
+      if (!expired.length) return;
+      await this.repo.removeCaptures(expired.map((e) => e.imagePath));
+      await this.repo.deleteUnknown(expired.map((e) => e.id));
     } catch (error) {
       this.logger.warn(`ลบรูปหน้าที่ไม่รู้จักไม่สำเร็จ: ${String(error)}`);
     }
