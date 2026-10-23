@@ -80,7 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     redisPort: wholeNumber(env, 'REDIS_PORT', 6379),
     matchAcceptMin,
     matchReviewMin,
-    cameraOpenBeforeMin: wholeNumber(env, 'CAMERA_OPEN_BEFORE_MIN', 0),
+    cameraOpenBeforeMin: wholeNumber(env, 'CAMERA_OPEN_BEFORE_MIN', 20),
     matchLog: env.MATCH_LOG?.trim() === '1',
   };
 }
