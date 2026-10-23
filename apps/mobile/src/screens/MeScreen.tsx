@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError, apiFetch } from '../lib/api';
+import { discardCard } from '../lib/face';
 import { supabase } from '../lib/supabase';
 import type { FaceStatus, Me } from '../lib/types';
 import { ConsentScreen } from './ConsentScreen';
@@ -87,6 +88,7 @@ export function MeScreen({ onRejected }: Props) {
         done={face.verified ? face.done : []}
         card={face.verified ? null : card}
         onCardRejected={(message) => {
+          discardCard(card);
           setFace({ ...face, verified: false });
           setCard(null);
           setCardError(message);

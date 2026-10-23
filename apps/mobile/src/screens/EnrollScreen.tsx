@@ -12,13 +12,14 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { ApiError, apiFetch } from '../lib/api';
-import { uploadPose, verifyIdentity } from '../lib/face';
+import { discardCard, uploadPose, verifyIdentity } from '../lib/face';
 import type { FaceStatus, Pose } from '../lib/types';
 
 const POSES: Pose[] = ['front', 'left', 'right', 'up', 'down'];
 
 // ปัญหาที่ภาพบัตร สแกนหน้าใหม่ไม่ช่วย ต้องกลับไปเลือกภาพบัตรใหม่
 const CARD_ERRORS = new Set([
+  'CARD_INVALID',
   'CARD_UNREADABLE',
   'CARD_NOT_YOURS',
   'CARD_NOT_TODAY',
@@ -115,6 +116,7 @@ export function EnrollScreen({
             pose === 'front' && cardUri
               ? await verifyIdentity(cardUri, photo)
               : await uploadPose(pose, photo);
+          if (pose === 'front') discardCard(cardUri);
           doneRef.current = status.done;
           setDone(status.done);
           setMessage(null);
@@ -130,8 +132,15 @@ export function EnrollScreen({
             callbacks.current.onCardRejected(e.message);
             return;
           }
+          // ไฟล์ใหญ่เกินตอนส่งบัตร ส่วนใหญ่เป็นที่ภาพบัตร (รูปหน้าย่อแล้ว)
+          if (e instanceof ApiError && e.status === 413 && pose === 'front') {
+            callbacks.current.onCardRejected('ภาพบัตรใหญ่เกินไป ใช้ภาพหน้าจอบัตรแทนรูปถ่าย');
+            return;
+          }
           if (e instanceof ApiError && e.status === 422) {
             setMessage(e.message);
+            // ตอนส่งบัตรไปด้วย เว้นจังหวะไม่ให้ส่งภาพบัตรซ้ำถี่ ๆ
+            if (pose === 'front') await wait(1200);
             continue;
           }
           if (e instanceof ApiError && e.status === 401) {
@@ -257,6 +266,14 @@ export function EnrollScreen({
           </>
         ) : (
           <Text style={styles.message}>{message ?? (ready ? 'กำลังสแกน…' : 'กำลังเปิดกล้อง…')}</Text>
+        )}
+        {pose === 'front' && card && (
+          <Pressable
+            style={styles.link}
+            onPress={() => onCardRejected('เลือกภาพบัตรใหม่ได้เลย')}
+          >
+            <Text style={styles.linkLight}>เปลี่ยนภาพบัตร</Text>
+          </Pressable>
         )}
         <Pressable style={styles.link} onPress={onSignOut}>
           <Text style={styles.linkLight}>ออกจากระบบ</Text>
