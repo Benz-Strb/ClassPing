@@ -15,6 +15,8 @@ export interface EnrollResult {
   pose: FacePose | null;
   sharpness: number;
   model: string;
+  // รูปครอปหน้า JPEG base64 สำหรับเก็บแทนรูปเต็ม
+  crop?: string | null;
 }
 
 export interface DetectedFace {
@@ -58,6 +60,7 @@ const TIMEOUT_MS = 10_000;
 // code อื่นจาก service (เช่น BAD_EMBEDDING, REQUEST_TOO_LARGE, 404) เป็นบั๊กหรือตั้งค่าผิดฝั่งระบบ
 const USER_FACING_CODES = new Set([
   'NO_FACE',
+  'FACE_CUT_OFF',
   'MULTIPLE_FACES',
   'FACE_TOO_SMALL',
   'LOW_QUALITY',

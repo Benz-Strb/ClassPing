@@ -55,6 +55,11 @@ def pick_enrollment_face(
         raise FaceError(422, "MULTIPLE_FACES", "มีหลายคนในรูป ถ่ายให้มีแค่คนเดียว")
 
     face = candidates[0]
+    # รูปที่เก็บไว้ให้อาจารย์ดูต้องเห็นหน้าครบ กรอบหน้าเลยขอบภาพแปลว่าหน้าขาดไปบางส่วน
+    height, width = image.shape[:2]
+    x1, y1, x2, y2 = face.bbox
+    if x1 < 0 or y1 < 0 or x2 > width or y2 > height:
+        raise FaceError(422, "FACE_CUT_OFF", "หน้าอยู่ชิดขอบ ขยับให้หน้าอยู่กลางจอ")
     if face_size(face.bbox) < settings.enroll_min_face_px:
         raise FaceError(422, "FACE_TOO_SMALL", "หน้าเล็กไป ขยับเข้ามาใกล้กล้องอีกหน่อย")
     if face.det_score < settings.enroll_min_det_score:
