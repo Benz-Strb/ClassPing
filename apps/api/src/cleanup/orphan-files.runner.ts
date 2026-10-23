@@ -10,11 +10,7 @@ const BUCKETS: Bucket[] = ['captures', 'faces'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ลบรูปที่ไม่มีแถวไหนชี้ถึงแล้ว เช่น ลบวิชา คาบ หรือผู้ใช้ไป แถวหายตาม cascade แต่ไฟล์ยังอยู่
-export async function sweepBucket(
-  repo: CleanupRepo,
-  bucket: Bucket,
-  now: Date,
-): Promise<number> {
+export async function sweepBucket(repo: CleanupRepo, bucket: Bucket, now: Date): Promise<number> {
   // โฟลเดอร์ที่ชื่อไม่ใช่ id ไม่ใช่ของระบบนี้ ไม่แตะ
   const folders = (await repo.folders(bucket)).filter((f) => UUID.test(f));
   if (!folders.length) return 0;
@@ -25,7 +21,8 @@ export async function sweepBucket(
   for (const folder of folders) {
     const old = (await repo.files(bucket, folder)).filter((f) => f.createdAt.getTime() <= cutoff);
     if (!old.length) continue;
-    const refs = owners.has(folder) ? await repo.referenced(bucket, folder) : new Set<string>();
+    const paths = old.map((f) => f.path);
+    const refs = owners.has(folder) ? await repo.referenced(bucket, paths) : new Set<string>();
     const orphans = old.filter((f) => !refs.has(f.path)).map((f) => f.path);
     if (!orphans.length) continue;
     await repo.remove(bucket, orphans);

@@ -17,8 +17,8 @@ export interface CleanupRepo {
   files(bucket: Bucket, folder: string): Promise<StoredFile[]>;
   // id ที่ยังมีเจ้าของอยู่ (คาบหรือผู้ใช้)
   existingOwners(bucket: Bucket, ids: string[]): Promise<Set<string>>;
-  // path ที่ยังมีแถวในฐานข้อมูลชี้ถึง
-  referenced(bucket: Bucket, folder: string): Promise<Set<string>>;
+  // path ไหนใน paths ที่ยังมีแถวในฐานข้อมูลชี้ถึง (ถามทีละไฟล์ ไม่ดึงทั้งโฟลเดอร์ที่อาจเกินลิมิตแถว)
+  referenced(bucket: Bucket, paths: string[]): Promise<Set<string>>;
   remove(bucket: Bucket, paths: string[]): Promise<void>;
 }
 
@@ -26,7 +26,10 @@ export const CLEANUP_REPO = Symbol('CLEANUP_REPO');
 
 const PAGE = 1000;
 
-const OWNER_TABLE: Record<Bucket, string> = { captures: 'sessions', faces: 'users' };
+const OWNER_TABLE: Record<Bucket, string> = {
+  captures: 'sessions',
+  faces: 'users',
+};
 
 @Injectable()
 export class SupabaseCleanupRepo implements CleanupRepo {
@@ -38,13 +41,15 @@ export class SupabaseCleanupRepo implements CleanupRepo {
   }
 
   async files(bucket: Bucket, folder: string): Promise<StoredFile[]> {
-    return (await this.list(bucket, folder))
-      .filter((e) => e.id !== null)
-      // ไม่รู้เวลาอัปโหลด ถือว่าเพิ่งอัปโหลด จะได้ไม่ถูกลบ
-      .map((e) => ({
-        path: `${folder}/${e.name}`,
-        createdAt: e.created_at ? new Date(e.created_at) : new Date(),
-      }));
+    return (
+      (await this.list(bucket, folder))
+        .filter((e) => e.id !== null)
+        // ไม่รู้เวลาอัปโหลด ถือว่าเพิ่งอัปโหลด จะได้ไม่ถูกลบ
+        .map((e) => ({
+          path: `${folder}/${e.name}`,
+          createdAt: e.created_at ? new Date(e.created_at) : new Date(),
+        }))
+    );
   }
 
   async existingOwners(bucket: Bucket, ids: string[]): Promise<Set<string>> {
@@ -57,25 +62,20 @@ export class SupabaseCleanupRepo implements CleanupRepo {
     return found;
   }
 
-  async referenced(bucket: Bucket, folder: string): Promise<Set<string>> {
-    const sources =
-      bucket === 'captures'
-        ? [
-            { table: 'attendance', key: 'session_id' },
-            { table: 'unknown_faces', key: 'session_id' },
-          ]
-        : [{ table: 'face_profiles', key: 'user_id' }];
-    const paths = new Set<string>();
-    for (const { table, key } of sources) {
-      const { data, error } = await this.db
-        .from(table)
-        .select('image_path')
-        .eq(key, folder)
-        .not('image_path', 'is', null);
-      if (error) throw dbError();
-      for (const row of data as { image_path: string }[]) paths.add(row.image_path);
+  async referenced(bucket: Bucket, paths: string[]): Promise<Set<string>> {
+    const tables = bucket === 'captures' ? ['attendance', 'unknown_faces'] : ['face_profiles'];
+    const found = new Set<string>();
+    for (const table of tables) {
+      for (const batch of chunk(paths, 100)) {
+        const { data, error } = await this.db
+          .from(table)
+          .select('image_path')
+          .in('image_path', batch);
+        if (error) throw dbError();
+        for (const row of data as { image_path: string }[]) found.add(row.image_path);
+      }
     }
-    return paths;
+    return found;
   }
 
   async remove(bucket: Bucket, paths: string[]): Promise<void> {
@@ -86,11 +86,17 @@ export class SupabaseCleanupRepo implements CleanupRepo {
   }
 
   private async list(bucket: Bucket, prefix: string) {
-    const entries: { id: string | null; name: string; created_at: string | null }[] = [];
+    const entries: {
+      id: string | null;
+      name: string;
+      created_at: string | null;
+    }[] = [];
     for (let offset = 0; ; offset += PAGE) {
-      const { data, error } = await this.db.storage
-        .from(bucket)
-        .list(prefix, { limit: PAGE, offset, sortBy: { column: 'name', order: 'asc' } });
+      const { data, error } = await this.db.storage.from(bucket).list(prefix, {
+        limit: PAGE,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      });
       if (error) throw dbError();
       entries.push(...data);
       if (data.length < PAGE) return entries;
