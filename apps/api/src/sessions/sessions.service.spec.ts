@@ -1,3 +1,4 @@
+import type { AppConfig } from '../config/config.js';
 import { randomUUID } from 'node:crypto';
 import type { Course, CoursesRepo } from '../courses/courses.repo.js';
 import { CoursesService } from '../courses/courses.service.js';
@@ -77,7 +78,7 @@ async function rejection(promise: Promise<unknown>) {
   throw new Error('คาดว่าจะ throw แต่ไม่ throw');
 }
 
-function setup() {
+function setup(openBeforeMin = 0) {
   const owner = user();
   const course: Course = { id: randomUUID(), code: 'CS101', name: 'x', section: null, teacherId: owner.id };
   const courses = new CoursesService({
@@ -99,7 +100,9 @@ function setup() {
 
   const repo = new InMemorySessionsRepo();
   let now = NOW;
-  const service = new SessionsService(courses, schedulesRepo, repo, () => now);
+  const service = new SessionsService(courses, schedulesRepo, repo, () => now, {
+    cameraOpenBeforeMin: openBeforeMin,
+  } as AppConfig);
 
   const addSchedule = (patch: Partial<Schedule> = {}) => {
     const schedule: Schedule = {
@@ -196,6 +199,20 @@ describe('SessionsService.syncCourse', () => {
     removeSchedule(tuesday.id);
     await service.syncCourse(course.id);
     expect(sessions()).toEqual([{ ...live, scheduleId: null }]);
+  });
+
+  it('กล้องเปิดก่อนคาบแล้ว (20 นาที) ถือว่าคาบเริ่มแล้ว งดสอนไม่ทำให้คาบหาย', async () => {
+    const { course, service, addSchedule, setOverride, sessions } = setup(20);
+    // ตอนนี้ 10:00 คาบ 10:15 กล้องเปิดไปแล้ว คาบ 10:30 ยังไม่เปิด
+    const soon = addSchedule({ weekday: 2, startTime: '10:15', endTime: '10:45' });
+    const later = addSchedule({ weekday: 2, startTime: '10:45', endTime: '11:30' });
+    await service.syncCourse(course.id);
+    expect(sessions()).toHaveLength(2);
+
+    setOverride({ scheduleId: soon.id, onDate: TODAY, cancelled: true });
+    setOverride({ scheduleId: later.id, onDate: TODAY, cancelled: true });
+    await service.syncCourse(course.id);
+    expect(sessions().map((s) => s.scheduleId)).toEqual([soon.id]);
   });
 
   it('ลบตาราง คาบในอนาคตหาย แต่คาบที่จบไปแล้วยังอยู่', async () => {

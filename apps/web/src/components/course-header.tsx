@@ -8,6 +8,7 @@ import { handleApiError } from "@/lib/auth-error";
 import type { Course } from "@/lib/types";
 
 const TABS = [
+  { path: "checkin", label: "เช็คชื่อ" },
   { path: "students", label: "นักศึกษา" },
   { path: "schedule", label: "ตารางเรียน" },
   { path: "rules", label: "เกณฑ์" },
@@ -44,7 +45,7 @@ export function CourseHeader() {
       <nav className="flex gap-4 border-b">
         {TABS.map((tab) => {
           const href = `/courses/${id}/${tab.path}`;
-          const active = pathname === href;
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={tab.path}
