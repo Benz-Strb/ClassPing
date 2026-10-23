@@ -1,12 +1,15 @@
 import logging
 import sys
 import threading
+import time
 
 import cv2
 
 log = logging.getLogger("camera")
 
 JPEG_QUALITY = 85
+# อ่านภาพไม่ได้ติดกันเท่านี้ (ราว 3 วิ) ถือว่ากล้องมีปัญหา
+FAILS_BEFORE_WARNING = 30
 
 
 class Webcam:
@@ -37,11 +40,19 @@ class Webcam:
         self._thread.start()
 
     def _grab(self) -> None:
+        fails = 0
         while self._running and self._cap is not None:
             ok, frame = self._cap.read()
             if ok:
+                fails = 0
                 with self._lock:
                     self._frame = frame
+                continue
+            fails += 1
+            if fails == FAILS_BEFORE_WARNING:
+                log.warning("อ่านภาพจากกล้องหมายเลข %d ไม่ได้ ตรวจสายกล้อง", self.index)
+            # กล้องหลุดแล้ว read() คืนทันที ถ้าไม่พักจะกิน CPU เต็ม
+            time.sleep(0.1)
 
     def read(self) -> bytes | None:
         with self._lock:

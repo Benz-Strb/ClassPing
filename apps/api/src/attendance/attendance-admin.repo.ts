@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { AppError } from '../common/app-error.js';
 import { dbError } from '../common/db-error.js';
 import type { Rules } from '../courses/courses.repo.js';
 import { DEFAULT_RULES } from '../courses/courses.service.js';
@@ -202,6 +203,10 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       })
       .eq('session_id', sessionId)
       .eq('student_id', fromUserId);
+    // กล้องเพิ่งบันทึกคนใหม่คนนี้พอดี
+    if (error?.code === '23505') {
+      throw new AppError(409, 'ALREADY_RECORDED', 'นักศึกษาคนนี้มีผลเช็คชื่อในคาบนี้แล้ว');
+    }
     if (error) throw dbError();
   }
 

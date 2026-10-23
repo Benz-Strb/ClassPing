@@ -1,11 +1,20 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { SCHEDULES_REPO, type SchedulesRepo } from '../schedules/schedules.repo.js';
 import type { SessionSyncer } from '../schedules/schedules.service.js';
 import type { AppUser } from '../users/users.service.js';
-import { addDays, bangkokDate, daysBetween, isDate, planDay, type PlannedSession } from './plan-day.js';
+import {
+  addDays,
+  bangkokDate,
+  cameraOpened,
+  daysBetween,
+  isDate,
+  planDay,
+  type PlannedSession,
+} from './plan-day.js';
 import { SESSIONS_REPO, type SessionRow, type SessionsRepo } from './sessions.repo.js';
 
 export interface SessionView {
@@ -41,6 +50,7 @@ export class SessionsService implements SessionSyncer {
     @Inject(SCHEDULES_REPO) private readonly schedules: SchedulesRepo,
     @Inject(SESSIONS_REPO) private readonly repo: SessionsRepo,
     @Inject(CLOCK) private readonly now: Clock,
+    @Optional() @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
 
   syncCourse(courseId: string): Promise<void> {
@@ -56,7 +66,7 @@ export class SessionsService implements SessionSyncer {
     return run;
   }
 
-  // คาบที่เริ่มแล้วห้ามแตะ ไม่งั้นผลเช็คชื่อหายตาม
+  // คาบที่กล้องเปิดแล้ว (ก่อนเวลาเริ่มตาม CAMERA_OPEN_BEFORE_MIN) ห้ามแตะ ไม่งั้นผลเช็คชื่อหายตาม
   private async syncNow(courseId: string): Promise<void> {
     const now = this.now();
     const from = bangkokDate(now);
@@ -84,7 +94,7 @@ export class SessionsService implements SessionSyncer {
 
     for (const row of existing) {
       const wanted = row.scheduleId ? planned.get(keyOf(row)) : undefined;
-      if (row.startsAt <= now || (wanted && sameSlot(row, wanted))) {
+      if (cameraOpened(row.startsAt, now, this.config?.cameraOpenBeforeMin) || (wanted && sameSlot(row, wanted))) {
         taken.set(row.id, row.startsAt.getTime());
       } else if (!wanted) {
         toRemove.push(row.id);

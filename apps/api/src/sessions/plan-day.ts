@@ -97,3 +97,8 @@ export function overlaps(
 ): boolean {
   return a.startsAt < b.endsAt && b.startsAt < a.endsAt;
 }
+
+// กล้องเริ่มส่งภาพก่อนเวลาคาบ จึงนับว่าคาบเริ่มตั้งแต่ตอนนั้น
+export function cameraOpened(startsAt: Date, now: Date, openBeforeMin = 0): boolean {
+  return startsAt.getTime() - openBeforeMin * 60_000 <= now.getTime();
+}

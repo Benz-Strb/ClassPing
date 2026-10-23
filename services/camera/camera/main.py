@@ -8,7 +8,7 @@ import time
 from datetime import UTC, datetime
 
 from camera.api import BadToken, CameraApi
-from camera.loop import CameraLoop
+from camera.loop import RETRY_SECONDS, CameraLoop
 from camera.webcam import Webcam
 
 
@@ -35,7 +35,15 @@ def main() -> int:
     log.info("รอคาบจาก %s (กล้องหมายเลข %d)", api_url, camera.index)
     try:
         while True:
-            time.sleep(loop.tick())
+            try:
+                wait = loop.tick()
+            except BadToken:
+                raise
+            except Exception:
+                # error ที่ไม่ได้คาดไว้ ไม่ให้โปรแกรมตายกลางคาบ
+                log.exception("เกิดข้อผิดพลาด ลองใหม่ใน %d วิ", RETRY_SECONDS)
+                wait = RETRY_SECONDS
+            time.sleep(wait)
     except BadToken as error:
         log.error("%s", error)
         return 1

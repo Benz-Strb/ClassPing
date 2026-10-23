@@ -7,11 +7,13 @@ import type { DetectedFace, DetectResult } from '../face/face.client.js';
 import {
   ATTENDANCE_REPO,
   type AttendanceRepo,
+  type CameraRecord,
   type SessionContext,
 } from './attendance.repo.js';
 import { classify, nextWrite, statusAt, type Verdict } from './decide.js';
 import type { FrameJob } from './frame-queue.js';
 import { bestTwo, type GalleryEntry } from './gallery.js';
+import { RejectedGuesses } from './rejected-guesses.js';
 
 // ของที่ต้องใช้จาก module อื่น แยกออกมาให้เทสต์ใส่ของปลอมได้ง่าย
 export interface FrameDeps {
@@ -49,6 +51,7 @@ export class FrameProcessor {
     @Inject(FRAME_DEPS) private readonly deps: FrameDeps,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly now: Clock,
+    private readonly rejected: RejectedGuesses,
   ) {}
 
   async process(job: FrameJob): Promise<FrameOutcome> {
@@ -76,7 +79,10 @@ export class FrameProcessor {
 
     for (const face of faces) {
       const best = bestTwo(face.embedding, gallery);
-      const verdict = classify(best, thresholds);
+      let verdict = classify(best, thresholds);
+      if (verdict.kind === 'review' && this.rejected.isRejected(job.sessionId, verdict.userId)) {
+        verdict = { kind: 'unknown' };
+      }
       if (this.config.matchLog) {
         const size = Math.round(Math.min(face.bbox[2] - face.bbox[0], face.bbox[3] - face.bbox[1]));
         this.logger.log(
@@ -115,18 +121,28 @@ export class FrameProcessor {
     if (action === 'skip') return;
 
     const imagePath = await this.upload(`${sessionId}/${verdict.userId}`, face.crop);
+    const record: CameraRecord = {
+      sessionId,
+      userId: verdict.userId,
+      status,
+      firstSeenAt: seenAt,
+      confidence: verdict.score,
+      imagePath,
+    };
+    let written: boolean;
     try {
-      await this.repo.write({
-        sessionId,
-        userId: verdict.userId,
-        status,
-        firstSeenAt: seenAt,
-        confidence: verdict.score,
-        imagePath,
-      });
+      written =
+        action === 'insert'
+          ? await this.repo.insertIfAbsent(record)
+          : await this.repo.replacePending(record);
     } catch (error) {
       await this.removeQuietly(imagePath);
       throw error;
+    }
+    // ระหว่างอัปโหลด อาจารย์แก้แถวนี้ไปแล้ว ผลของอาจารย์ชนะ
+    if (!written) {
+      await this.removeQuietly(imagePath);
+      return;
     }
     if (action === 'replace') await this.removeQuietly(current?.imagePath ?? null);
   }

@@ -14,6 +14,7 @@ import {
   type StoredAttendance,
 } from './attendance-admin.repo.js';
 import { statusAt, type AttendanceStatus } from './decide.js';
+import { RejectedGuesses } from './rejected-guesses.js';
 
 export interface AttendanceView {
   studentCode: string;
@@ -67,6 +68,7 @@ export class AttendanceService {
     private readonly roster: RosterService,
     @Inject(ATTENDANCE_ADMIN_REPO) private readonly repo: AttendanceAdminRepo,
     @Inject(CLOCK) private readonly now: Clock,
+    private readonly rejected: RejectedGuesses,
   ) {}
 
   async view(user: AppUser, sessionId: string): Promise<SessionAttendance> {
@@ -150,6 +152,7 @@ export class AttendanceService {
         await this.repo.insertUnknown(sessionId, row.imagePath, row.firstSeenAt ?? this.now());
       }
       await this.repo.deleteRow(sessionId, userId);
+      this.rejected.reject(sessionId, userId, session.endsAt);
       return this.view(user, sessionId);
     }
 

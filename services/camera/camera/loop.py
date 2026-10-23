@@ -12,6 +12,10 @@ POLL_SECONDS = 30
 RETRY_SECONDS = 5
 
 
+class CameraError(Exception):
+    """เปิดกล้องไม่ได้"""
+
+
 class Api(Protocol):
     def session(self) -> Session | None: ...
     def send(self, frame: bytes) -> str: ...
@@ -46,6 +50,11 @@ class CameraLoop:
                 log.warning("%s ลองใหม่ใน %d วิ", error, RETRY_SECONDS)
                 self.next_poll = None
                 return RETRY_SECONDS
+            except CameraError as error:
+                # กล้องหลุดหรือมีโปรแกรมอื่นใช้อยู่ ลองใหม่เรื่อย ๆ ห้องจะได้ไม่พลาดทั้งคาบ
+                log.warning("%s ลองใหม่ใน %d วิ", error, RETRY_SECONDS)
+                self.next_poll = now + timedelta(seconds=RETRY_SECONDS)
+                return RETRY_SECONDS
             self.next_poll = now + timedelta(seconds=POLL_SECONDS)
 
         if self.session is not None and now >= self.session.ends_at:
@@ -74,9 +83,12 @@ class CameraLoop:
 
     def _switch(self, session: Session | None):
         if session is not None and self.session is None:
+            try:
+                self.camera.open()
+            except Exception as error:
+                raise CameraError(str(error)) from error
             log.info("เริ่มส่งภาพ %s (ถึง %s)", session.course, session.ends_at.astimezone())
             self.sent = 0
-            self.camera.open()
         elif session is None and self.session is not None:
             log.info("หยุดส่งภาพ %s (ส่งไป %d ภาพ)", self.session.course, self.sent)
             self.camera.close()
