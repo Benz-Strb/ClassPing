@@ -7,11 +7,14 @@ export interface Me {
   role: 'student' | 'teacher' | 'admin';
   studentId: string | null;
   pdpaConsentAt: string | null;
+  identityVerifiedAt: string | null;
 }
 
 export type Pose = 'front' | 'left' | 'right' | 'up' | 'down';
 
 export interface FaceStatus {
   done: Pose[];
+  // ยืนยันบัตรแล้วและครบทุกท่า
   complete: boolean;
+  verified: boolean;
 }
