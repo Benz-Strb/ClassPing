@@ -8,9 +8,10 @@ import {
   Put,
   Query,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
 import { EnrollmentService, type FaceStatus, type UploadedImage } from './enrollment.service.js';
@@ -29,6 +30,26 @@ export class EnrollmentController {
   @Get('me/face')
   status(@CurrentUser() user: AppUser): Promise<FaceStatus> {
     return this.enrollment.status(user);
+  }
+
+  // ภาพบัตรอยู่ในหน่วยความจำของ request นี้เท่านั้น (multer เก็บใน memory เป็นค่าเริ่มต้น)
+  @Post('me/identity')
+  @HttpCode(200)
+  @UseInterceptors(
+    UploadErrorsInterceptor,
+    FileFieldsInterceptor(
+      [
+        { name: 'card', maxCount: 1 },
+        { name: 'face', maxCount: 1 },
+      ],
+      { limits: { fileSize: MAX_IMAGE_BYTES, files: 2 } },
+    ),
+  )
+  verifyIdentity(
+    @CurrentUser() user: AppUser,
+    @UploadedFiles() files: { card?: UploadedImage[]; face?: UploadedImage[] } | undefined,
+  ): Promise<FaceStatus> {
+    return this.enrollment.verifyIdentity(user, files?.card?.[0], files?.face?.[0]);
   }
 
   @Put('me/face/:pose')

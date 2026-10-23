@@ -12,6 +12,7 @@ from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
 from app.matching import match
+from app.ocr import RapidTextReader, TextReader
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
 
 PUBLIC_PATHS = {"/health"}
@@ -58,7 +59,7 @@ def check_body_size(request: Request, settings: Settings):
     return None
 
 
-def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
+def create_app(settings: Settings, engine: FaceEngine, reader: TextReader) -> FastAPI:
     app = FastAPI(title="ClassPing face service", docs_url=None, redoc_url=None)
     install_error_handlers(app)
 
@@ -91,8 +92,11 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
             read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
         )
         face = pick_enrollment_face(engine.analyze(frame), frame, settings)
+        crop = face_crop(frame, face.bbox)
         return {
             "data": {
+                # เก็บแค่รูปครอปหน้า ไม่เก็บรูปเต็ม อาจารย์ดูออกว่าใครและไม่มีพื้นหลังติดไป
+                "crop": None if crop is None else base64.b64encode(crop).decode("ascii"),
                 "embedding": face.embedding.tolist(),
                 "bbox": list(face.bbox),
                 "detScore": face.det_score,
@@ -118,6 +122,21 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
                 "faces": [detected_json(face, frame if crops else None) for face in usable],
                 # หน้าเล็กเกินไปเทียบแล้วไม่แม่น นับไว้ให้รู้ว่ากล้องอาจอยู่ไกลไป
                 "skippedSmall": len(faces) - len(usable),
+            }
+        }
+
+    # บัตรนักศึกษา: ตัวหนังสือทุกบรรทัด + หน้าในบัตร ให้ API ตัดสินเอง
+    # ภาพอยู่ในหน่วยความจำอย่างเดียว ไม่บันทึกและไม่ log ข้อความที่อ่านได้
+    @app.post("/cards/read")
+    def read_card(image: UploadFile):
+        frame = decode_image(
+            read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
+        )
+        faces = sorted(real_faces(engine.analyze(frame)), key=lambda f: -face_size(f.bbox))
+        return {
+            "data": {
+                "lines": [{"text": text, "score": score} for text, score in reader.read(frame)],
+                "faces": [detected_json(face, None) for face in faces],
             }
         }
 
@@ -183,4 +202,4 @@ def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
 def build_app() -> FastAPI:
     """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
     settings = load_settings(os.environ)
-    return create_app(settings, InsightFaceEngine(settings))
+    return create_app(settings, InsightFaceEngine(settings), RapidTextReader())

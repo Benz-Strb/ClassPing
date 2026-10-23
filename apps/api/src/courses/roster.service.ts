@@ -11,8 +11,16 @@ export interface RosterEntry {
   studentCode: string;
   fullName: string | null;
   hasLoggedIn: boolean;
+  identityVerified: boolean;
   faceEnrolled: boolean;
 }
+
+// รายชื่อที่อาจารย์เห็น มีรูปหน้าตรงของคนที่ยืนยันบัตรแล้ว ไว้ดูว่าเป็นตัวจริง
+export interface RosterView extends RosterEntry {
+  faceImageUrl: string | null;
+}
+
+const SIGNED_URL_SECONDS = 600;
 
 export interface AddResult {
   added: string[];
@@ -35,16 +43,25 @@ export class RosterService {
     @Inject(ROSTER_REPO) private readonly repo: RosterRepo,
   ) {}
 
-  async list(user: AppUser, courseId: string): Promise<RosterEntry[]> {
+  async list(user: AppUser, courseId: string): Promise<RosterView[]> {
     await this.courses.getOwned(user, courseId);
-    return (await this.entries(courseId)).map(({ userId: _userId, ...entry }) => entry);
+    const entries = await this.entries(courseId);
+    const verified = entries.flatMap((e) => (e.userId && e.identityVerified ? [e.userId] : []));
+    const urls = verified.length
+      ? await this.repo.frontImageUrls(verified, SIGNED_URL_SECONDS)
+      : new Map<string, string>();
+    return entries.map(({ userId, ...entry }) => ({
+      ...entry,
+      faceImageUrl: (userId && urls.get(userId)) || null,
+    }));
   }
 
   // ใช้ภายใน ไม่ได้ตรวจสิทธิ์ userId = null คือยังไม่เคย login
   async entries(courseId: string): Promise<(RosterEntry & { userId: string | null })[]> {
     const codes = await this.repo.listCodes(courseId);
     const accounts = await this.repo.accountsByCodes(codes);
-    const faces = new Set(await this.repo.faceEnrolledUserIds(accounts.map((a) => a.userId)));
+    const verified = accounts.filter((a) => a.identityVerified).map((a) => a.userId);
+    const faces = new Set(await this.repo.faceEnrolledUserIds(verified));
     const byCode = new Map(accounts.map((a) => [a.studentCode, a]));
 
     return [...codes].sort().map((code) => {
@@ -54,6 +71,7 @@ export class RosterService {
         userId: account?.userId ?? null,
         fullName: account?.fullName ?? null,
         hasLoggedIn: Boolean(account),
+        identityVerified: account?.identityVerified ?? false,
         faceEnrolled: account ? faces.has(account.userId) : false,
       };
     });
@@ -82,6 +100,6 @@ export class RosterService {
   // ใช้ภายใน ไม่ได้ตรวจสิทธิ์
   async enrolledUserIds(courseId: string): Promise<string[]> {
     const accounts = await this.repo.accountsByCodes(await this.repo.listCodes(courseId));
-    return accounts.map((a) => a.userId);
+    return accounts.filter((a) => a.identityVerified).map((a) => a.userId);
   }
 }

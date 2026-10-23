@@ -16,7 +16,8 @@ export interface FaceRow {
 export interface EnrollmentRepo {
   listByUser(userId: string): Promise<FaceRow[]>;
   savePose(userId: string, row: FaceRow): Promise<void>;
-  deleteByUser(userId: string): Promise<string[]>;
+  // keep = ท่าที่ไม่ลบ คืน path ของรูปในแถวที่ลบ
+  deleteByUser(userId: string, keep?: Pose): Promise<string[]>;
   uploadImage(path: string, bytes: Buffer, mime: string): Promise<void>;
   removeImages(paths: string[]): Promise<void>;
   // ทุกไฟล์ใต้ faces/<userId>/ รวมไฟล์ที่ไม่มีแถวชี้ถึงแล้ว
@@ -64,12 +65,10 @@ export class SupabaseEnrollmentRepo implements EnrollmentRepo {
     if (error) throw dbError();
   }
 
-  async deleteByUser(userId: string): Promise<string[]> {
-    const { data, error } = await this.db
-      .from('face_profiles')
-      .delete()
-      .eq('user_id', userId)
-      .select('image_path');
+  async deleteByUser(userId: string, keep?: Pose): Promise<string[]> {
+    let query = this.db.from('face_profiles').delete().eq('user_id', userId);
+    if (keep) query = query.neq('pose', keep);
+    const { data, error } = await query.select('image_path');
     if (error) throw dbError();
     return (data as { image_path: string }[]).map((r) => r.image_path);
   }
@@ -94,11 +93,7 @@ export class SupabaseEnrollmentRepo implements EnrollmentRepo {
   }
 
   async userExists(userId: string): Promise<boolean> {
-    const { data, error } = await this.db
-      .from('users')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
+    const { data, error } = await this.db.from('users').select('id').eq('id', userId).maybeSingle();
     if (error) throw dbError();
     return data !== null;
   }

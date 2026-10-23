@@ -14,6 +14,7 @@ const student: AppUser = {
   role: 'student',
   studentId: '66112106',
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 };
 
 function context(req: Record<string, unknown>): ExecutionContext {
@@ -121,6 +122,19 @@ describe('AuthGuard', () => {
     const guard = new AuthGuard(reflector(), db(okUser('66112106@dpu.ac.th')), config, users);
     expect(await guard.canActivate(context(req))).toBe(true);
     expect(req.user).toEqual(student);
+  });
+
+  it('bearer ตัวพิมพ์เล็กก็ผ่าน', async () => {
+    const req: Record<string, unknown> = { headers: { authorization: 'bearer t' } };
+    const guard = new AuthGuard(reflector(), db(okUser('66112106@dpu.ac.th')), config, users);
+    expect(await guard.canActivate(context(req))).toBe(true);
+  });
+
+  it('scheme อื่นได้ 401', async () => {
+    const guard = new AuthGuard(reflector(), db(okUser('66112106@dpu.ac.th')), config, users);
+    expect(
+      await rejection(guard.canActivate(context({ headers: { authorization: 'Basic t' } }))),
+    ).toMatchObject({ status: 401 });
   });
 
   it('บัญชีที่สมัครด้วยรหัสผ่าน (ไม่ใช่ Google) ได้ 403 แม้เมลจะเป็น @dpu.ac.th', async () => {

@@ -66,6 +66,7 @@ const user = (role: AppUser['role'] = 'teacher'): AppUser => ({
   role,
   studentId: null,
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 });
 
 async function rejection(promise: Promise<unknown>) {

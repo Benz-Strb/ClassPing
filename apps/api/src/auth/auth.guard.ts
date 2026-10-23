@@ -50,7 +50,8 @@ export class AuthGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest<AuthRequest>();
     const [scheme, token] = (req.headers.authorization ?? '').split(' ');
-    if (scheme !== 'Bearer' || !token) throw unauthorized();
+    // ชื่อ scheme ไม่สนตัวพิมพ์ (RFC 9110)
+    if (scheme?.toLowerCase() !== 'bearer' || !token) throw unauthorized();
 
     const authUser = await this.verify(token);
     const google = this.googleIdentity(authUser);

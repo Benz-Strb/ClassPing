@@ -30,6 +30,14 @@
           "cameraPermission": "ใช้กล้องถ่ายหน้าเพื่อลงทะเบียนใบหน้า",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "เลือกภาพหน้าจอบัตรนักศึกษาเพื่อยืนยันตัวตน",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ]
   }

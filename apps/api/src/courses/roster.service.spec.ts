@@ -28,6 +28,11 @@ class InMemoryRosterRepo implements RosterRepo {
   async faceEnrolledUserIds(userIds: string[]) {
     return userIds.filter((id) => this.faceUserIds.has(id));
   }
+  signed: string[][] = [];
+  async frontImageUrls(userIds: string[]) {
+    this.signed.push(userIds);
+    return new Map(userIds.map((id) => [id, `https://signed/${id}`]));
+  }
 }
 
 const user = (role: AppUser['role'] = 'teacher'): AppUser => ({
@@ -37,6 +42,7 @@ const user = (role: AppUser['role'] = 'teacher'): AppUser => ({
   role,
   studentId: null,
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 });
 
 async function rejection(promise: Promise<unknown>) {
@@ -99,16 +105,47 @@ describe('RosterService', () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112126 66112106 66112199' });
     repo.accounts = [
-      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์' },
-      { studentCode: '66112126', userId: 'u2', fullName: 'ฟิล์ม' },
+      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', identityVerified: true },
+      { studentCode: '66112126', userId: 'u2', fullName: 'ฟิล์ม', identityVerified: false },
     ];
     repo.faceUserIds.add('u1');
+    repo.faceUserIds.add('u2');
 
     expect(await service.list(owner, course.id)).toEqual([
-      { studentCode: '66112106', fullName: 'เบนซ์', hasLoggedIn: true, faceEnrolled: true },
-      { studentCode: '66112126', fullName: 'ฟิล์ม', hasLoggedIn: true, faceEnrolled: false },
-      { studentCode: '66112199', fullName: null, hasLoggedIn: false, faceEnrolled: false },
+      {
+        studentCode: '66112106',
+        fullName: 'เบนซ์',
+        hasLoggedIn: true,
+        identityVerified: true,
+        faceEnrolled: true,
+        faceImageUrl: 'https://signed/u1',
+      },
+      {
+        studentCode: '66112126',
+        fullName: 'ฟิล์ม',
+        hasLoggedIn: true,
+        identityVerified: false,
+        faceEnrolled: false,
+        faceImageUrl: null,
+      },
+      {
+        studentCode: '66112199',
+        fullName: null,
+        hasLoggedIn: false,
+        identityVerified: false,
+        faceEnrolled: false,
+        faceImageUrl: null,
+      },
     ]);
+    // ขอ URL รูปเฉพาะคนที่ยืนยันบัตรแล้ว
+    expect(repo.signed).toEqual([['u1']]);
+  });
+
+  it('ไม่มีใครยืนยันบัตร ไม่ต้องขอ URL รูป', async () => {
+    const { owner, course, repo, service } = setup();
+    await service.add(owner, course.id, { codes: '66112106' });
+    await service.list(owner, course.id);
+    expect(repo.signed).toEqual([]);
   });
 
   it('เอาออกได้ และรหัสที่ไม่มีในวิชาได้ 404 STUDENT_NOT_IN_COURSE', async () => {
@@ -134,17 +171,46 @@ describe('RosterService', () => {
   it('entries คืนรายชื่อพร้อม userId (คนที่ยังไม่ login ได้ null) ไม่ตรวจสิทธิ์', async () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112106 66112199' });
-    repo.accounts = [{ studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์' }];
+    repo.accounts = [
+      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', identityVerified: true },
+    ];
     expect(await service.entries(course.id)).toEqual([
-      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', hasLoggedIn: true, faceEnrolled: false },
-      { studentCode: '66112199', userId: null, fullName: null, hasLoggedIn: false, faceEnrolled: false },
+      {
+        studentCode: '66112106',
+        userId: 'u1',
+        fullName: 'เบนซ์',
+        hasLoggedIn: true,
+        identityVerified: true,
+        faceEnrolled: false,
+      },
+      {
+        studentCode: '66112199',
+        userId: null,
+        fullName: null,
+        hasLoggedIn: false,
+        identityVerified: false,
+        faceEnrolled: false,
+      },
     ]);
   });
 
-  it('enrolledUserIds คืนเฉพาะคนที่ login แล้ว (แผน 5 ใช้เลือกคนไปเทียบหน้า)', async () => {
+  it('ครบทุกท่าแต่ยังไม่ยืนยันบัตร ไม่นับว่าลงทะเบียนหน้า และกล้องไม่เทียบ', async () => {
+    const { owner, course, repo, service } = setup();
+    await service.add(owner, course.id, { codes: '66112106' });
+    repo.accounts = [
+      { studentCode: '66112106', userId: 'u1', fullName: null, identityVerified: false },
+    ];
+    repo.faceUserIds.add('u1');
+    expect((await service.entries(course.id))[0].faceEnrolled).toBe(false);
+    expect(await service.enrolledUserIds(course.id)).toEqual([]);
+  });
+
+  it('enrolledUserIds คืนเฉพาะคนที่ login และยืนยันบัตรแล้ว (แผน 5 ใช้เลือกคนไปเทียบหน้า)', async () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112106 66112199' });
-    repo.accounts = [{ studentCode: '66112106', userId: 'u1', fullName: null }];
+    repo.accounts = [
+      { studentCode: '66112106', userId: 'u1', fullName: null, identityVerified: true },
+    ];
     expect(await service.enrolledUserIds(course.id)).toEqual(['u1']);
   });
 });

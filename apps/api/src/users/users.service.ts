@@ -12,6 +12,8 @@ export interface AppUser {
   role: Role;
   studentId: string | null;
   pdpaConsentAt: string | null;
+  // ยืนยันด้วยบัตรนักศึกษาแล้ว null = ยังไม่ยืนยัน
+  identityVerifiedAt: string | null;
 }
 
 interface UserRow {
@@ -21,6 +23,7 @@ interface UserRow {
   role: Role;
   student_id: string | null;
   pdpa_consent_at: string | null;
+  identity_verified_at: string | null;
 }
 
 const toAppUser = (row: UserRow): AppUser => ({
@@ -30,6 +33,7 @@ const toAppUser = (row: UserRow): AppUser => ({
   role: row.role,
   studentId: row.student_id,
   pdpaConsentAt: row.pdpa_consent_at,
+  identityVerifiedAt: row.identity_verified_at,
 });
 
 const dbError = () =>
@@ -108,6 +112,20 @@ export class UsersService {
     const { error } = await this.db
       .from('users')
       .update({ pdpa_consent_at: null })
+      .eq('id', userId)
+      .select('id')
+      .single();
+    if (error) throw dbError();
+  }
+
+  // score = คะแนนหน้าในบัตรเทียบหน้าสด, null = ล้างการยืนยัน (รีเซ็ตใบหน้า)
+  async setIdentity(userId: string, score: number | null): Promise<void> {
+    const { error } = await this.db
+      .from('users')
+      .update({
+        identity_verified_at: score === null ? null : new Date().toISOString(),
+        identity_score: score,
+      })
       .eq('id', userId)
       .select('id')
       .single();

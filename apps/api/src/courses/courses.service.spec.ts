@@ -45,6 +45,7 @@ const user = (id: string, role: AppUser['role'] = 'teacher'): AppUser => ({
   role,
   studentId: null,
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 });
 
 const teacherA = user(randomUUID());
