@@ -1,10 +1,12 @@
+import base64
+
 from tests.conftest import fake_face
 from tests.images import jpeg, noise_image
 
 
-def post(client, auth, body: bytes):
+def post(client, auth, body: bytes, query: str = ""):
     return client.post(
-        "/faces/detect", headers=auth, files={"image": ("f.jpg", body, "image/jpeg")}
+        f"/faces/detect{query}", headers=auth, files={"image": ("f.jpg", body, "image/jpeg")}
     )
 
 
@@ -42,3 +44,12 @@ def test_detect_invalid_image(client, auth):
     res = post(client, auth, b"garbage")
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "INVALID_IMAGE"
+
+
+def test_detect_crops_only_when_asked(client, auth, engine):
+    engine.faces = [fake_face(bbox=(100.0, 100.0, 200.0, 200.0))]
+    plain = post(client, auth, jpeg(noise_image())).json()["data"]["faces"][0]
+    assert "crop" not in plain
+
+    face = post(client, auth, jpeg(noise_image()), "?crops=1").json()["data"]["faces"][0]
+    assert base64.b64decode(face["crop"])[:3] == b"\xff\xd8\xff"
