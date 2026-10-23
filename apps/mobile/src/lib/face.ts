@@ -4,8 +4,10 @@ import { apiFetch } from './api';
 import type { FaceStatus, Pose } from './types';
 
 const MAX_SIDE = 1280;
+// ภาพหน้าจอบัตรใหญ่กว่ารูปหน้า (iPhone 1290x2796) ย่อแค่พอไม่เกิน 5 MB ให้ตัวเลขยังคม
+const CARD_MAX_SIDE = 1600;
 
-interface Photo {
+export interface Photo {
   uri: string;
   width: number;
   height: number;
@@ -27,4 +29,24 @@ export async function uploadPose(pose: Pose, photo: Photo): Promise<FaceStatus> 
   // fetch ของ Expo ไม่รับแบบ { uri, name, type } ต้องใช้ File ของ expo-file-system
   form.append('image', new File(uri));
   return apiFetch<FaceStatus>(`/me/face/${pose}`, { method: 'PUT', body: form });
+}
+
+// แปลงภาพบัตรเป็น PNG เสมอ (ภาพจากคลังอาจเป็น HEIC) และย่อถ้าใหญ่เกิน
+export async function prepareCard(image: Photo): Promise<string> {
+  const context = ImageManipulator.manipulate(image.uri);
+  if (Math.max(image.width, image.height) > CARD_MAX_SIDE) {
+    context.resize(
+      image.width >= image.height ? { width: CARD_MAX_SIDE } : { height: CARD_MAX_SIDE },
+    );
+  }
+  const rendered = await context.renderAsync();
+  return (await rendered.saveAsync({ format: SaveFormat.PNG })).uri;
+}
+
+// ส่งภาพบัตรคู่กับรูปหน้าตรง ผ่านแล้วรูปนี้เป็นท่าหน้าตรง
+export async function verifyIdentity(cardUri: string, photo: Photo): Promise<FaceStatus> {
+  const form = new FormData();
+  form.append('card', new File(cardUri));
+  form.append('face', new File(await shrink(photo)));
+  return apiFetch<FaceStatus>('/me/identity', { method: 'POST', body: form });
 }
