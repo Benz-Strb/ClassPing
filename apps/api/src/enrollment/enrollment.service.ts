@@ -218,8 +218,12 @@ export class EnrollmentService {
     file: UploadedImage,
     old: FaceRow | undefined,
   ) {
-    const imagePath = `${userId}/${pose}-${randomUUID()}.${EXTENSIONS[file.mimetype]}`;
-    await this.repo.uploadImage(imagePath, file.buffer, file.mimetype);
+    // เก็บรูปครอปหน้าจาก face service ไม่เก็บรูปเต็ม (service รุ่นเก่าไม่มีครอป ใช้รูปเดิม)
+    const image = result.crop
+      ? { buffer: Buffer.from(result.crop, 'base64'), mimetype: 'image/jpeg' }
+      : file;
+    const imagePath = `${userId}/${pose}-${randomUUID()}.${EXTENSIONS[image.mimetype]}`;
+    await this.repo.uploadImage(imagePath, image.buffer, image.mimetype);
     try {
       await this.repo.savePose(userId, {
         pose,
