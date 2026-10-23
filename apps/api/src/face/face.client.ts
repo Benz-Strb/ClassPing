@@ -22,6 +22,8 @@ export interface DetectedFace {
   detScore: number;
   embedding: number[];
   pose: FacePose | null;
+  // JPEG base64 มีเฉพาะตอนขอ crops (null ถ้ากรอบอยู่นอกภาพ)
+  crop?: string | null;
 }
 
 export interface DetectResult {
@@ -68,6 +70,7 @@ const unavailable = () =>
 @Injectable()
 export class FaceClient {
   private readonly logger = new Logger(FaceClient.name);
+  private modelName?: string;
 
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
@@ -75,8 +78,15 @@ export class FaceClient {
     return this.post('/faces/enroll', imageForm(image, mime));
   }
 
-  detect(image: Buffer, mime: string): Promise<DetectResult> {
-    return this.post('/faces/detect', imageForm(image, mime));
+  detect(image: Buffer, mime: string, opts: { crops?: boolean } = {}): Promise<DetectResult> {
+    const path = opts.crops ? '/faces/detect?crops=1' : '/faces/detect';
+    return this.post(path, imageForm(image, mime));
+  }
+
+  // โมเดลที่ service ใช้อยู่ embedding ต่างโมเดลเอามาเทียบกันไม่ได้
+  async model(): Promise<string> {
+    this.modelName ??= (await this.request<{ model: string }>('GET', '/health')).model;
+    return this.modelName;
   }
 
   async match(
@@ -91,16 +101,25 @@ export class FaceClient {
     return data.results;
   }
 
-  private async post<T>(
+  private post<T>(
     path: string,
     body: FormData | string,
+    headers: Record<string, string> = {},
+  ): Promise<T> {
+    return this.request('POST', path, body, headers);
+  }
+
+  private async request<T>(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: FormData | string,
     headers: Record<string, string> = {},
   ): Promise<T> {
     let res: Response;
     try {
       res = await fetch(`${this.config.faceServiceUrl}${path}`, {
-        method: 'POST',
-        body,
+        method,
+        ...(body === undefined ? {} : { body }),
         headers: { ...headers, 'X-Face-Token': this.config.faceServiceToken },
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });

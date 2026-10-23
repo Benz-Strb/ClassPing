@@ -19,7 +19,8 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "seed:rooms": "node --env-file=.env scripts/seed-rooms.ts"
+    "seed:rooms": "node --env-file=.env scripts/seed-rooms.ts",
+    "seed:camera": "node --env-file=.env scripts/seed-camera.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
