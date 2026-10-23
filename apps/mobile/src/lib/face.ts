@@ -1,4 +1,4 @@
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { apiFetch } from './api';
 import type { FaceStatus, Pose } from './types';
@@ -31,7 +31,8 @@ export async function uploadPose(pose: Pose, photo: Photo): Promise<FaceStatus> 
   return apiFetch<FaceStatus>(`/me/face/${pose}`, { method: 'PUT', body: form });
 }
 
-// แปลงภาพบัตรเป็น PNG เสมอ (ภาพจากคลังอาจเป็น HEIC) และย่อถ้าใหญ่เกิน
+// แปลงภาพบัตรเป็น JPEG เสมอ (ภาพจากคลังอาจเป็น HEIC) และย่อถ้าใหญ่เกิน
+// JPEG คุณภาพสูงพอให้อ่านตัวเลขได้ และไม่เกิน 5 MB แม้เป็นรูปถ่ายบัตร
 export async function prepareCard(image: Photo): Promise<string> {
   const context = ImageManipulator.manipulate(image.uri);
   if (Math.max(image.width, image.height) > CARD_MAX_SIDE) {
@@ -40,7 +41,18 @@ export async function prepareCard(image: Photo): Promise<string> {
     );
   }
   const rendered = await context.renderAsync();
-  return (await rendered.saveAsync({ format: SaveFormat.PNG })).uri;
+  return (await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.92 })).uri;
+}
+
+// ลบสำเนาภาพบัตรในเครื่องหลังใช้เสร็จ ลบเฉพาะไฟล์ใน cache ของแอป ไม่แตะคลังรูป
+export function discardCard(uri: string | null) {
+  if (!uri || !uri.startsWith(Paths.cache.uri)) return;
+  try {
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch {
+    // ลบไม่ได้ก็ไม่เป็นไร ระบบจะล้าง cache เอง
+  }
 }
 
 // ส่งภาพบัตรคู่กับรูปหน้าตรง ผ่านแล้วรูปนี้เป็นท่าหน้าตรง

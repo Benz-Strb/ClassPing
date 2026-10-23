@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { prepareCard } from '../lib/face';
+import { discardCard, prepareCard } from '../lib/face';
 
 const STEPS = [
   'เปิดบัตรนักศึกษาออนไลน์ในแอปของมหาวิทยาลัย',
@@ -26,8 +26,12 @@ export function IdentityScreen({ error, onPicked, onSignOut }: Props) {
     setProblem(null);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-      if (result.canceled || !result.assets[0]) return;
-      onPicked(await prepareCard(result.assets[0]));
+      const asset = result.canceled ? null : result.assets[0];
+      if (!asset) return;
+      const card = await prepareCard(asset);
+      // สำเนาที่ตัวเลือกรูปคัดลอกมาไม่ใช้แล้ว
+      discardCard(asset.uri);
+      onPicked(card);
     } catch {
       setProblem('เปิดภาพไม่สำเร็จ ลองเลือกใหม่อีกครั้ง');
     } finally {
