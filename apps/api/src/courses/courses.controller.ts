@@ -3,7 +3,7 @@ import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
 import type { Course, Rules } from './courses.repo.js';
 import { CoursesService } from './courses.service.js';
-import { RosterService, type AddResult, type RosterEntry } from './roster.service.js';
+import { RosterService, type AddResult, type RosterView } from './roster.service.js';
 
 @Controller('courses')
 @Roles('teacher')
@@ -52,7 +52,7 @@ export class CoursesController {
   }
 
   @Get(':id/students')
-  students(@CurrentUser() user: AppUser, @Param('id') id: string): Promise<RosterEntry[]> {
+  students(@CurrentUser() user: AppUser, @Param('id') id: string): Promise<RosterView[]> {
     return this.roster.list(user, id);
   }
 

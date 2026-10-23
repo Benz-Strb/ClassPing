@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import type { AddStudentsResult, RosterEntry } from "@/lib/types";
+import { Photo } from "./photo";
 
 export function StudentsView() {
   const { id } = useParams<{ id: string }>();
@@ -99,6 +100,7 @@ export function StudentsView() {
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-600">
               <tr>
+                <th className="px-4 py-2">รูป</th>
                 <th className="px-4 py-2">รหัส</th>
                 <th className="px-4 py-2">ชื่อ</th>
                 <th className="px-4 py-2">สถานะ</th>
@@ -108,6 +110,13 @@ export function StudentsView() {
             <tbody className="divide-y">
               {roster.map((student) => (
                 <tr key={student.studentCode}>
+                  <td className="px-4 py-2">
+                    {student.faceImageUrl ? (
+                      <Photo src={student.faceImageUrl} size="h-12 w-12" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-gray-100" />
+                    )}
+                  </td>
                   <td className="px-4 py-2 font-mono">{student.studentCode}</td>
                   <td className="px-4 py-2">{student.fullName ?? "-"}</td>
                   <td className="px-4 py-2">
