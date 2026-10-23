@@ -9,7 +9,11 @@ const FRESH = new Date('2026-10-23T11:30:00Z');
 
 function fakeRepo(
   tree: Record<string, StoredFile[]>,
-  opts: { owners?: string[]; refs?: Record<string, string[]>; failFolders?: Bucket } = {},
+  opts: {
+    owners?: string[];
+    refs?: Record<string, string[]>;
+    failFolders?: Bucket;
+  } = {},
 ) {
   const removed: { bucket: Bucket; paths: string[] }[] = [];
   const repo: CleanupRepo = {
@@ -20,7 +24,14 @@ function fakeRepo(
     files: async (_bucket, folder) => tree[folder] ?? [],
     existingOwners: async (_bucket, ids) =>
       new Set(ids.filter((id) => (opts.owners ?? [LIVE]).includes(id))),
-    referenced: async (_bucket, folder) => new Set(opts.refs?.[folder] ?? []),
+    referenced: async (_bucket, paths) =>
+      new Set(
+        paths.filter((p) =>
+          Object.values(opts.refs ?? {})
+            .flat()
+            .includes(p),
+        ),
+      ),
     remove: async (bucket, paths) => void removed.push({ bucket, paths }),
   };
   return { repo, removed };
@@ -53,7 +64,9 @@ describe('sweepBucket', () => {
   });
 
   it('ไฟล์ที่เพิ่งอัปโหลดยังไม่ลบ แม้ยังไม่มีแถว', async () => {
-    const { repo, removed } = fakeRepo({ [LIVE]: [{ path: `${LIVE}/new.jpg`, createdAt: FRESH }] });
+    const { repo, removed } = fakeRepo({
+      [LIVE]: [{ path: `${LIVE}/new.jpg`, createdAt: FRESH }],
+    });
     expect(await sweepBucket(repo, 'captures', NOW)).toBe(0);
     expect(removed).toEqual([]);
   });
