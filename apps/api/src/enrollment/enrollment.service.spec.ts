@@ -380,13 +380,13 @@ describe('EnrollmentService.verifyIdentity', () => {
     });
   });
 
-  it('ภาพบัตรมีหลายหน้า ได้ 422 MULTIPLE_FACES ไม่เทียบหน้าสด', async () => {
+  it('ภาพบัตรมีหลายหน้า ได้ 422 CARD_MULTIPLE_FACES ไม่เทียบหน้าสด', async () => {
     const { service, face } = setup();
     const [own] = face.card.faces;
     face.card = { ...face.card, faces: [own, { ...own, embedding: [0, 1] }] };
     expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
       status: 422,
-      code: 'MULTIPLE_FACES',
+      code: 'CARD_MULTIPLE_FACES',
     });
     expect(face.calls).toBe(0);
   });

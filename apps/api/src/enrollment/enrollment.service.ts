@@ -94,7 +94,7 @@ export class EnrollmentService {
     if (others.length) {
       throw new AppError(
         422,
-        'MULTIPLE_FACES',
+        'CARD_MULTIPLE_FACES',
         'ภาพบัตรมีหลายหน้า ใช้ภาพหน้าจอบัตรของตัวเองใบเดียว',
       );
     }
