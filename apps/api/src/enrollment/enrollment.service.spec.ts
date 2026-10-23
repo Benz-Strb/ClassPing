@@ -112,6 +112,12 @@ class FakeFace {
   }
 }
 
+const png = () => {
+  const buffer = Buffer.alloc(100, 1);
+  buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return { buffer, mimetype: 'image/png', size: 100 };
+};
+
 // ขึ้นต้นด้วยไบต์ของ JPEG จริง เนื้อที่เหลือไม่สำคัญเพราะ face service เป็นของปลอม
 const jpeg = (size = 1000) => {
   const buffer = Buffer.alloc(size, 1);
@@ -280,11 +286,6 @@ describe('EnrollmentService.reset', () => {
 });
 
 describe('EnrollmentService.verifyIdentity', () => {
-  const png = () => {
-    const buffer = Buffer.alloc(100, 1);
-    buffer.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    return { buffer, mimetype: 'image/png', size: 100 };
-  };
   const unverified = (patch: Partial<AppUser> = {}) =>
     student({ identityVerifiedAt: null, ...patch });
 
@@ -467,6 +468,17 @@ describe('EnrollmentService.savePose', () => {
       code: 'ALREADY_ENROLLED',
     });
     expect(repo.files.size).toBe(5);
+  });
+
+  it('เก็บรูปครอปหน้าจาก face service แทนรูปเต็ม', async () => {
+    const { service, face, repo } = setup();
+    const me = await verified(repo);
+    const crop = Buffer.from([0xff, 0xd8, 0xff, 1, 2, 3]);
+    face.next = { pose: ANGLE.left, crop: crop.toString('base64') };
+    await service.savePose(me, 'left', png());
+    const left = (await repo.listByUser(me.id)).find((r) => r.pose === 'left')!;
+    expect(left.imagePath).toMatch(/\.jpg$/);
+    expect(repo.files.get(left.imagePath)).toEqual(crop);
   });
 
   it('ถ่ายท่าเดิมซ้ำ แทนที่แถวเดิมและลบไฟล์เก่า', async () => {

@@ -1,3 +1,5 @@
+import base64
+
 import numpy as np
 import pytest
 
@@ -25,6 +27,18 @@ def test_enroll_ok_shape(client, auth):
     assert data["pose"] == {"pitch": 1.0, "yaw": -2.0, "roll": 3.0}
     assert data["sharpness"] > 1000
     assert data["model"] == "buffalo_l"
+    assert base64.b64decode(data["crop"])[:3] == b"\xff\xd8\xff"
+
+
+@pytest.mark.parametrize(
+    "bbox",
+    [(-10.0, 100.0, 200.0, 300.0), (300.0, 100.0, 490.0, 300.0), (100.0, 300.0, 300.0, 481.0)],
+)
+def test_enroll_rejects_face_cut_off(client, auth, engine, bbox):
+    engine.faces = [fake_face(bbox=bbox)]
+    res = post(client, auth, jpeg(noise_image()))
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "FACE_CUT_OFF"
 
 
 def test_enroll_pose_null_when_missing(client, auth, engine):

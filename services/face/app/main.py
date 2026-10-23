@@ -92,8 +92,11 @@ def create_app(settings: Settings, engine: FaceEngine, reader: TextReader) -> Fa
             read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
         )
         face = pick_enrollment_face(engine.analyze(frame), frame, settings)
+        crop = face_crop(frame, face.bbox)
         return {
             "data": {
+                # เก็บแค่รูปครอปหน้า ไม่เก็บรูปเต็ม อาจารย์ดูออกว่าใครและไม่มีพื้นหลังติดไป
+                "crop": None if crop is None else base64.b64encode(crop).decode("ascii"),
                 "embedding": face.embedding.tolist(),
                 "bbox": list(face.bbox),
                 "detScore": face.det_score,
