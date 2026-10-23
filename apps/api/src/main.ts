@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { FrameWorker } from './attendance/frame.worker.js';
+import { UnknownCleanupRunner } from './attendance/unknown-cleanup.runner.js';
 import { configureApp } from './app.setup.js';
 import { SessionSyncRunner } from './sessions/session-sync.runner.js';
 
@@ -11,5 +13,7 @@ async function bootstrap() {
   const config = configureApp(app);
   await app.listen(config.port);
   app.get(SessionSyncRunner).start();
+  app.get(FrameWorker).start();
+  app.get(UnknownCleanupRunner).start();
 }
 await bootstrap();

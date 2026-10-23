@@ -1,3 +1,4 @@
+import base64
 import hmac
 import os
 
@@ -6,6 +7,7 @@ from fastapi import FastAPI, Request, UploadFile
 from pydantic import BaseModel, model_validator
 
 from app.config import Settings, load_settings
+from app.crops import face_crop
 from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
@@ -25,6 +27,19 @@ def pose_json(face: DetectedFace) -> dict | None:
         return None
     pitch, yaw, roll = face.pose
     return {"pitch": pitch, "yaw": yaw, "roll": roll}
+
+
+def detected_json(face: DetectedFace, frame: np.ndarray | None) -> dict:
+    data = {
+        "bbox": list(face.bbox),
+        "detScore": face.det_score,
+        "embedding": face.embedding.tolist(),
+        "pose": pose_json(face),
+    }
+    if frame is not None:
+        crop = face_crop(frame, face.bbox)
+        data["crop"] = None if crop is None else base64.b64encode(crop).decode("ascii")
+    return data
 
 
 # ส่วนหัว multipart (boundary, ชื่อไฟล์) เผื่อไว้นอกเหนือจากขนาดรูป
@@ -87,8 +102,9 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
             }
         }
 
+    # crops=1 แนบรูปครอปหน้า (JPEG base64) ไว้ให้ API เก็บเป็นหลักฐานเช็คชื่อ
     @app.post("/faces/detect")
-    def detect(image: UploadFile):
+    def detect(image: UploadFile, crops: bool = False):
         frame = decode_image(
             read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
         )
@@ -99,15 +115,7 @@ def create_app(settings: Settings, engine: FaceEngine) -> FastAPI:
             "data": {
                 "width": width,
                 "height": height,
-                "faces": [
-                    {
-                        "bbox": list(face.bbox),
-                        "detScore": face.det_score,
-                        "embedding": face.embedding.tolist(),
-                        "pose": pose_json(face),
-                    }
-                    for face in usable
-                ],
+                "faces": [detected_json(face, frame if crops else None) for face in usable],
                 # หน้าเล็กเกินไปเทียบแล้วไม่แม่น นับไว้ให้รู้ว่ากล้องอาจอยู่ไกลไป
                 "skippedSmall": len(faces) - len(usable),
             }
