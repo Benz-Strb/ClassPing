@@ -20,10 +20,12 @@ class InMemoryEnrollmentRepo implements EnrollmentRepo {
     poses.set(row.pose, row);
     this.rows.set(userId, poses);
   }
-  async deleteByUser(userId: string) {
-    const paths = [...(this.rows.get(userId)?.values() ?? [])].map((r) => r.imagePath);
-    this.rows.delete(userId);
-    return paths;
+  async deleteByUser(userId: string, keep?: Pose) {
+    const poses = this.rows.get(userId) ?? new Map<Pose, FaceRow>();
+    const gone = [...poses.values()].filter((r) => r.pose !== keep);
+    gone.forEach((r) => poses.delete(r.pose));
+    if (!poses.size) this.rows.delete(userId);
+    return gone.map((r) => r.imagePath);
   }
   async uploadImage(path: string, bytes: Buffer) {
     this.files.set(path, bytes);
@@ -343,12 +345,12 @@ describe('EnrollmentService.verifyIdentity', () => {
     });
   });
 
-  it('ไฟล์บัตรไม่ใช่รูป ได้ 400 UNSUPPORTED_IMAGE', async () => {
+  it('ไฟล์บัตรไม่ใช่รูป ได้ 400 CARD_INVALID', async () => {
     const { service, face } = setup();
     const pdf = { buffer: Buffer.from('%PDF-1.7'), mimetype: 'application/pdf', size: 8 };
     expect(await rejection(service.verifyIdentity(unverified(), pdf, jpeg()))).toMatchObject({
       status: 400,
-      code: 'UNSUPPORTED_IMAGE',
+      code: 'CARD_INVALID',
     });
     expect(face.cardCalls).toBe(0);
   });
@@ -367,9 +369,42 @@ describe('EnrollmentService.verifyIdentity', () => {
       status: 422,
       code,
     });
-    expect(face.calls).toBe(0);
     expect(repo.files.size).toBe(0);
     expect(identities).toEqual([]);
+  });
+
+  it('หน้าสดยังไม่ผ่าน ไม่ต้องอ่านบัตร', async () => {
+    const { service, face } = setup();
+    face.next = { pose: ANGLE.left };
+    expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
+      code: 'WRONG_POSE',
+    });
+    expect(face.cardCalls).toBe(0);
+  });
+
+  it('face service อ่านไฟล์บัตรไม่ได้ ได้ 400 CARD_INVALID', async () => {
+    const { service, face } = setup();
+    face.readCard = async () => {
+      throw new AppError(413, 'IMAGE_TOO_LARGE', 'รูปใหญ่เกิน 5 MB');
+    };
+    expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
+      status: 400,
+      code: 'CARD_INVALID',
+    });
+  });
+
+  it('ยืนยันใหม่แล้วบันทึกหน้าตรงไม่สำเร็จ ท่าเดิมยังอยู่ครบ', async () => {
+    const { service, repo } = setup();
+    const me = unverified();
+    for (const pose of POSES) await storeRow(repo, me.id, pose);
+    repo.uploadImage = async () => {
+      throw new AppError(503, 'DB_UNAVAILABLE', 'เชื่อมต่อฐานข้อมูลไม่ได้ ลองใหม่อีกครั้ง');
+    };
+    expect(await rejection(service.verifyIdentity(me, png(), jpeg()))).toMatchObject({
+      status: 503,
+    });
+    expect((await repo.listByUser(me.id)).length).toBe(5);
+    expect(repo.files.size).toBe(5);
   });
 
   it('บัตรไม่มีหน้า ได้ 422 CARD_NO_FACE', async () => {
@@ -381,7 +416,7 @@ describe('EnrollmentService.verifyIdentity', () => {
     });
   });
 
-  it('ภาพบัตรมีหลายหน้า ได้ 422 CARD_MULTIPLE_FACES ไม่เทียบหน้าสด', async () => {
+  it('ภาพบัตรมีหลายหน้า ได้ 422 CARD_MULTIPLE_FACES', async () => {
     const { service, face } = setup();
     const [own] = face.card.faces;
     face.card = { ...face.card, faces: [own, { ...own, embedding: [0, 1] }] };
@@ -389,7 +424,6 @@ describe('EnrollmentService.verifyIdentity', () => {
       status: 422,
       code: 'CARD_MULTIPLE_FACES',
     });
-    expect(face.calls).toBe(0);
   });
 
   it('หน้าสดไม่ตรงกับบัตร ได้ 422 FACE_NOT_MATCH_CARD ท่าเก่ายังอยู่', async () => {

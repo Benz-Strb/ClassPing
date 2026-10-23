@@ -87,4 +87,26 @@ describe('checkCard', () => {
     });
     expect(checkCard(card, expect106)).toMatchObject({ ok: false, code: 'CARD_UNREADABLE' });
   });
+
+  it('วันออกบัตรที่ OCR อ่านขีดหาย ไม่ถูกนับเป็นรหัสคนอื่น', () => {
+    const card = replace('5uənas : 27-05-2566', { text: '5uənas : 27052566', score: 0.95 });
+    expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+
+  it('วันที่ไม่มีขีดแยกอยู่คนละบรรทัด ไม่ถูกนับเป็นรหัส', () => {
+    const card = [...CARD, { text: '23102569', score: 0.99 }];
+    expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+
+  it('OCR แยกวันที่ออกจากบรรทัด Generate ยังอ่านได้', () => {
+    const card = CARD.flatMap((l) =>
+      l.text.startsWith('System Generate')
+        ? [
+            { text: 'System Generate Date :', score: 0.98 },
+            { text: '23-10-2569', score: 0.98 },
+          ]
+        : [l],
+    );
+    expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
 });
