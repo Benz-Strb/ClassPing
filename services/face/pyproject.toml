@@ -11,6 +11,7 @@ dependencies = [
     "opencv-python>=5.0.0.93",
     "pillow>=13.0.0",
     "python-multipart>=0.0.32",
+    "rapidocr==3.10.0",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -23,6 +24,8 @@ dev = [
 
 [tool.uv]
 package = false
+# rapidocr ขอ opencv-python-headless ซึ่งชนกับ opencv-python (ใช้ชื่อ cv2 เดียวกัน) ใช้ตัวเดิมตัวเดียว
+override-dependencies = ["opencv-python-headless; sys_platform == 'never'"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
