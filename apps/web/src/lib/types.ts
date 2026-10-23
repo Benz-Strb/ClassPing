@@ -72,3 +72,24 @@ export interface SessionView {
   endsAt: string;
   status: "upcoming" | "live" | "ended";
 }
+
+export type AttendanceStatus = "present" | "late" | "absent" | "leave" | "pending";
+
+export interface AttendanceRow {
+  studentCode: string;
+  fullName: string | null;
+  faceEnrolled: boolean;
+  // null = กล้องยังไม่เห็น
+  status: AttendanceStatus | null;
+  firstSeenAt: string | null;
+  confidence: number | null;
+  imageUrl: string | null;
+  // ชื่อคนแก้ล่าสุด null = กล้องบันทึก
+  updatedBy: string | null;
+}
+
+export interface SessionAttendance {
+  session: SessionView;
+  rows: AttendanceRow[];
+  unknown: { imageUrl: string; seenAt: string }[];
+}
