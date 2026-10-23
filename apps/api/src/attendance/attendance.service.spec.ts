@@ -21,6 +21,7 @@ const teacher: AppUser = {
   role: 'teacher',
   studentId: null,
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 };
 const student: AppUser = { ...teacher, id: 'x', role: 'student' };
 

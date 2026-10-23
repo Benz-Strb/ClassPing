@@ -9,6 +9,8 @@ export interface StudentAccount {
   studentCode: string;
   userId: string;
   fullName: string | null;
+  // ยืนยันตัวตนด้วยบัตรแล้ว ยังไม่ยืนยันไม่นับว่าลงทะเบียนใบหน้า
+  identityVerified: boolean;
 }
 
 export interface RosterRepo {
@@ -63,11 +65,22 @@ export class SupabaseRosterRepo implements RosterRepo {
     for (const batch of chunk(codes, BATCH)) {
       const { data, error } = await this.db
         .from('users')
-        .select('id, full_name, student_id')
+        .select('id, full_name, student_id, identity_verified_at')
         .in('student_id', batch);
       if (error) throw dbError();
-      for (const r of data as { id: string; full_name: string | null; student_id: string }[]) {
-        accounts.push({ studentCode: r.student_id, userId: r.id, fullName: r.full_name });
+      const rows = data as {
+        id: string;
+        full_name: string | null;
+        student_id: string;
+        identity_verified_at: string | null;
+      }[];
+      for (const r of rows) {
+        accounts.push({
+          studentCode: r.student_id,
+          userId: r.id,
+          fullName: r.full_name,
+          identityVerified: r.identity_verified_at !== null,
+        });
       }
     }
     return accounts;
