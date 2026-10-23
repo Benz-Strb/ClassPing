@@ -26,7 +26,9 @@
     "db:seed:camera": "npm run seed:camera --workspace @classping/api --",
     "dev:face": "cd services/face && uv run uvicorn app.main:build_app --factory --env-file .env --host 127.0.0.1 --port 8001",
     "test:face": "cd services/face && uv run pytest",
-    "test:face:model": "cd services/face && uv run pytest -m model"
+    "test:face:model": "cd services/face && uv run pytest -m model",
+    "dev:camera": "cd services/camera && uv run --env-file .env python -m camera.main",
+    "test:camera": "cd services/camera && uv run pytest"
   },
   "overrides": {
     "react": "19.2.3",
