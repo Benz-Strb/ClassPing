@@ -15,6 +15,8 @@ export interface EnrollResult {
   pose: FacePose | null;
   sharpness: number;
   model: string;
+  // รูปครอปหน้า JPEG base64 สำหรับเก็บแทนรูปเต็ม
+  crop?: string | null;
 }
 
 export interface DetectedFace {
@@ -31,6 +33,13 @@ export interface DetectResult {
   height: number;
   faces: DetectedFace[];
   skippedSmall: number;
+}
+
+export interface CardRead {
+  // ทุกบรรทัดที่อ่านได้ ไม่เก็บและไม่ log
+  lines: { text: string; score: number }[];
+  // หน้าในบัตร ใหญ่สุดก่อน
+  faces: DetectedFace[];
 }
 
 export interface MatchCandidate {
@@ -51,6 +60,7 @@ const TIMEOUT_MS = 10_000;
 // code อื่นจาก service (เช่น BAD_EMBEDDING, REQUEST_TOO_LARGE, 404) เป็นบั๊กหรือตั้งค่าผิดฝั่งระบบ
 const USER_FACING_CODES = new Set([
   'NO_FACE',
+  'FACE_CUT_OFF',
   'MULTIPLE_FACES',
   'FACE_TOO_SMALL',
   'LOW_QUALITY',
@@ -81,6 +91,10 @@ export class FaceClient {
   detect(image: Buffer, mime: string, opts: { crops?: boolean } = {}): Promise<DetectResult> {
     const path = opts.crops ? '/faces/detect?crops=1' : '/faces/detect';
     return this.post(path, imageForm(image, mime));
+  }
+
+  readCard(image: Buffer, mime: string): Promise<CardRead> {
+    return this.post('/cards/read', imageForm(image, mime));
   }
 
   // โมเดลที่ service ใช้อยู่ embedding ต่างโมเดลเอามาเทียบกันไม่ได้
