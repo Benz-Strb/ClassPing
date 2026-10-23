@@ -3,6 +3,8 @@
 ใช้รูปตัวอย่างที่ติดมากับแพ็กเกจ insightface เท่านั้น
 """
 
+import cv2
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from insightface.data import get_image
@@ -10,6 +12,7 @@ from insightface.data import get_image
 from app.config import load_settings
 from app.engine import InsightFaceEngine
 from app.main import create_app
+from app.ocr import RapidTextReader
 from tests.conftest import TOKEN
 from tests.images import crop_with_margin, jpeg
 
@@ -39,8 +42,15 @@ def single_image(real_engine, group_image):
 
 
 @pytest.fixture(scope="session")
-def model_client(model_settings, real_engine):
-    return TestClient(create_app(model_settings, real_engine), raise_server_exceptions=False)
+def real_reader():
+    return RapidTextReader()
+
+
+@pytest.fixture(scope="session")
+def model_client(model_settings, real_engine, real_reader):
+    return TestClient(
+        create_app(model_settings, real_engine, real_reader), raise_server_exceptions=False
+    )
 
 
 AUTH = {"X-Face-Token": TOKEN}
@@ -110,3 +120,21 @@ def test_model_strangers_score_low(real_engine, single_image, group_image):
     for face in others:
         [result] = match(np.array([face.embedding]), [("me", np.array([me.embedding]))])
         assert result.score < 0.35
+
+
+def test_rapid_reader_reads_card_text(real_reader):
+    """ตัวหนังสือแบบบนบัตรนักศึกษาออนไลน์ วาดขึ้นเอง ไม่ใช่บัตรจริง"""
+    image = np.full((360, 900, 3), 230, dtype=np.uint8)
+    cv2.putText(image, "66112106", (40, 110), cv2.FONT_HERSHEY_SIMPLEX, 2.5, (120, 40, 120), 5)
+    cv2.putText(
+        image,
+        "System Generate Date : 23-10-2569",
+        (40, 250),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (60, 60, 60),
+        2,
+    )
+    texts = " | ".join(text for text, _ in real_reader.read(image))
+    assert "66112106" in texts
+    assert "23-10-2569" in texts
