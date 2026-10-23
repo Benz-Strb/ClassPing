@@ -67,7 +67,7 @@ describe('loadConfig', () => {
     expect(config.redisPort).toBe(6379);
     expect(config.matchAcceptMin).toBe(0.5);
     expect(config.matchReviewMin).toBe(0.36);
-    expect(config.cameraOpenBeforeMin).toBe(0);
+    expect(config.cameraOpenBeforeMin).toBe(20);
     expect(config.matchLog).toBe(false);
   });
 
