@@ -9,11 +9,14 @@ interface Row {
   role: string;
   student_id: string | null;
   pdpa_consent_at: string | null;
+  identity_verified_at?: string | null;
+  identity_score?: number | null;
 }
 
 // ตาราง users ปลอมในหน่วยความจำ รองรับเฉพาะคำสั่งที่ UsersService ใช้
 function fakeDb(initial: Row[] = []) {
-  const rows = new Map(initial.map((r) => [r.id, { ...r }]));
+  const blank = { pdpa_consent_at: null, identity_verified_at: null, identity_score: null };
+  const rows = new Map(initial.map((r) => [r.id, { ...blank, ...r }]));
   const upserts: { values: Partial<Row>; options: unknown }[] = [];
 
   const selectOne = (id: string) => ({
@@ -27,7 +30,7 @@ function fakeDb(initial: Row[] = []) {
     upsert: async (values: Partial<Row>, options: { ignoreDuplicates?: boolean }) => {
       upserts.push({ values, options });
       if (!rows.has(values.id!) || !options.ignoreDuplicates) {
-        rows.set(values.id!, { pdpa_consent_at: null, ...(values as Row) });
+        rows.set(values.id!, { ...blank, ...(values as Row) });
       }
       return { error: null };
     },
@@ -70,6 +73,7 @@ describe('UsersService.ensureUser', () => {
       role: 'student',
       studentId: '66112106',
       pdpaConsentAt: null,
+      identityVerifiedAt: null,
     });
     expect(rows.get('u1')?.role).toBe('student');
   });
@@ -184,5 +188,32 @@ describe('UsersService.clearConsent', () => {
     ]);
     await new UsersService(db, config()).clearConsent('u1');
     expect(rows.get('u1')!.pdpa_consent_at).toBeNull();
+  });
+});
+
+describe('UsersService.setIdentity', () => {
+  const row: Row = {
+    id: 'u1',
+    email: '66112106@dpu.ac.th',
+    full_name: null,
+    role: 'student',
+    student_id: '66112106',
+    pdpa_consent_at: '2026-10-01T00:00:00.000Z',
+  };
+
+  it('ยืนยันแล้วเก็บเวลากับคะแนน', async () => {
+    const { db, rows } = fakeDb([row]);
+    await new UsersService(db, config()).setIdentity('u1', 0.52);
+    expect(rows.get('u1')!.identity_verified_at).not.toBeNull();
+    expect(rows.get('u1')!.identity_score).toBe(0.52);
+  });
+
+  it('ส่ง null ล้างการยืนยัน', async () => {
+    const { db, rows } = fakeDb([
+      { ...row, identity_verified_at: '2026-10-23T00:00:00.000Z', identity_score: 0.5 },
+    ]);
+    await new UsersService(db, config()).setIdentity('u1', null);
+    expect(rows.get('u1')!.identity_verified_at).toBeNull();
+    expect(rows.get('u1')!.identity_score).toBeNull();
   });
 });
