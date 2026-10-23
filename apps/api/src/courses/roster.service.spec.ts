@@ -37,6 +37,7 @@ const user = (role: AppUser['role'] = 'teacher'): AppUser => ({
   role,
   studentId: null,
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 });
 
 async function rejection(promise: Promise<unknown>) {
@@ -99,8 +100,8 @@ describe('RosterService', () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112126 66112106 66112199' });
     repo.accounts = [
-      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์' },
-      { studentCode: '66112126', userId: 'u2', fullName: 'ฟิล์ม' },
+      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', identityVerified: true },
+      { studentCode: '66112126', userId: 'u2', fullName: 'ฟิล์ม', identityVerified: true },
     ];
     repo.faceUserIds.add('u1');
 
@@ -134,17 +135,44 @@ describe('RosterService', () => {
   it('entries คืนรายชื่อพร้อม userId (คนที่ยังไม่ login ได้ null) ไม่ตรวจสิทธิ์', async () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112106 66112199' });
-    repo.accounts = [{ studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์' }];
+    repo.accounts = [
+      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', identityVerified: true },
+    ];
     expect(await service.entries(course.id)).toEqual([
-      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', hasLoggedIn: true, faceEnrolled: false },
-      { studentCode: '66112199', userId: null, fullName: null, hasLoggedIn: false, faceEnrolled: false },
+      {
+        studentCode: '66112106',
+        userId: 'u1',
+        fullName: 'เบนซ์',
+        hasLoggedIn: true,
+        faceEnrolled: false,
+      },
+      {
+        studentCode: '66112199',
+        userId: null,
+        fullName: null,
+        hasLoggedIn: false,
+        faceEnrolled: false,
+      },
     ]);
   });
 
-  it('enrolledUserIds คืนเฉพาะคนที่ login แล้ว (แผน 5 ใช้เลือกคนไปเทียบหน้า)', async () => {
+  it('ครบทุกท่าแต่ยังไม่ยืนยันบัตร ไม่นับว่าลงทะเบียนหน้า และกล้องไม่เทียบ', async () => {
+    const { owner, course, repo, service } = setup();
+    await service.add(owner, course.id, { codes: '66112106' });
+    repo.accounts = [
+      { studentCode: '66112106', userId: 'u1', fullName: null, identityVerified: false },
+    ];
+    repo.faceUserIds.add('u1');
+    expect((await service.entries(course.id))[0].faceEnrolled).toBe(false);
+    expect(await service.enrolledUserIds(course.id)).toEqual([]);
+  });
+
+  it('enrolledUserIds คืนเฉพาะคนที่ login และยืนยันบัตรแล้ว (แผน 5 ใช้เลือกคนไปเทียบหน้า)', async () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112106 66112199' });
-    repo.accounts = [{ studentCode: '66112106', userId: 'u1', fullName: null }];
+    repo.accounts = [
+      { studentCode: '66112106', userId: 'u1', fullName: null, identityVerified: true },
+    ];
     expect(await service.enrolledUserIds(course.id)).toEqual(['u1']);
   });
 });

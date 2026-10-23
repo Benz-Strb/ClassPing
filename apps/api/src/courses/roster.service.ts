@@ -44,7 +44,8 @@ export class RosterService {
   async entries(courseId: string): Promise<(RosterEntry & { userId: string | null })[]> {
     const codes = await this.repo.listCodes(courseId);
     const accounts = await this.repo.accountsByCodes(codes);
-    const faces = new Set(await this.repo.faceEnrolledUserIds(accounts.map((a) => a.userId)));
+    const verified = accounts.filter((a) => a.identityVerified).map((a) => a.userId);
+    const faces = new Set(await this.repo.faceEnrolledUserIds(verified));
     const byCode = new Map(accounts.map((a) => [a.studentCode, a]));
 
     return [...codes].sort().map((code) => {
@@ -82,6 +83,6 @@ export class RosterService {
   // ใช้ภายใน ไม่ได้ตรวจสิทธิ์
   async enrolledUserIds(courseId: string): Promise<string[]> {
     const accounts = await this.repo.accountsByCodes(await this.repo.listCodes(courseId));
-    return accounts.map((a) => a.userId);
+    return accounts.filter((a) => a.identityVerified).map((a) => a.userId);
   }
 }

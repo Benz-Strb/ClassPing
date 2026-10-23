@@ -33,6 +33,13 @@ export interface DetectResult {
   skippedSmall: number;
 }
 
+export interface CardRead {
+  // ทุกบรรทัดที่อ่านได้ ไม่เก็บและไม่ log
+  lines: { text: string; score: number }[];
+  // หน้าในบัตร ใหญ่สุดก่อน
+  faces: DetectedFace[];
+}
+
 export interface MatchCandidate {
   id: string;
   embeddings: number[][];
@@ -81,6 +88,10 @@ export class FaceClient {
   detect(image: Buffer, mime: string, opts: { crops?: boolean } = {}): Promise<DetectResult> {
     const path = opts.crops ? '/faces/detect?crops=1' : '/faces/detect';
     return this.post(path, imageForm(image, mime));
+  }
+
+  readCard(image: Buffer, mime: string): Promise<CardRead> {
+    return this.post('/cards/read', imageForm(image, mime));
   }
 
   // โมเดลที่ service ใช้อยู่ embedding ต่างโมเดลเอามาเทียบกันไม่ได้

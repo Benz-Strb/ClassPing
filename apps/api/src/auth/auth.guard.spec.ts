@@ -14,6 +14,7 @@ const student: AppUser = {
   role: 'student',
   studentId: '66112106',
   pdpaConsentAt: null,
+  identityVerifiedAt: null,
 };
 
 function context(req: Record<string, unknown>): ExecutionContext {
