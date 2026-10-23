@@ -37,6 +37,11 @@ export class RosterService {
 
   async list(user: AppUser, courseId: string): Promise<RosterEntry[]> {
     await this.courses.getOwned(user, courseId);
+    return (await this.entries(courseId)).map(({ userId: _userId, ...entry }) => entry);
+  }
+
+  // ใช้ภายใน ไม่ได้ตรวจสิทธิ์ userId = null คือยังไม่เคย login
+  async entries(courseId: string): Promise<(RosterEntry & { userId: string | null })[]> {
     const codes = await this.repo.listCodes(courseId);
     const accounts = await this.repo.accountsByCodes(codes);
     const faces = new Set(await this.repo.faceEnrolledUserIds(accounts.map((a) => a.userId)));
@@ -46,6 +51,7 @@ export class RosterService {
       const account = byCode.get(code);
       return {
         studentCode: code,
+        userId: account?.userId ?? null,
         fullName: account?.fullName ?? null,
         hasLoggedIn: Boolean(account),
         faceEnrolled: account ? faces.has(account.userId) : false,

@@ -131,6 +131,16 @@ describe('RosterService', () => {
     expect(await rejection(service.remove(other, course.id, '1'))).toMatchObject(notFound);
   });
 
+  it('entries คืนรายชื่อพร้อม userId (คนที่ยังไม่ login ได้ null) ไม่ตรวจสิทธิ์', async () => {
+    const { owner, course, repo, service } = setup();
+    await service.add(owner, course.id, { codes: '66112106 66112199' });
+    repo.accounts = [{ studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์' }];
+    expect(await service.entries(course.id)).toEqual([
+      { studentCode: '66112106', userId: 'u1', fullName: 'เบนซ์', hasLoggedIn: true, faceEnrolled: false },
+      { studentCode: '66112199', userId: null, fullName: null, hasLoggedIn: false, faceEnrolled: false },
+    ]);
+  });
+
   it('enrolledUserIds คืนเฉพาะคนที่ login แล้ว (แผน 5 ใช้เลือกคนไปเทียบหน้า)', async () => {
     const { owner, course, repo, service } = setup();
     await service.add(owner, course.id, { codes: '66112106 66112199' });
