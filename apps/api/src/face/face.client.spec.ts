@@ -77,6 +77,36 @@ describe('FaceClient', () => {
     expect(calls[0].url).toBe('http://face.test/faces/detect');
   });
 
+  it('detect แบบขอรูปครอปส่ง crops=1', async () => {
+    const data = { width: 10, height: 10, faces: [], skippedSmall: 0 };
+    const calls = stubFetch(() => json(200, { data }));
+    await new FaceClient(config).detect(image, 'image/jpeg', { crops: true });
+    expect(calls[0].url).toBe('http://face.test/faces/detect?crops=1');
+  });
+
+  it('model อ่านจาก /health ครั้งเดียวแล้วจำไว้', async () => {
+    const calls = stubFetch(() =>
+      json(200, { data: { ok: true, model: 'buffalo_l', embeddingSize: 512 } }),
+    );
+    const client = new FaceClient(config);
+    expect(await client.model()).toBe('buffalo_l');
+    expect(await client.model()).toBe('buffalo_l');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('http://face.test/health');
+    expect(calls[0].init.method).toBe('GET');
+  });
+
+  it('model เรียกไม่สำเร็จได้ 503 และครั้งถัดไปลองใหม่', async () => {
+    let up = false;
+    stubFetch(() =>
+      up ? json(200, { data: { model: 'buffalo_l' } }) : json(500, { error: {} }),
+    );
+    const client = new FaceClient(config);
+    expect((await rejection(client.model())).status).toBe(503);
+    up = true;
+    expect(await client.model()).toBe('buffalo_l');
+  });
+
   it('match ส่ง JSON และคืนรายการผล', async () => {
     const results = [{ bestId: 'a', score: 0.8, secondId: null, secondScore: null }];
     const calls = stubFetch(() => json(200, { data: { results } }));
