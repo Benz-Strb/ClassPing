@@ -12,13 +12,22 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { ApiError, apiFetch } from '../lib/api';
-import { uploadPose } from '../lib/face';
+import { uploadPose, verifyIdentity } from '../lib/face';
 import type { FaceStatus, Pose } from '../lib/types';
 
 const POSES: Pose[] = ['front', 'left', 'right', 'up', 'down'];
 
+// ปัญหาที่ภาพบัตร สแกนหน้าใหม่ไม่ช่วย ต้องกลับไปเลือกภาพบัตรใหม่
+const CARD_ERRORS = new Set([
+  'CARD_UNREADABLE',
+  'CARD_NOT_YOURS',
+  'CARD_NOT_TODAY',
+  'CARD_NO_FACE',
+  'CARD_MULTIPLE_FACES',
+]);
+
 const HINT: Record<Pose, string> = {
-  front: 'มองตรงกล้อง ให้หน้าอยู่ในวงกลม',
+  front: 'มองตรงกล้อง ระบบจะเทียบกับรูปในบัตร',
   left: 'หันหน้าไปทางซ้าย แล้วค้างไว้',
   right: 'หันหน้าไปทางขวา แล้วค้างไว้',
   up: 'เงยหน้าเล็กน้อย แล้วค้างไว้',
@@ -47,12 +56,22 @@ function arcPath(c: number, r: number, from: number, to: number) {
 
 interface Props {
   done: Pose[];
+  // ภาพบัตรที่เลือกไว้ ใช้ตอนสแกนหน้าตรง
+  card: string | null;
+  onCardRejected: (message: string) => void;
   onComplete: (status: FaceStatus) => void;
   onUnauthorized: (message: string) => void;
   onSignOut: () => void;
 }
 
-export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, onSignOut }: Props) {
+export function EnrollScreen({
+  done: initialDone,
+  card,
+  onCardRejected,
+  onComplete,
+  onUnauthorized,
+  onSignOut,
+}: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
   const { width, height } = useWindowDimensions();
@@ -64,8 +83,8 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
   const [message, setMessage] = useState<string | null>(null);
   const [stopped, setStopped] = useState<string | null>(null);
   const busy = useRef(false);
-  const callbacks = useRef({ onComplete, onUnauthorized });
-  callbacks.current = { onComplete, onUnauthorized };
+  const callbacks = useRef({ card, onCardRejected, onComplete, onUnauthorized });
+  callbacks.current = { card, onCardRejected, onComplete, onUnauthorized };
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => setForeground(state === 'active'));
@@ -87,7 +106,15 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
         try {
           const photo = await camera.current.takePictureAsync({ quality: 0.7, shutterSound: false });
           if (cancelled) return;
-          const status = await uploadPose(pose, photo);
+          const { card: cardUri } = callbacks.current;
+          if (pose === 'front' && !cardUri) {
+            callbacks.current.onCardRejected('ยืนยันตัวตนด้วยบัตรนักศึกษาก่อน');
+            return;
+          }
+          const status =
+            pose === 'front' && cardUri
+              ? await verifyIdentity(cardUri, photo)
+              : await uploadPose(pose, photo);
           doneRef.current = status.done;
           setDone(status.done);
           setMessage(null);
@@ -99,6 +126,10 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
           await wait(1200);
         } catch (e) {
           if (cancelled) return;
+          if (e instanceof ApiError && (CARD_ERRORS.has(e.code) || e.code === 'IDENTITY_REQUIRED')) {
+            callbacks.current.onCardRejected(e.message);
+            return;
+          }
           if (e instanceof ApiError && e.status === 422) {
             setMessage(e.message);
             continue;
@@ -106,16 +137,6 @@ export function EnrollScreen({ done: initialDone, onComplete, onUnauthorized, on
           if (e instanceof ApiError && e.status === 401) {
             callbacks.current.onUnauthorized(e.message);
             return;
-          }
-          // ต้องเริ่มจากหน้าตรงใหม่ เช่น ระบบตรวจใบหน้าเปลี่ยนรุ่น
-          if (e instanceof ApiError && e.code === 'FRONT_FIRST') {
-            const status = await apiFetch<FaceStatus>('/me/face').catch(() => null);
-            if (status && !cancelled) {
-              doneRef.current = status.done;
-              setDone(status.done);
-              setMessage(e.message);
-              continue;
-            }
           }
           // ลงทะเบียนครบจากเครื่องอื่นไปแล้ว
           if (e instanceof ApiError && e.code === 'ALREADY_ENROLLED') {

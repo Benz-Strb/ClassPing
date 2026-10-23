@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import type { FaceStatus, Me } from '../lib/types';
 import { ConsentScreen } from './ConsentScreen';
 import { EnrollScreen } from './EnrollScreen';
+import { IdentityScreen } from './IdentityScreen';
 
 const ROLE_LABEL: Record<Me['role'], string> = {
   student: 'นักศึกษา',
@@ -19,11 +20,13 @@ interface Props {
 
 const signOut = () => supabase.auth.signOut();
 
-// นักศึกษาต้องยินยอมก่อน แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
+// นักศึกษาต้องยินยอมก่อน ยืนยันบัตร แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
 export function MeScreen({ onRejected }: Props) {
   const [me, setMe] = useState<Me | null>(null);
   const [face, setFace] = useState<FaceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [card, setCard] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -64,10 +67,30 @@ export function MeScreen({ onRejected }: Props) {
     return <ConsentScreen onAccepted={setMe} onSignOut={signOut} />;
   }
 
+  if (face && !face.verified && !card) {
+    return (
+      <IdentityScreen
+        error={cardError}
+        onPicked={(uri) => {
+          setCard(uri);
+          setCardError(null);
+        }}
+        onSignOut={signOut}
+      />
+    );
+  }
+
   if (face && !face.complete) {
     return (
       <EnrollScreen
-        done={face.done}
+        // ท่าที่ถ่ายไว้ก่อนยืนยันบัตรจะถูกล้าง เริ่มจากหน้าตรงใหม่
+        done={face.verified ? face.done : []}
+        card={face.verified ? null : card}
+        onCardRejected={(message) => {
+          setFace({ ...face, verified: false });
+          setCard(null);
+          setCardError(message);
+        }}
         onComplete={setFace}
         onUnauthorized={async (message) => {
           await signOut();
