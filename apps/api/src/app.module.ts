@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { AttendanceModule } from './attendance/attendance.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { CameraModule } from './camera/camera.module.js';
 import { CoursesModule } from './courses/courses.module.js';
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module.js';
     SchedulesModule,
     EnrollmentModule,
     CameraModule,
+    AttendanceModule,
   ],
   providers: [
     // ลำดับสำคัญ: ตรวจ login ก่อน แล้วค่อยตรวจบทบาท
