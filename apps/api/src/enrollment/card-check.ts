@@ -22,6 +22,8 @@ const MIN_LINE_SCORE = 0.9;
 const MARKER = 'OFFICIAL STUDENT VIRTUAL ID';
 const CODE = /\b\d{8}\b/g;
 const DATE = /(\d{2})-(\d{2})-(\d{4})/;
+// วันที่ พ.ศ. ที่ OCR อ่านขีดหาย (เช่น 27052566) ไม่ใช่รหัสนักศึกษา รหัสขึ้นต้นด้วยปีเข้า (6x) เป็นวันที่ไม่ได้
+const DASHLESS_DATE = /^(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])25\d\d$/;
 // ปีบนบัตรเป็น พ.ศ.
 const BE_OFFSET = 543;
 
@@ -39,15 +41,21 @@ export function checkCard(
   const sure = lines.filter((l) => l.score >= MIN_LINE_SCORE).map((l) => l.text.trim());
   if (!sure.some((t) => t.toUpperCase().replace(/\s+/g, ' ').includes(MARKER))) return unreadable;
 
-  // บรรทัดวันที่ไม่เอามาหารหัส ถ้า OCR อ่านขีดหาย วันที่จะกลายเป็นเลข 8 หลัก
-  const dateLine = sure.find((t) => /generate/i.test(t));
-  const codes = new Set(sure.filter((t) => t !== dateLine).flatMap((t) => t.match(CODE) ?? []));
+  // บัตรมีวันที่สองที่ (วันสร้างภาพ วันออกบัตร) ถ้า OCR อ่านขีดหายจะกลายเป็นเลข 8 หลัก
+  const codes = new Set(
+    sure
+      .filter((t) => !DATE.test(t) && !/generate/i.test(t))
+      .flatMap((t) => t.match(CODE) ?? [])
+      .filter((c) => !DASHLESS_DATE.test(c)),
+  );
   if (!codes.size) return unreadable;
   if (codes.size > 1 || !codes.has(expected.studentCode)) {
     return { ok: false, code: 'CARD_NOT_YOURS', message: 'รหัสบนบัตรไม่ตรงกับบัญชีที่เข้าสู่ระบบ' };
   }
 
-  const date = dateLine?.match(DATE);
+  // OCR อาจแยก "System Generate Date :" กับวันที่เป็นคนละบรรทัด
+  const at = sure.findIndex((t) => /generate/i.test(t));
+  const date = at < 0 ? null : (sure[at].match(DATE) ?? sure[at + 1]?.match(DATE));
   if (!date) return unreadable;
   const [, day, month, beYear] = date;
   const onCard = `${Number(beYear) - BE_OFFSET}-${month}-${day}`;

@@ -41,6 +41,9 @@ const alreadyEnrolled = () =>
 const needIdentity = (message = 'ยืนยันตัวตนด้วยบัตรนักศึกษาก่อน') =>
   new AppError(409, 'IDENTITY_REQUIRED', message);
 
+const badCard = () =>
+  new AppError(400, 'CARD_INVALID', 'เปิดภาพบัตรไม่ได้ ใช้ภาพหน้าจอบัตรเป็นไฟล์ JPG หรือ PNG');
+
 const notAStudent = () =>
   new AppError(403, 'NOT_A_STUDENT', 'ลงทะเบียนใบหน้าได้เฉพาะบัญชีนักศึกษา');
 
@@ -77,13 +80,19 @@ export class EnrollmentService {
   ): Promise<FaceStatus> {
     this.checkAccount(user);
     if (!card || !file) throw new AppError(400, 'IMAGE_REQUIRED', 'ต้องแนบทั้งภาพบัตรและรูปหน้า');
-    this.checkImage(card);
+    if (!EXTENSIONS[card.mimetype] || !looksLike(card.mimetype, card.buffer)) throw badCard();
     this.checkImage(file);
 
     const rows = await this.repo.listByUser(user.id);
     if (user.identityVerifiedAt && isComplete(rows.map((r) => r.pose))) throw alreadyEnrolled();
 
-    const read = await this.face.readCard(card.buffer, card.mimetype);
+    // ตรวจหน้าสดก่อน ระหว่างที่ยังจัดท่าไม่ได้จะได้ไม่ต้องอ่านบัตรซ้ำทุกรูป
+    const result = await this.analyze(file, 'front');
+    const read = await this.face.readCard(card.buffer, card.mimetype).catch((error: unknown) => {
+      // ไฟล์บัตรเสียหรือใหญ่ไป ให้แอปกลับไปเลือกบัตรใหม่ ไม่ใช่ถ่ายหน้าซ้ำ
+      if (error instanceof AppError && [400, 413].includes(error.getStatus())) throw badCard();
+      throw error;
+    });
     const verdict = checkCard(read.lines, { studentCode: user.studentId!, today: this.now() });
     if (!verdict.ok) throw new AppError(422, verdict.code, verdict.message);
     const [cardFace, ...others] = read.faces;
@@ -99,7 +108,6 @@ export class EnrollmentService {
       );
     }
 
-    const result = await this.analyze(file, 'front');
     const score = cosine(cardFace.embedding, result.embedding);
     if (score < CARD_MATCH_MIN) {
       throw new AppError(
@@ -109,8 +117,15 @@ export class EnrollmentService {
       );
     }
 
-    await this.removeQuietly(await this.repo.deleteByUser(user.id));
-    await this.store(user.id, 'front', result, file, undefined);
+    // บันทึกหน้าตรงใหม่ก่อน แล้วค่อยล้างท่าอื่น บันทึกพังกลางทางท่าเดิมยังอยู่
+    await this.store(
+      user.id,
+      'front',
+      result,
+      file,
+      rows.find((r) => r.pose === 'front'),
+    );
+    await this.removeQuietly(await this.repo.deleteByUser(user.id, 'front'));
     await this.users.setIdentity(user.id, score);
     return { done: ['front'], complete: false, verified: true };
   }
