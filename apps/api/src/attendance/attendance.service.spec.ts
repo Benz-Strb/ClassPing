@@ -9,6 +9,7 @@ import type {
   UnknownFace,
 } from './attendance-admin.repo.js';
 import { AttendanceService } from './attendance.service.js';
+import { RejectedGuesses } from './rejected-guesses.js';
 
 const START = new Date('2026-10-23T02:00:00Z'); // 09:00
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
@@ -106,7 +107,8 @@ function setup() {
     },
   } as unknown as CoursesService;
   const rosterService = { entries: async () => roster } as unknown as RosterService;
-  const service = new AttendanceService(courses, rosterService, repo, () => at(30));
+  const rejected = new RejectedGuesses(() => at(30));
+  const service = new AttendanceService(courses, rosterService, repo, () => at(30), rejected);
   const pending = (userId: string, minute = 5) =>
     repo.rows.set(userId, {
       userId,
@@ -117,7 +119,7 @@ function setup() {
       updatedBy: null,
       updatedByName: null,
     });
-  return { repo, service, pending };
+  return { repo, service, pending, rejected };
 }
 
 describe('AttendanceService.view', () => {
@@ -238,12 +240,13 @@ describe('AttendanceService.review', () => {
     ).rejects.toMatchObject({ status: 409, code: 'NO_ACCOUNT' });
   });
 
-  it('ไม่ใช่นักศึกษาวิชานี้: ลบแถว รูปย้ายไปหน้าที่ไม่รู้จัก', async () => {
-    const { service, repo, pending } = setup();
+  it('ไม่ใช่นักศึกษาวิชานี้: ลบแถว รูปย้ายไปหน้าที่ไม่รู้จัก และกล้องจำไว้ไม่เดาคนนี้ซ้ำ', async () => {
+    const { service, repo, pending, rejected } = setup();
     pending('u1', 5);
     await service.review(teacher, SESSION_ID, '66000001', { action: 'reject' });
     expect(repo.rows.has('u1')).toBe(false);
     expect(repo.unknown).toEqual([{ imagePath: `${SESSION_ID}/u1-x.jpg`, seenAt: at(5) }]);
+    expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(true);
   });
 
   it('แถวที่ไม่ได้รอตรวจได้ 409 NOT_PENDING', async () => {

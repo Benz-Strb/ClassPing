@@ -9,6 +9,7 @@ import { ATTENDANCE_REPO, SupabaseAttendanceRepo } from './attendance.repo.js';
 import { AttendanceService } from './attendance.service.js';
 import { FRAME_DEPS, FrameProcessor, type FrameDeps } from './frame.processor.js';
 import { FrameWorker } from './frame.worker.js';
+import { RejectedGuesses } from './rejected-guesses.js';
 import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
 
 @Module({
@@ -18,6 +19,7 @@ import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
     AttendanceService,
     FrameProcessor,
     FrameWorker,
+    RejectedGuesses,
     UnknownCleanupRunner,
     { provide: ATTENDANCE_REPO, useClass: SupabaseAttendanceRepo },
     { provide: ATTENDANCE_ADMIN_REPO, useClass: SupabaseAttendanceAdminRepo },

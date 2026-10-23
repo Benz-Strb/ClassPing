@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -28,33 +28,37 @@ export function CheckinView() {
   const [data, setData] = useState<SessionAttendance | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // นับครั้งที่อาจารย์กดแก้ ผลจากรอบดึงข้อมูลที่เริ่มก่อนการแก้จะไม่ถูกใช้
+  const edits = useRef(0);
   const base = `/sessions/${sessionId}/attendance`;
 
   const load = useCallback(
-    () =>
-      apiFetch<SessionAttendance>(base)
+    () => {
+      const startedAt = edits.current;
+      return apiFetch<SessionAttendance>(base)
         .then((next) => {
-          setData(next);
+          if (edits.current === startedAt) setData(next);
           return next;
         })
         .catch(async (e: unknown) => {
           setError(await handleApiError(e, router));
           return null;
-        }),
+        });
+    },
     [base, router],
   );
 
-  // ดึงใหม่เรื่อย ๆ เฉพาะตอนคาบกำลังเรียน แท็บที่ซ่อนอยู่ข้ามรอบนั้นไป
+  // ดึงใหม่เรื่อย ๆ จนคาบจบ (กล้องเริ่มก่อนเวลาคาบ) แท็บที่ซ่อนอยู่ข้ามรอบนั้นไป
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     const tick = async () => {
-      let live = true;
+      let open = true;
       if (document.visibilityState === "visible") {
         const next = await load();
-        live = !next || next.session.status === "live";
+        open = !next || next.session.status !== "ended";
       }
-      if (!stopped && live) timer = setTimeout(tick, POLL_MS);
+      if (!stopped && open) timer = setTimeout(tick, POLL_MS);
     };
     void tick();
     return () => {
@@ -64,6 +68,7 @@ export function CheckinView() {
   }, [load]);
 
   async function send(path: string, method: string, body: unknown) {
+    edits.current += 1;
     setBusy(true);
     setError(null);
     try {
@@ -102,6 +107,11 @@ export function CheckinView() {
           {session.status === "live" && (
             <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">
               กำลังเรียน
+            </span>
+          )}
+          {session.status === "upcoming" && (
+            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+              ยังไม่เริ่ม
             </span>
           )}
         </h2>

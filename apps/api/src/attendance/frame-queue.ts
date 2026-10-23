@@ -41,7 +41,8 @@ export class BullFrameQueue implements FrameQueue, OnModuleDestroy {
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
     this.queue = new Queue<FrameJob>(FRAMES_QUEUE_NAME, {
       connection: redisConnection(config),
-      defaultJobOptions: { removeOnComplete: true, removeOnFail: 50 },
+      // งานที่พังก็ไม่เก็บไว้ เพราะในงานมีภาพทั้งห้อง
+      defaultJobOptions: { removeOnComplete: true, removeOnFail: true },
     });
     // ไม่ให้ error ของ connection ทำ API ล้ม
     this.queue.on('error', (error) => this.logger.warn(`Redis: ${error.message}`));

@@ -9,6 +9,7 @@ import type {
 } from './attendance.repo.js';
 import type { FrameJob } from './frame-queue.js';
 import { FrameProcessor, type FrameDeps } from './frame.processor.js';
+import { RejectedGuesses } from './rejected-guesses.js';
 
 const POSES = ['front', 'left', 'right', 'up', 'down'];
 const START = new Date('2026-10-23T02:00:00Z'); // 09:00
@@ -48,6 +49,7 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
   const unknowns: string[] = [];
   let faces: DetectedFace[] = [];
   let failWrite = false;
+  let beforeWrite = () => {};
   let detectCalls = 0;
 
   const embeddings: FaceEmbedding[] = [];
@@ -63,17 +65,24 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
     sessionContext: async () => (opts.context === undefined ? context : opts.context),
     faceEmbeddings: async (userIds) => embeddings.filter((e) => userIds.includes(e.userId)),
     find: async (_s, userId) => rows.get(userId) ?? null,
-    write: async (record) => {
+    insertIfAbsent: async (record) => {
+      beforeWrite();
       if (failWrite) throw new Error('db down');
-      rows.set(record.userId, {
-        status: record.status,
-        updatedBy: null,
-        imagePath: record.imagePath,
-        record,
-      });
+      if (rows.has(record.userId)) return false;
+      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, record });
+      return true;
+    },
+    replacePending: async (record) => {
+      beforeWrite();
+      if (failWrite) throw new Error('db down');
+      const row = rows.get(record.userId);
+      if (!row || row.status !== 'pending' || row.updatedBy !== null) return false;
+      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, record });
+      return true;
     },
     insertUnknown: async (_s, path) => void unknowns.push(path),
-    deleteUnknownBefore: async () => [],
+    unknownBefore: async () => [],
+    deleteUnknown: async () => undefined,
     uploadCapture: async (path) => void uploads.push(path),
     removeCaptures: async (paths) => void removed.push(...paths),
   };
@@ -86,7 +95,14 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
     enrolledUserIds: async () => ['a', 'b'],
   };
   const config = { matchAcceptMin: 0.5, matchReviewMin: 0.36, matchLog: false } as AppConfig;
-  const processor = new FrameProcessor(repo, deps, config, () => new Date(START.getTime() + 3_600_000));
+  const rejected = new RejectedGuesses(() => new Date(START.getTime() + 3_600_000));
+  const processor = new FrameProcessor(
+    repo,
+    deps,
+    config,
+    () => new Date(START.getTime() + 3_600_000),
+    rejected,
+  );
 
   return {
     processor,
@@ -101,6 +117,9 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
       rows.set(userId, { ...row, updatedBy: 'teacher1' });
     },
     detectCalls: () => detectCalls,
+    rejected,
+    // จำลองอาจารย์กดแก้ระหว่างที่กล้องกำลังอัปโหลดรูป
+    whileWriting: (fn: () => void) => (beforeWrite = fn),
   };
 }
 
@@ -206,5 +225,51 @@ describe('FrameProcessor', () => {
     await t.processor.process(job(1));
     expect(t.rows.get('a')!.imagePath).toBeNull();
     expect(t.uploads).toEqual([]);
+  });
+
+  it('อาจารย์แก้แถวระหว่างที่กล้องกำลังบันทึก ผลของอาจารย์ไม่ถูกทับ และลบรูปที่เพิ่งอัปโหลด', async () => {
+    const t = setup();
+    t.show([face(between)]);
+    await t.processor.process(job(5));
+    const pendingImage = t.uploads[0];
+
+    t.whileWriting(() => t.teacherEdits('a'));
+    t.show([face(A)]);
+    await t.processor.process(job(6));
+    expect(t.rows.get('a')).toMatchObject({ status: 'pending', updatedBy: 'teacher1' });
+    expect(t.removed).toEqual([t.uploads[1]]);
+    expect(t.removed).not.toContain(pendingImage);
+  });
+
+  it('มีแถวเกิดขึ้นก่อนกล้องเขียน (เช่นอาจารย์ตั้งสถานะเอง) ไม่เขียนทับ และลบรูปที่เพิ่งอัปโหลด', async () => {
+    const t = setup();
+    t.whileWriting(() => {
+      t.rows.set('a', {
+        status: 'absent',
+        updatedBy: 'teacher1',
+        imagePath: null,
+        record: {} as CameraRecord,
+      });
+    });
+    t.show([face(A)]);
+    await t.processor.process(job(1));
+    expect(t.rows.get('a')?.status).toBe('absent');
+    expect(t.removed).toEqual(t.uploads);
+  });
+
+  it('คนที่อาจารย์บอกว่าไม่ใช่ ไม่ถูกเดาเป็นรอตรวจซ้ำในคาบเดิม แต่ถ้ามั่นใจยังบันทึกได้', async () => {
+    const t = setup();
+    t.rejected.reject('s1', 'a', context.endsAt);
+    t.show([face(between)]);
+    await expect(t.processor.process(job(5))).resolves.toEqual({
+      matched: 0,
+      review: 0,
+      unknown: 1,
+    });
+    expect(t.rows.size).toBe(0);
+
+    t.show([face(A)]);
+    await t.processor.process(job(6));
+    expect(t.rows.get('a')?.status).toBe('present');
   });
 });

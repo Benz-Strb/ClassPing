@@ -40,11 +40,14 @@ export interface AttendanceRepo {
   sessionContext(sessionId: string): Promise<SessionContext | null>;
   faceEmbeddings(userIds: string[], model: string): Promise<FaceEmbedding[]>;
   find(sessionId: string, userId: string): Promise<AttendanceRow | null>;
-  // บันทึกผลจากกล้อง (updated_by ว่าง)
-  write(record: CameraRecord): Promise<void>;
+  // ผลจากกล้อง (updated_by ว่าง) เขียนได้เฉพาะตอนที่ยังไม่มีแถว คืน false ถ้ามีแถวอยู่แล้ว
+  insertIfAbsent(record: CameraRecord): Promise<boolean>;
+  // แทนแถวรอตรวจที่กล้องเขียนไว้ คืน false ถ้าอาจารย์แก้ไปแล้วหรือแถวหายไป
+  replacePending(record: CameraRecord): Promise<boolean>;
   insertUnknown(sessionId: string, imagePath: string, seenAt: Date): Promise<void>;
-  // ลบแถวหน้าที่ไม่รู้จักที่เก่ากว่า before คืน path ของรูป
-  deleteUnknownBefore(before: Date): Promise<string[]>;
+  // หน้าที่ไม่รู้จักที่เก่ากว่า before ทีละไม่เกิน 1000 แถว
+  unknownBefore(before: Date): Promise<{ id: string; imagePath: string }[]>;
+  deleteUnknown(ids: string[]): Promise<void>;
   uploadCapture(path: string, bytes: Buffer): Promise<void>;
   removeCaptures(paths: string[]): Promise<void>;
 }
@@ -53,6 +56,17 @@ export const ATTENDANCE_REPO = Symbol('ATTENDANCE_REPO');
 
 const BUCKET = 'captures';
 const BATCH = 50;
+
+const cameraRow = (record: CameraRecord) => ({
+  session_id: record.sessionId,
+  student_id: record.userId,
+  status: record.status,
+  first_seen_at: record.firstSeenAt.toISOString(),
+  confidence: record.confidence,
+  image_path: record.imagePath,
+  updated_by: null,
+  updated_at: new Date().toISOString(),
+});
 
 @Injectable()
 export class SupabaseAttendanceRepo implements AttendanceRepo {
@@ -130,21 +144,27 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
     return { status: row.status, updatedBy: row.updated_by, imagePath: row.image_path };
   }
 
-  async write(record: CameraRecord): Promise<void> {
-    const { error } = await this.db.from('attendance').upsert(
-      {
-        session_id: record.sessionId,
-        student_id: record.userId,
-        status: record.status,
-        first_seen_at: record.firstSeenAt.toISOString(),
-        confidence: record.confidence,
-        image_path: record.imagePath,
-        updated_by: null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'session_id,student_id' },
-    );
+  async insertIfAbsent(record: CameraRecord): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('attendance')
+      .upsert(cameraRow(record), { onConflict: 'session_id,student_id', ignoreDuplicates: true })
+      .select('student_id');
     if (error) throw dbError();
+    return data.length > 0;
+  }
+
+  // เงื่อนไขอยู่ในคำสั่งเดียวกับการเขียน อาจารย์กดแก้ระหว่างนั้นก็ไม่ถูกทับ
+  async replacePending(record: CameraRecord): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('attendance')
+      .update(cameraRow(record))
+      .eq('session_id', record.sessionId)
+      .eq('student_id', record.userId)
+      .eq('status', 'pending')
+      .is('updated_by', null)
+      .select('student_id');
+    if (error) throw dbError();
+    return data.length > 0;
   }
 
   async insertUnknown(sessionId: string, imagePath: string, seenAt: Date): Promise<void> {
@@ -154,14 +174,24 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
     if (error) throw dbError();
   }
 
-  async deleteUnknownBefore(before: Date): Promise<string[]> {
+  async unknownBefore(before: Date): Promise<{ id: string; imagePath: string }[]> {
     const { data, error } = await this.db
       .from('unknown_faces')
-      .delete()
+      .select('id, image_path')
       .lt('seen_at', before.toISOString())
-      .select('image_path');
+      .limit(1000);
     if (error) throw dbError();
-    return (data as { image_path: string }[]).map((r) => r.image_path);
+    return (data as { id: string; image_path: string }[]).map((r) => ({
+      id: r.id,
+      imagePath: r.image_path,
+    }));
+  }
+
+  async deleteUnknown(ids: string[]): Promise<void> {
+    for (const batch of chunk(ids, BATCH)) {
+      const { error } = await this.db.from('unknown_faces').delete().in('id', batch);
+      if (error) throw dbError();
+    }
   }
 
   async uploadCapture(path: string, bytes: Buffer): Promise<void> {

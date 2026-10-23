@@ -37,11 +37,14 @@ class FakeApi:
 
 class FakeCamera:
     def __init__(self):
+        self.fail_open = False
         self.opened = 0
         self.closed = 0
         self.is_open = False
 
     def open(self):
+        if self.fail_open:
+            raise RuntimeError("เปิดกล้องหมายเลข 0 ไม่ได้")
         self.opened += 1
         self.is_open = True
 
@@ -157,3 +160,18 @@ def test_send_time_counts_toward_interval(setup):
 
     api.send = slow
     assert loop.tick() == pytest.approx(0.6)
+
+
+def test_camera_open_failure_retries_instead_of_crashing(setup):
+    api, cam, clock, loop = setup
+    api.current = session()
+    cam.fail_open = True
+    assert loop.tick() == RETRY_SECONDS
+    assert api.sent == []
+    assert loop.session is None
+
+    cam.fail_open = False
+    clock.advance(RETRY_SECONDS)
+    assert loop.tick() == 1.0
+    assert cam.opened == 1
+    assert api.sent == [b"jpeg"]

@@ -1,14 +1,16 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { z } from 'zod';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { parseBody } from '../common/validate.js';
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { RoomsRepo } from '../rooms/rooms.repo.js';
 import {
   addDays,
   bangkokDate,
   bangkokTime,
+  cameraOpened,
   daysBetween,
   isDate,
   overlaps,
@@ -72,7 +74,7 @@ const roomConflict = (roomName: string, courseCode: string, start: string, end: 
 const timeConflict = (start: string, end: string) =>
   new AppError(409, 'TIME_CONFLICT', `วิชานี้มีเรียนเวลา ${start}-${end} อยู่แล้ว`);
 const sessionStarted = () =>
-  new AppError(400, 'SESSION_STARTED', 'คาบวันนี้เลยเวลาเริ่มแล้ว แก้ไม่ได้');
+  new AppError(400, 'SESSION_STARTED', 'คาบนี้กล้องเริ่มเช็คชื่อแล้ว แก้ไม่ได้');
 
 const NEW_SCHEDULE = 'new';
 
@@ -97,6 +99,7 @@ export class SchedulesService {
     @Inject(SCHEDULES_REPO) private readonly repo: SchedulesRepo,
     @Inject(SESSION_SYNCER) private readonly syncer: SessionSyncer,
     @Inject(CLOCK) private readonly now: Clock,
+    @Optional() @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
 
   async list(user: AppUser, courseId: string): Promise<Schedule[]> {
@@ -251,7 +254,7 @@ export class SchedulesService {
     }
   }
 
-  // คาบวันนี้ที่เลยเวลาเริ่มแล้ว (ทั้งเวลาเดิมและเวลาใหม่) แก้ไม่ได้
+  // คาบวันนี้ที่กล้องเปิดแล้ว (ทั้งเวลาเดิมและเวลาใหม่) แก้ไม่ได้
   private async checkNotStarted(schedule: Schedule, date: string, next: Override | null) {
     const now = this.now();
     if (date !== bangkokDate(now)) return;
@@ -260,7 +263,8 @@ export class SchedulesService {
     );
     const [before] = planDay(date, [schedule], current);
     const [after] = planDay(date, [schedule], next ? [next] : []);
-    if ((before && before.startsAt <= now) || (after && after.startsAt <= now)) {
+    const opened = (s?: { startsAt: Date }) => !!s && cameraOpened(s.startsAt, now, this.config?.cameraOpenBeforeMin);
+    if (opened(before) || opened(after)) {
       throw sessionStarted();
     }
   }
