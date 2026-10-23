@@ -380,6 +380,17 @@ describe('EnrollmentService.verifyIdentity', () => {
     });
   });
 
+  it('ภาพบัตรมีหลายหน้า ได้ 422 MULTIPLE_FACES ไม่เทียบหน้าสด', async () => {
+    const { service, face } = setup();
+    const [own] = face.card.faces;
+    face.card = { ...face.card, faces: [own, { ...own, embedding: [0, 1] }] };
+    expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
+      status: 422,
+      code: 'MULTIPLE_FACES',
+    });
+    expect(face.calls).toBe(0);
+  });
+
   it('หน้าสดไม่ตรงกับบัตร ได้ 422 FACE_NOT_MATCH_CARD ท่าเก่ายังอยู่', async () => {
     const { service, face, repo, identities } = setup();
     const me = unverified();

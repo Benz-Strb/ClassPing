@@ -86,9 +86,17 @@ export class EnrollmentService {
     const read = await this.face.readCard(card.buffer, card.mimetype);
     const verdict = checkCard(read.lines, { studentCode: user.studentId!, today: this.now() });
     if (!verdict.ok) throw new AppError(422, verdict.code, verdict.message);
-    const [cardFace] = read.faces;
+    const [cardFace, ...others] = read.faces;
     if (!cardFace) {
       throw new AppError(422, 'CARD_NO_FACE', 'ไม่เห็นรูปหน้าในบัตร ใช้ภาพหน้าจอบัตรทั้งใบ');
+    }
+    // บัตรจริงมีหน้าเดียว ภาพที่มีหน้าอื่นปนอาจเป็นภาพที่แต่งมา
+    if (others.length) {
+      throw new AppError(
+        422,
+        'MULTIPLE_FACES',
+        'ภาพบัตรมีหลายหน้า ใช้ภาพหน้าจอบัตรของตัวเองใบเดียว',
+      );
     }
 
     const result = await this.analyze(file, 'front');
