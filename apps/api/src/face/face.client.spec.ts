@@ -84,6 +84,14 @@ describe('FaceClient', () => {
     expect(calls[0].url).toBe('http://face.test/faces/detect?crops=1');
   });
 
+  it('readCard ส่งรูปไปที่ /cards/read แล้วคืนบรรทัดกับหน้า', async () => {
+    const data = { lines: [{ text: '66112106', score: 1 }], faces: [] };
+    const calls = stubFetch(() => json(200, { data }));
+    expect(await new FaceClient(config).readCard(image, 'image/png')).toEqual(data);
+    expect(calls[0].url).toBe('http://face.test/cards/read');
+    expect(calls[0].init.body).toBeInstanceOf(FormData);
+  });
+
   it('model อ่านจาก /health ครั้งเดียวแล้วจำไว้', async () => {
     const calls = stubFetch(() =>
       json(200, { data: { ok: true, model: 'buffalo_l', embeddingSize: 512 } }),

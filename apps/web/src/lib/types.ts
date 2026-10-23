@@ -32,6 +32,8 @@ export interface RosterEntry {
   fullName: string | null;
   hasLoggedIn: boolean;
   faceEnrolled: boolean;
+  // รูปหน้าตรงที่ลงทะเบียนไว้ URL ใช้ได้ 10 นาที
+  faceImageUrl: string | null;
 }
 
 export interface AddStudentsResult {

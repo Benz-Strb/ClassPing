@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AttendanceModule } from './attendance/attendance.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { CameraModule } from './camera/camera.module.js';
+import { CleanupModule } from './cleanup/cleanup.module.js';
 import { CoursesModule } from './courses/courses.module.js';
 import { EnrollmentModule } from './enrollment/enrollment.module.js';
 import { RolesGuard } from './auth/roles.guard.js';
@@ -23,6 +24,7 @@ import { UsersModule } from './users/users.module.js';
     EnrollmentModule,
     CameraModule,
     AttendanceModule,
+    CleanupModule,
   ],
   providers: [
     // ลำดับสำคัญ: ตรวจ login ก่อน แล้วค่อยตรวจบทบาท

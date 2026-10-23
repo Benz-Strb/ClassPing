@@ -9,6 +9,8 @@ export interface StudentAccount {
   studentCode: string;
   userId: string;
   fullName: string | null;
+  // ยืนยันตัวตนด้วยบัตรแล้ว ยังไม่ยืนยันไม่นับว่าลงทะเบียนใบหน้า
+  identityVerified: boolean;
 }
 
 export interface RosterRepo {
@@ -17,6 +19,8 @@ export interface RosterRepo {
   removeCode(courseId: string, code: string): Promise<boolean>;
   accountsByCodes(codes: string[]): Promise<StudentAccount[]>;
   faceEnrolledUserIds(userIds: string[]): Promise<string[]>;
+  // URL ชั่วคราวของรูปหน้าตรง (ท่าที่เทียบกับบัตรแล้ว) key = userId
+  frontImageUrls(userIds: string[], seconds: number): Promise<Map<string, string>>;
 }
 
 export const ROSTER_REPO = Symbol('ROSTER_REPO');
@@ -63,11 +67,22 @@ export class SupabaseRosterRepo implements RosterRepo {
     for (const batch of chunk(codes, BATCH)) {
       const { data, error } = await this.db
         .from('users')
-        .select('id, full_name, student_id')
+        .select('id, full_name, student_id, identity_verified_at')
         .in('student_id', batch);
       if (error) throw dbError();
-      for (const r of data as { id: string; full_name: string | null; student_id: string }[]) {
-        accounts.push({ studentCode: r.student_id, userId: r.id, fullName: r.full_name });
+      const rows = data as {
+        id: string;
+        full_name: string | null;
+        student_id: string;
+        identity_verified_at: string | null;
+      }[];
+      for (const r of rows) {
+        accounts.push({
+          studentCode: r.student_id,
+          userId: r.id,
+          fullName: r.full_name,
+          identityVerified: r.identity_verified_at !== null,
+        });
       }
     }
     return accounts;
@@ -87,5 +102,30 @@ export class SupabaseRosterRepo implements RosterRepo {
       }
     }
     return [...poses].filter(([, list]) => isComplete(list)).map(([id]) => id);
+  }
+
+  async frontImageUrls(userIds: string[], seconds: number): Promise<Map<string, string>> {
+    const urls = new Map<string, string>();
+    for (const batch of chunk(userIds, BATCH)) {
+      const { data, error } = await this.db
+        .from('face_profiles')
+        .select('user_id, image_path')
+        .eq('pose', 'front')
+        .in('user_id', batch);
+      if (error) throw dbError();
+      const rows = data as { user_id: string; image_path: string }[];
+      if (!rows.length) continue;
+      const signed = await this.db.storage.from('faces').createSignedUrls(
+        rows.map((r) => r.image_path),
+        seconds,
+      );
+      if (signed.error) throw dbError();
+      const byPath = new Map(rows.map((r) => [r.image_path, r.user_id]));
+      for (const item of signed.data) {
+        const userId = item.path && byPath.get(item.path);
+        if (userId && item.signedUrl) urls.set(userId, item.signedUrl);
+      }
+    }
+    return urls;
   }
 }

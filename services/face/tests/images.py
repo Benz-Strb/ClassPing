@@ -32,3 +32,9 @@ def crop_with_margin(image, bbox, margin: float = 0.6, size: int = 320) -> np.nd
     right = min(int(x2 + w * margin), image.shape[1])
     bottom = min(int(y2 + h * margin), image.shape[0])
     return cv2.resize(image[top:bottom, left:right], (size, size))
+
+
+def png(image: np.ndarray) -> bytes:
+    ok, buffer = cv2.imencode(".png", image)
+    assert ok
+    return buffer.tobytes()
