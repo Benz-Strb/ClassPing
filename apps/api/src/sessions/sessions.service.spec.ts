@@ -17,10 +17,16 @@ class InMemorySessionsRepo implements SessionsRepo {
   rows = new Map<string, SessionRow>();
   writes = 0;
 
-  async listByCourse(courseId: string, from: string, to: string) {
+  async listByCourse(
+    courseId: string,
+    from: string,
+    to: string,
+    opts: { classOnly?: boolean } = {},
+  ) {
     await new Promise((resolve) => setImmediate(resolve));
     return [...this.rows.values()]
       .filter((r) => r.courseId === courseId && r.onDate >= from && r.onDate <= to)
+      .filter((r) => !opts.classOnly || r.kind === 'class')
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   }
   async courseIdsInRange(from: string, to: string) {
@@ -45,7 +51,7 @@ class InMemorySessionsRepo implements SessionsRepo {
     if (sessions.some((s) => this.clash(s))) throw new Error('duplicate key 23505');
     for (const s of sessions) {
       const id = randomUUID();
-      this.rows.set(id, { ...s, id, roomName: `ห้อง ${s.roomId}` });
+      this.rows.set(id, { kind: 'class', title: null, ...s, id, roomName: `ห้อง ${s.roomId}` });
     }
   }
   async update(id: string, patch: Pick<SessionRow, 'roomId' | 'startsAt' | 'endsAt'>) {
@@ -247,6 +253,48 @@ describe('SessionsService.syncCourse', () => {
     addSchedule({ weekday: 2, startTime: '13:00', endTime: '15:00' });
     await service.syncCourse(course.id);
     expect(sessions().map((s) => s.onDate)).toEqual([TODAY]);
+  });
+});
+
+describe('SessionsService กับคาบสอบ', () => {
+  const exam = (
+    courseId: string,
+    onDate: string,
+    startsAt: string,
+    endsAt: string,
+  ): SessionRow => ({
+    id: randomUUID(),
+    kind: 'exam',
+    title: 'สอบกลางภาค',
+    scheduleId: null,
+    courseId,
+    roomId: 'B',
+    roomName: 'ห้อง B',
+    onDate,
+    startsAt: new Date(startsAt),
+    endsAt: new Date(endsAt),
+  });
+
+  it('sync ไม่ลบหรือแก้คาบสอบ ทั้งที่กล้องยังไม่เปิดและเปิดแล้ว', async () => {
+    const { course, repo, service, addSchedule, sessions } = setup(20);
+    addSchedule();
+    const later = exam(course.id, '2026-10-23', '2026-10-23T02:00:00Z', '2026-10-23T04:00:00Z');
+    const soon = exam(course.id, TODAY, '2026-10-20T03:10:00Z', '2026-10-20T05:00:00Z');
+    repo.rows.set(later.id, later);
+    repo.rows.set(soon.id, soon);
+
+    await service.syncCourse(course.id);
+    await service.syncAll();
+    const kept = sessions().filter((s) => s.kind === 'exam');
+    expect(kept).toEqual([later, soon]);
+  });
+
+  it('รายการคาบของวิชาแสดงคาบสอบพร้อมชื่อ', async () => {
+    const { owner, course, repo, service } = setup();
+    const row = exam(course.id, '2026-10-23', '2026-10-23T02:00:00Z', '2026-10-23T04:00:00Z');
+    repo.rows.set(row.id, row);
+    const list = await service.listForCourse(owner, course.id, TODAY, NEXT_MONDAY);
+    expect(list.map((s) => [s.kind, s.title])).toEqual([['exam', 'สอบกลางภาค']]);
   });
 });
 

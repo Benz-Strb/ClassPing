@@ -19,6 +19,8 @@ import { SESSIONS_REPO, type SessionRow, type SessionsRepo } from './sessions.re
 
 export interface SessionView {
   id: string;
+  kind: 'class' | 'exam';
+  title: string | null;
   scheduleId: string | null;
   courseId: string;
   roomId: string;
@@ -85,7 +87,7 @@ export class SessionsService implements SessionSyncer {
       }
     }
 
-    const existing = await this.repo.listByCourse(courseId, from, to);
+    const existing = await this.repo.listByCourse(courseId, from, to, { classOnly: true });
     const existingKeys = new Set(existing.map(keyOf));
     const toRemove: string[] = [];
     const toUpdate: { id: string; session: PlannedSession }[] = [];
@@ -158,6 +160,8 @@ export class SessionsService implements SessionSyncer {
     const now = this.now();
     return (await this.repo.listByCourse(courseId, from, to)).map((row) => ({
       id: row.id,
+      kind: row.kind,
+      title: row.title,
       scheduleId: row.scheduleId,
       courseId: row.courseId,
       roomId: row.roomId,

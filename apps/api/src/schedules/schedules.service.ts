@@ -17,11 +17,13 @@ import {
   planDay,
   weekdayOf,
   type OverrideLike,
+  type PlannedSession,
   type ScheduleLike,
 } from '../sessions/plan-day.js';
 import type { AppUser } from '../users/users.service.js';
 import {
   SCHEDULES_REPO,
+  type ExamSlot,
   type Override,
   type Schedule,
   type SchedulesRepo,
@@ -38,11 +40,11 @@ const DAY_END = '22:00';
 const MIN_LENGTH_MIN = 15;
 const MAX_LENGTH_MIN = 6 * 60;
 const MAX_RANGE_DAYS = 31;
-const MAX_AHEAD_DAYS = 365;
+export const MAX_AHEAD_DAYS = 365;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const time = z
+export const time = z
   .string({ error: 'กรุณาใส่เวลา' })
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'ใส่เวลาแบบ 09:00' });
 const weekday = z
@@ -50,7 +52,7 @@ const weekday = z
   .int({ error: 'วันไม่ถูกต้อง' })
   .min(0, { error: 'วันไม่ถูกต้อง' })
   .max(6, { error: 'วันไม่ถูกต้อง' });
-const roomId = z.string({ error: 'กรุณาเลือกห้อง' });
+export const roomId = z.string({ error: 'กรุณาเลือกห้อง' });
 
 const createSchema = z.object({ weekday, startTime: time, endTime: time, roomId });
 const updateSchema = createSchema.partial();
@@ -65,28 +67,41 @@ const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.sl
 
 const badRequest = (message: string) => new AppError(400, 'BAD_REQUEST', message);
 const scheduleNotFound = () => new AppError(404, 'SCHEDULE_NOT_FOUND', 'ไม่พบตารางเรียนนี้');
-const roomConflict = (roomName: string, courseCode: string, start: string, end: string) =>
+export const roomConflict = (roomName: string, courseCode: string, start: string, end: string) =>
   new AppError(
     409,
     'ROOM_CONFLICT',
     `${roomName} มีวิชา ${courseCode} เวลา ${start}-${end} แล้ว`,
   );
-const timeConflict = (start: string, end: string) =>
+export const timeConflict = (start: string, end: string) =>
   new AppError(409, 'TIME_CONFLICT', `วิชานี้มีเรียนเวลา ${start}-${end} อยู่แล้ว`);
-const sessionStarted = () =>
+export const sessionStarted = () =>
   new AppError(400, 'SESSION_STARTED', 'คาบนี้กล้องเริ่มเช็คชื่อแล้ว แก้ไม่ได้');
 
 const NEW_SCHEDULE = 'new';
 
-function checkTimes(start: string, end: string) {
+export function checkTimes(start: string, end: string, label = 'เวลาเรียน') {
   if (start >= end) throw badRequest('เวลาเริ่มต้องก่อนเวลาจบ');
   if (start < DAY_START || end > DAY_END) {
-    throw badRequest(`เวลาเรียนต้องอยู่ในช่วง ${DAY_START}-${DAY_END}`);
+    throw badRequest(`${label}ต้องอยู่ในช่วง ${DAY_START}-${DAY_END}`);
   }
   const length = minutes(end) - minutes(start);
   if (length < MIN_LENGTH_MIN || length > MAX_LENGTH_MIN) {
     throw badRequest('คาบต้องยาว 15 นาที ถึง 6 ชั่วโมง');
   }
+}
+
+// คาบเรียนของตารางนี้ทับห้องสอบ หรือทับเวลาสอบของวิชาเดียวกัน
+function checkExamClash(session: PlannedSession | undefined, exams: ExamSlot[]) {
+  if (!session) return;
+  const hit = exams.find(
+    (e) => (e.roomId === session.roomId || e.courseId === session.courseId) && overlaps(e, session),
+  );
+  if (!hit) return;
+  const start = bangkokTime(hit.startsAt);
+  const end = bangkokTime(hit.endsAt);
+  if (hit.roomId === session.roomId) throw roomConflict(hit.roomName, hit.courseCode, start, end);
+  throw timeConflict(start, end);
 }
 
 @Injectable()
@@ -303,6 +318,19 @@ export class SchedulesService {
         mine.id,
       );
     }
+
+    // คาบสอบในวันเดียวกันของสัปดาห์ เทียบกับคาบของตารางนี้ในวันนั้น (หลัง override)
+    const exams = (await this.repo.listExamsBetween(today, addDays(today, MAX_AHEAD_DAYS))).filter(
+      (e) => weekdayOf(e.onDate) === next.weekday,
+    );
+    for (const exam of exams) {
+      const [session] = planDay(
+        exam.onDate,
+        [mine],
+        overrides.filter((o) => o.onDate === exam.onDate && o.scheduleId === mine.id),
+      );
+      checkExamClash(session, [exam]);
+    }
   }
 
   private async checkDayConflict(schedule: Schedule, override: Override) {
@@ -312,6 +340,8 @@ export class SchedulesService {
       (o) => o.scheduleId !== schedule.id,
     );
     await this.checkDate(date, schedules, [...overrides, override], schedule.id);
+    const [session] = planDay(date, [schedule], [override]);
+    checkExamClash(session, await this.repo.listExamsBetween(date, date));
   }
 
   // วางคาบของวันนั้นทุกวิชา แล้วดูว่าคาบของตารางนี้ไปทับห้องหรือทับวิชาเดียวกันไหม
