@@ -41,12 +41,19 @@ const session: WatchableSession = {
   cameraId: CAM,
 };
 
-function setup(opts: { segments?: { start: Date; duration: number }[]; secret?: boolean } = {}) {
+function setup(
+  opts: {
+    segments?: { start: Date; duration: number }[];
+    secret?: boolean;
+    previousEnd?: Date | null;
+  } = {},
+) {
   const views: string[] = [];
   const listed: { path: string; from: Date; to: Date }[] = [];
   const repo = {
     session: async (id: string) => (id === S1 ? session : null),
     sessionsOnDate: async () => [],
+    previousEndInRoom: async () => opts.previousEnd ?? null,
     logView: async (sid: string, uid: string, kind: string) => void views.push(`${kind} ${uid}`),
   } as LiveRepo;
   const playback: PlaybackClient = {
@@ -95,6 +102,21 @@ describe('RecordingService.list', () => {
       expiresOn: '2026-11-23T09:50:00.000Z',
       canDownload: true,
     });
+  });
+
+  it('ห้องเดียวกันมีคาบก่อนหน้าจบ 17:05 เริ่มนับไฟล์ตั้งแต่ 17:05 ไม่ใช่ 16:58 (ไม่เห็นคาบคนอื่น)', async () => {
+    const previousEnd = new Date('2026-10-24T10:05:00Z');
+    const { service, listed } = setup({
+      previousEnd,
+      segments: [{ start: new Date('2026-10-24T09:50:00Z'), duration: 1800 }],
+    });
+    const result = await service.list(owner, S1);
+    expect(listed[0].from).toEqual(previousEnd);
+    expect(result.segments).toEqual([{ start: '2026-10-24T10:05:00.000Z', duration: 900 }]);
+    expect(
+      (await rejection(service.link(owner, S1, body({ start: '2026-10-24T10:00:00.000Z' }))))
+        .status,
+    ).toBe(400);
   });
 
   it('คนคุมสอบดูรายการได้แต่ดาวน์โหลดไม่ได้ อาจารย์วิชาอื่นได้ 404', async () => {
