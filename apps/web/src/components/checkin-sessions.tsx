@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { addDays, bangkokDate, formatDate, formatTime } from "@/lib/time";
 import type { SessionView } from "@/lib/types";
+import { ExamBadge } from "./exam-badge";
 
 const STATUS = {
   upcoming: { label: "ยังไม่เริ่ม", className: "bg-gray-100 text-gray-700" },
@@ -68,6 +69,7 @@ export function CheckinSessions() {
                 <span>
                   {formatTime(session.startsAt)}-{formatTime(session.endsAt)} · {session.roomName}
                 </span>
+                {session.kind === "exam" && <ExamBadge title={session.title} />}
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs ${STATUS[session.status].className}`}
                 >

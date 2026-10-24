@@ -65,6 +65,9 @@ export interface Override {
 
 export interface SessionView {
   id: string;
+  kind: "class" | "exam";
+  // ชื่อคาบสอบ คาบเรียนเป็น null
+  title: string | null;
   scheduleId: string | null;
   courseId: string;
   roomId: string;
@@ -73,6 +76,29 @@ export interface SessionView {
   startsAt: string;
   endsAt: string;
   status: "upcoming" | "live" | "ended";
+}
+
+export interface Person {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+export interface Exam {
+  id: string;
+  title: string;
+  onDate: string;
+  start: string;
+  end: string;
+  startsAt: string;
+  endsAt: string;
+  room: Room;
+  lateAfterMin: number;
+  // null = นับขาดตอนหมดคาบ
+  absentAfterMin: number | null;
+  proctors: Person[];
+  // กล้องเปิดแล้ว แก้ได้แค่คนคุมสอบ
+  locked: boolean;
 }
 
 export type AttendanceStatus = "present" | "late" | "absent" | "leave" | "pending";

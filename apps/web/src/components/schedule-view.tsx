@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { addDays, bangkokDate, formatDate, formatTime, WEEKDAYS } from "@/lib/time";
 import type { Override, Room, Schedule, SessionView } from "@/lib/types";
+import { ExamBadge } from "./exam-badge";
 
 interface Data {
   schedules: Schedule[];
@@ -23,7 +24,10 @@ interface SlotForm {
 
 type DayRow =
   | { kind: "session"; key: string; session: SessionView; changed: boolean }
-  | { kind: "cancelled"; key: string; schedule: Schedule; onDate: string };
+  | { kind: "cancelled"; key: string; schedule: Schedule; onDate: string }
+  | { kind: "replaced"; key: string; onDate: string; start: string; end: string };
+
+const weekdayOf = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay();
 
 const STATUS = {
   upcoming: { label: "ยังไม่เริ่ม", className: "bg-gray-100 text-gray-700" },
@@ -151,6 +155,7 @@ export function ScheduleView() {
           ? [{ kind: "cancelled", key: `${o.scheduleId}|${o.onDate}`, schedule, onDate: o.onDate }]
           : [];
       }),
+    ...replacedByExam(data),
   ].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   return (
@@ -217,11 +222,20 @@ export function ScheduleView() {
 
       <div className="space-y-3">
         <h2 className="font-medium">คาบ 7 วันข้างหน้า</h2>
-        <p className="text-sm text-gray-600">คาบที่เริ่มไปแล้วแก้ไม่ได้</p>
+        <p className="text-sm text-gray-600">คาบที่เริ่มไปแล้วแก้ไม่ได้ คาบสอบแก้ที่แท็บสอบ</p>
         {rows.length === 0 && <p className="text-gray-600">ไม่มีคาบใน 7 วันนี้</p>}
         <ul className="divide-y rounded-lg border">
           {rows.map((row) =>
-            row.kind === "cancelled" ? (
+            row.kind === "replaced" ? (
+              <li key={row.key} className="flex items-center justify-between px-4 py-3">
+                <span className="text-gray-500 line-through">
+                  {formatDate(row.onDate)} {row.start}-{row.end}
+                </span>
+                <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-800">
+                  แทนด้วยคาบสอบ
+                </span>
+              </li>
+            ) : row.kind === "cancelled" ? (
               <li key={row.key} className="flex items-center justify-between px-4 py-3">
                 <span className="text-gray-500 line-through">
                   {formatDate(row.onDate)} {row.schedule.startTime}-{row.schedule.endTime}
@@ -246,6 +260,7 @@ export function ScheduleView() {
                     <span className="font-medium">{formatDate(row.session.onDate)}</span>{" "}
                     {formatTime(row.session.startsAt)}-{formatTime(row.session.endsAt)} ·{" "}
                     {row.session.roomName}{" "}
+                    {row.session.kind === "exam" && <ExamBadge title={row.session.title} />}{" "}
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${STATUS[row.session.status].className}`}
                     >
@@ -315,9 +330,35 @@ export function ScheduleView() {
 }
 
 function sortKey(row: DayRow) {
-  return row.kind === "session"
-    ? `${row.session.onDate} ${formatTime(row.session.startsAt)}`
-    : `${row.onDate} ${row.schedule.startTime}`;
+  if (row.kind === "session") return `${row.session.onDate} ${formatTime(row.session.startsAt)}`;
+  if (row.kind === "replaced") return `${row.onDate} ${row.start}`;
+  return `${row.onDate} ${row.schedule.startTime}`;
+}
+
+// คาบเรียนที่ไม่ถูกสร้างเพราะมีคาบสอบของวิชานี้ทับในวันนั้น
+function replacedByExam(data: Data): DayRow[] {
+  const exams = data.sessions.filter((s) => s.kind === "exam");
+  const rows: DayRow[] = [];
+  for (const exam of exams) {
+    const examStart = formatTime(exam.startsAt);
+    const examEnd = formatTime(exam.endsAt);
+    for (const schedule of data.schedules) {
+      if (schedule.weekday !== weekdayOf(exam.onDate)) continue;
+      const override = data.overrides.find(
+        (o) => o.scheduleId === schedule.id && o.onDate === exam.onDate,
+      );
+      if (override?.cancelled) continue;
+      const start = override?.startTime ?? schedule.startTime;
+      const end = override?.endTime ?? schedule.endTime;
+      const created = data.sessions.some(
+        (s) => s.scheduleId === schedule.id && s.onDate === exam.onDate,
+      );
+      if (!created && start < examEnd && examStart < end) {
+        rows.push({ kind: "replaced", key: `${schedule.id}|${exam.onDate}`, onDate: exam.onDate, start, end });
+      }
+    }
+  }
+  return rows;
 }
 
 function SlotFields({
