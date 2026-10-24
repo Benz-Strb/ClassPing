@@ -5,6 +5,7 @@ import { CameraService } from '../camera/camera.service.js';
 import { hashToken } from '../camera/camera-token.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { cameraPath } from './media-path.js';
 import { verifyMediaToken } from './media-token.js';
 
 // ข้อมูลที่ MediaMTX ส่งมาถามทุกครั้งที่มีคนเชื่อมต่อ (authMethod: http)
@@ -20,7 +21,6 @@ export interface MediaAuthRequest {
   query?: string;
 }
 
-export const cameraPath = (cameraId: string) => `cam/${cameraId}`;
 
 const same = (a: string, b: string) => {
   const x = Buffer.from(a);

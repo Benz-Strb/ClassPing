@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from camera.api import BadToken, CameraApi
 from camera.loop import RETRY_SECONDS, CameraLoop
+from camera.stream import Streamer
 from camera.webcam import Webcam
 
 
@@ -26,11 +27,11 @@ def main() -> int:
         log.error("ยังไม่ได้ตั้ง CAMERA_TOKEN ใน services/camera/.env (สร้างด้วย npm run db:seed:camera)")
         return 1
     api_url = os.environ.get("API_URL", "").strip() or "http://127.0.0.1:3001"
-    camera = Webcam(
-        index=int(os.environ.get("CAMERA_INDEX", "").strip() or 0),
-        max_width=int(os.environ.get("FRAME_MAX_WIDTH", "").strip() or 1280),
-    )
-    loop = CameraLoop(CameraApi(api_url, token), camera, lambda: datetime.now(UTC))
+    max_width = int(os.environ.get("FRAME_MAX_WIDTH", "").strip() or 1280)
+    camera = Webcam(index=int(os.environ.get("CAMERA_INDEX", "").strip() or 0), max_width=max_width)
+    # วิดีโอดูสด/อัดเก็บ ส่งเมื่อ API บอกที่ส่งมาเท่านั้น
+    streamer = Streamer(source=camera.latest_raw, max_width=max_width)
+    loop = CameraLoop(CameraApi(api_url, token), camera, lambda: datetime.now(UTC), streamer)
 
     log.info("รอคาบจาก %s (กล้องหมายเลข %d)", api_url, camera.index)
     try:
@@ -52,6 +53,7 @@ def main() -> int:
     finally:
         if loop.session is not None:
             log.info("ปิดโปรแกรม ส่งไป %d ภาพ", loop.sent)
+        streamer.stop()
         camera.close()
 
 
