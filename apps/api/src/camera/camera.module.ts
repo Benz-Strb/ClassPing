@@ -15,5 +15,6 @@ import { CameraService } from './camera.service.js';
     { provide: FRAME_QUEUE, useClass: BullFrameQueue },
     { provide: CLOCK, useValue: () => new Date() },
   ],
+  exports: [CameraService, CAMERA_REPO],
 })
 export class CameraModule {}
