@@ -28,6 +28,18 @@ export interface Override {
   endTime: string | null;
 }
 
+// คาบสอบ ใช้เช็คห้อง/เวลาชนกับตารางเรียน
+export interface ExamSlot {
+  id: string;
+  courseId: string;
+  courseCode: string;
+  roomId: string;
+  roomName: string;
+  onDate: string;
+  startsAt: Date;
+  endsAt: Date;
+}
+
 export interface SchedulesRepo {
   listAll(): Promise<Schedule[]>;
   listByCourse(courseId: string): Promise<Schedule[]>;
@@ -39,6 +51,7 @@ export interface SchedulesRepo {
   listOverrides(scheduleIds: string[], from: string, to: string): Promise<Override[]>;
   listOverridesBetween(from: string, to: string): Promise<Override[]>;
   listOverridesOnDate(date: string): Promise<Override[]>;
+  listExamsBetween(from: string, to: string): Promise<ExamSlot[]>;
   saveOverride(override: Override): Promise<Override>;
   removeOverride(scheduleId: string, date: string): Promise<boolean>;
 }
@@ -187,6 +200,37 @@ export class SupabaseSchedulesRepo implements SchedulesRepo {
       .lte('on_date', to);
     if (error) throw dbError();
     return (data as OverrideRow[]).map(toOverride);
+  }
+
+  async listExamsBetween(from: string, to: string): Promise<ExamSlot[]> {
+    const { data, error } = await this.db
+      .from('sessions')
+      .select('id, course_id, room_id, on_date, starts_at, ends_at, rooms(name), courses(code)')
+      .eq('kind', 'exam')
+      .gte('on_date', from)
+      .lte('on_date', to);
+    if (error) throw dbError();
+    return (
+      data as unknown as {
+        id: string;
+        course_id: string;
+        room_id: string;
+        on_date: string;
+        starts_at: string;
+        ends_at: string;
+        rooms: { name: string } | null;
+        courses: { code: string } | null;
+      }[]
+    ).map((row) => ({
+      id: row.id,
+      courseId: row.course_id,
+      courseCode: row.courses?.code ?? '',
+      roomId: row.room_id,
+      roomName: row.rooms?.name ?? '',
+      onDate: row.on_date,
+      startsAt: new Date(row.starts_at),
+      endsAt: new Date(row.ends_at),
+    }));
   }
 
   async listOverridesOnDate(date: string): Promise<Override[]> {
