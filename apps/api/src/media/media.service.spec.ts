@@ -6,7 +6,7 @@ import { MediaService, type MediaAuthRequest } from './media.service.js';
 
 const NOW = new Date('2026-10-24T02:00:00Z');
 const TOKEN_SECRET = 't'.repeat(32);
-const PLAYBACK_SECRET = 'p'.repeat(32);
+const SERVER_SECRET = 'p'.repeat(32);
 
 const camA: CameraIdentity = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -40,7 +40,7 @@ const session: LiveSession = {
 function setup(opts: { live?: boolean; secrets?: boolean } = {}) {
   const config = {
     mediaTokenSecret: opts.secrets === false ? null : TOKEN_SECRET,
-    mediaPlaybackSecret: opts.secrets === false ? null : PLAYBACK_SECRET,
+    mediaServerSecret: opts.secrets === false ? null : SERVER_SECRET,
   } as AppConfig;
   const service = new MediaService(
     { findByTokenHash: async (hash: string) => tokens[hash] ?? null },
@@ -141,7 +141,7 @@ describe('MediaService.authorize คนดูสด', () => {
 describe('MediaService.authorize อื่น ๆ', () => {
   it('playback ด้วย secret ของ API ผ่าน ค่าอื่นไม่ผ่าน', async () => {
     const service = setup();
-    await expect(service.authorize({ action: 'playback', token: PLAYBACK_SECRET })).resolves.toBe(
+    await expect(service.authorize({ action: 'playback', token: SERVER_SECRET })).resolves.toBe(
       true,
     );
     await expect(service.authorize({ action: 'playback', token: 'x'.repeat(32) })).resolves.toBe(
@@ -149,14 +149,21 @@ describe('MediaService.authorize อื่น ๆ', () => {
     );
     await expect(service.authorize({ action: 'playback', token: viewer() })).resolves.toBe(false);
     await expect(
-      setup({ secrets: false }).authorize({ action: 'playback', token: PLAYBACK_SECRET }),
+      setup({ secrets: false }).authorize({ action: 'playback', token: SERVER_SECRET }),
     ).resolves.toBe(false);
   });
 
-  it('api / metrics / pprof ไม่ผ่านเสมอ', async () => {
+  it('control API ด้วย secret ของ API ผ่าน (ใช้ตัดสายตอนหมดคาบ) ค่าอื่นไม่ผ่าน', async () => {
     const service = setup();
-    for (const action of ['api', 'metrics', 'pprof']) {
-      await expect(service.authorize({ action, token: PLAYBACK_SECRET })).resolves.toBe(false);
+    await expect(service.authorize({ action: 'api', token: SERVER_SECRET })).resolves.toBe(true);
+    await expect(service.authorize({ action: 'api', token: viewer() })).resolves.toBe(false);
+    await expect(service.authorize({ action: 'api' })).resolves.toBe(false);
+  });
+
+  it('metrics / pprof ไม่ผ่านเสมอ', async () => {
+    const service = setup();
+    for (const action of ['metrics', 'pprof']) {
+      await expect(service.authorize({ action, token: SERVER_SECRET })).resolves.toBe(false);
     }
   });
 });

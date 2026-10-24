@@ -27,6 +27,7 @@ function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?:
   const added: FrameJob[] = [];
   const repo: CameraRepo = {
     findByTokenHash: async () => null,
+    findById: async () => null,
     touch: async () => undefined,
     liveSession: async (roomId, opensBy, now) => {
       calls.push({ roomId, opensBy, now });
