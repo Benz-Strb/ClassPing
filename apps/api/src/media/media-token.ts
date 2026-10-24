@@ -7,6 +7,10 @@ export interface MediaTokenPayload {
   act: 'read' | 'clip' | 'publish';
   sid: string;
   exp: number;
+  // เฉพาะ clip: ช่วงที่ดู/ดาวน์โหลด และเป็นการดาวน์โหลดไหม
+  start?: string;
+  dur?: number;
+  dl?: boolean;
 }
 
 const sign = (secret: string, body: string) =>
