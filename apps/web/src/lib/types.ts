@@ -125,6 +125,18 @@ export interface LiveTicket {
   session: LiveSession;
 }
 
+// กรอบหน้าล่าสุดจากกล้องเช็คชื่อ box เป็นสัดส่วนของภาพ [ซ้าย, บน, ขวา, ล่าง]
+export interface LiveFaces {
+  at: string | null;
+  faces: {
+    n: number;
+    box: [number, number, number, number];
+    kind: "match" | "review" | "unknown";
+    name: string | null;
+    studentCode: string | null;
+  }[];
+}
+
 export type AttendanceStatus = "present" | "late" | "absent" | "leave" | "pending";
 
 export interface AttendanceRow {
