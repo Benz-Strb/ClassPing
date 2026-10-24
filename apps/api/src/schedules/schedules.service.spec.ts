@@ -544,11 +544,16 @@ describe('SchedulesService ชนกับคาบสอบ', () => {
     });
   });
 
-  it('ตารางของวิชาที่สอบอยู่ ทับเวลาสอบคนละห้อง ได้ TIME_CONFLICT', async () => {
-    const { otherTeacher, cs102, service, monday } = withExam();
-    expect((await rejection(service.create(otherTeacher, cs102.id, monday()))).code).toBe(
-      'TIME_CONFLICT',
-    );
+  it('ตารางของวิชาที่สอบอยู่ ทับเวลาสอบตัวเองได้ (วันสอบคาบสอบแทนคาบเรียน)', async () => {
+    const { otherTeacher, cs102, roomB, service, monday } = withExam();
+    await expect(service.create(otherTeacher, cs102.id, monday())).resolves.toBeTruthy();
+    await expect(
+      service.create(
+        otherTeacher,
+        cs102.id,
+        monday({ roomId: roomB, weekday: 1, startTime: '13:00', endTime: '14:00' }),
+      ),
+    ).resolves.toBeTruthy();
   });
 
   it('ห้องอื่นหรือเวลาไม่ทับ สร้างได้', async () => {

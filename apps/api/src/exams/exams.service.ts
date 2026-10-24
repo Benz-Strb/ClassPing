@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { z } from 'zod';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
@@ -28,6 +28,7 @@ import {
   toInstant,
   weekdayOf,
 } from '../sessions/plan-day.js';
+import { SessionsService } from '../sessions/sessions.service.js';
 import type { AppUser } from '../users/users.service.js';
 import {
   EXAMS_REPO,
@@ -80,6 +81,8 @@ const examSchema = z
       .array(z.string(), { error: 'ข้อมูลคนคุมสอบไม่ถูกต้อง' })
       .max(MAX_PROCTORS, { error: `คนคุมสอบได้ไม่เกิน ${MAX_PROCTORS} คน` })
       .default([]),
+    // อาจารย์ยืนยันแล้วว่าให้คาบสอบแทนคาบเรียนที่ทับในวันนั้น
+    replaceClasses: z.boolean({ error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง' }).default(false),
   })
   .refine((e) => e.absentAfterMin === null || e.absentAfterMin > e.lateAfterMin, {
     error: 'เวลาตัดขาดต้องมากกว่าเวลาตัดสาย',
@@ -89,13 +92,19 @@ type ExamInput = z.infer<typeof examSchema>;
 
 const examNotFound = () => new AppError(404, 'EXAM_NOT_FOUND', 'ไม่พบคาบสอบนี้');
 
+type Slot = { startsAt: Date; endsAt: Date };
+
 @Injectable()
 export class ExamsService {
+  private readonly logger = new Logger(ExamsService.name);
+
   constructor(
     private readonly courses: CoursesService,
     private readonly rooms: RoomsRepo,
     @Inject(SCHEDULES_REPO) private readonly schedules: SchedulesRepo,
     @Inject(EXAMS_REPO) private readonly repo: ExamsRepo,
+    @Inject(SessionsService)
+    private readonly sessions: Pick<SessionsService, 'clearClassesFor' | 'syncCourse'>,
     @Inject(CLOCK) private readonly now: Clock,
     @Optional() @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
@@ -108,8 +117,10 @@ export class ExamsService {
   async create(user: AppUser, courseId: string, body: unknown): Promise<ExamView> {
     await this.courses.getOwned(user, courseId);
     const input = parseBody(examSchema, body);
-    const exam = await this.validate(courseId, input, null);
+    const { exam, replaces } = await this.validate(courseId, input, null);
+    if (replaces) await this.sessions.clearClassesFor(courseId, exam);
     const id = await this.repo.insert(exam, input.proctorIds);
+    await this.sync(courseId);
     return this.view((await this.repo.findById(id))!);
   }
 
@@ -130,9 +141,11 @@ export class ExamsService {
       if (!same) throw sessionStarted();
       await this.repo.setProctors(examId, await this.checkProctors(input.proctorIds));
     } else {
-      const exam = await this.validate(current.courseId, input, examId);
+      const { exam, replaces } = await this.validate(current.courseId, input, examId);
+      if (replaces) await this.sessions.clearClassesFor(current.courseId, exam);
       await this.repo.update(examId, exam);
       await this.repo.setProctors(examId, input.proctorIds);
+      await this.sync(current.courseId);
     }
     return this.view((await this.repo.findById(examId))!);
   }
@@ -141,6 +154,17 @@ export class ExamsService {
     const current = await this.owned(user, examId);
     if (this.locked(current)) throw sessionStarted();
     await this.repo.remove(examId);
+    // คาบเรียนที่เคยถูกแทนกลับมา
+    await this.sync(current.courseId);
+  }
+
+  // บันทึกไปแล้ว ถ้าสร้างคาบไม่สำเร็จ รอบทุกชั่วโมงจะสร้างให้เอง
+  private async sync(courseId: string) {
+    try {
+      await this.sessions.syncCourse(courseId);
+    } catch (error) {
+      this.logger.warn(`สร้างคาบของวิชา ${courseId} ไม่สำเร็จ: ${String(error)}`);
+    }
   }
 
   // ใช้ให้อาจารย์เลือกคนคุมสอบ
@@ -178,8 +202,18 @@ export class ExamsService {
       throw new AppError(400, 'ROOM_NOT_FOUND', 'ไม่พบห้องนี้');
     }
     await this.checkProctors(input.proctorIds);
-    await this.checkClash(exam, selfId);
-    return exam;
+    const replaced = await this.checkClash(exam, selfId);
+    if (replaced.length && !input.replaceClasses) {
+      const times = replaced
+        .map((c) => `${bangkokTime(c.startsAt)}-${bangkokTime(c.endsAt)}`)
+        .join(', ');
+      throw new AppError(
+        409,
+        'REPLACES_CLASS',
+        `คาบสอบนี้ทับคาบเรียน ${times} ของวันนั้น คาบเรียนจะถูกแทนด้วยคาบสอบ`,
+      );
+    }
+    return { exam, replaces: replaced.length > 0 };
   }
 
   private async checkProctors(ids: string[]): Promise<string[]> {
@@ -192,25 +226,29 @@ export class ExamsService {
     return unique;
   }
 
-  // ทับห้องกับคาบเรียน/คาบสอบอื่นวันนั้น หรือทับเวลาเรียนของวิชาเดียวกัน
-  private async checkClash(exam: NewExam, selfId: string | null) {
+  // ทับห้องของวิชาอื่น หรือทับคาบสอบอื่นของวิชาเดียวกัน = ห้าม
+  // ทับคาบเรียนของวิชาเดียวกัน = คืนรายการไว้ให้อาจารย์ยืนยันว่าจะแทน
+  private async checkClash(exam: NewExam, selfId: string | null): Promise<Slot[]> {
     const date = exam.onDate;
     const schedules = await this.schedules.listByWeekday(weekdayOf(date));
     const classes = planDay(date, schedules, await this.schedules.listOverridesOnDate(date));
     const exams = (await this.schedules.listExamsBetween(date, date)).filter(
       (e) => e.id !== selfId,
     );
+    const replaced = classes.filter((c) => c.courseId === exam.courseId && overlaps(c, exam));
     const slots = [
-      ...classes.map((c) => ({
-        ...c,
-        courseCode: schedules.find((s) => s.id === c.scheduleId)?.courseCode ?? '',
-      })),
+      ...classes
+        .filter((c) => c.courseId !== exam.courseId)
+        .map((c) => ({
+          ...c,
+          courseCode: schedules.find((s) => s.id === c.scheduleId)?.courseCode ?? '',
+        })),
       ...exams,
     ];
     const hit = slots.find(
       (s) => (s.roomId === exam.roomId || s.courseId === exam.courseId) && overlaps(s, exam),
     );
-    if (!hit) return;
+    if (!hit) return replaced;
     const start = bangkokTime(hit.startsAt);
     const end = bangkokTime(hit.endsAt);
     if (hit.roomId !== exam.roomId) throw timeConflict(start, end);

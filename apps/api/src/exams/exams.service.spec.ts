@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { AppError } from '../common/app-error.js';
 import type { AppConfig } from '../config/config.js';
 import type { Course, CoursesRepo } from '../courses/courses.repo.js';
 import { CoursesService } from '../courses/courses.service.js';
@@ -103,6 +104,17 @@ function setup(openBeforeMin = 20) {
   } as unknown as SchedulesRepo;
 
   const config = { cameraOpenBeforeMin: openBeforeMin } as AppConfig;
+  const sessionCalls: string[] = [];
+  const sessions = {
+    opened: false,
+    clearClassesFor: async (courseId: string, slot: { onDate: string }) => {
+      if (sessions.opened)
+        throw new AppError(400, 'SESSION_STARTED', 'คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว');
+      sessionCalls.push(`clear ${courseId === cs101.id ? 'CS101' : 'CS102'} ${slot.onDate}`);
+    },
+    syncCourse: async (courseId: string) =>
+      void sessionCalls.push(`sync ${courseId === cs101.id ? 'CS101' : 'CS102'}`),
+  };
   const service = new ExamsService(
     new CoursesService({
       findById: async (id: string) => courseRows.get(id) ?? null,
@@ -112,6 +124,7 @@ function setup(openBeforeMin = 20) {
     } as unknown as RoomsRepo,
     schedulesRepo,
     examsRepo,
+    sessions,
     () => NOW,
     config,
   );
@@ -155,6 +168,8 @@ function setup(openBeforeMin = 20) {
     roomB,
     service,
     config,
+    sessions,
+    sessionCalls,
     overrides,
     addSchedule,
     body,
@@ -241,10 +256,60 @@ describe('ExamsService ห้องและเวลาชน', () => {
     await expect(service.create(owner, cs101.id, body({ roomId: roomA }))).resolves.toBeTruthy();
   });
 
-  it('ทับเวลาเรียนของวิชาเดียวกันคนละห้อง ได้ TIME_CONFLICT', async () => {
-    const { owner, cs101, roomA, service, addSchedule, body } = setup();
+  it('ทับคาบเรียนของวิชาตัวเอง ต้องยืนยันก่อน (409 REPLACES_CLASS) ทั้งห้องเดิมและคนละห้อง', async () => {
+    const { owner, cs101, roomA, service, addSchedule, body, sessionCalls } = setup();
+    addSchedule({ courseId: cs101.id, courseCode: 'CS101', roomId: roomA, endTime: '10:30' });
+    for (const roomId of [roomA, undefined]) {
+      const patch = roomId ? { roomId } : {};
+      expect(await rejection(service.create(owner, cs101.id, body(patch)))).toEqual({
+        status: 409,
+        code: 'REPLACES_CLASS',
+        message: 'คาบสอบนี้ทับคาบเรียน 09:00-10:30 ของวันนั้น คาบเรียนจะถูกแทนด้วยคาบสอบ',
+      });
+    }
+    expect(sessionCalls).toEqual([]);
+  });
+
+  it('ยืนยันแล้ว เอาคาบเรียนที่ทับออกก่อนบันทึก แล้วสร้างคาบใหม่ของวิชา', async () => {
+    const { owner, cs101, roomA, service, addSchedule, body, sessionCalls } = setup();
     addSchedule({ courseId: cs101.id, courseCode: 'CS101', roomId: roomA });
-    expect((await rejection(service.create(owner, cs101.id, body()))).code).toBe('TIME_CONFLICT');
+    const exam = await service.create(
+      owner,
+      cs101.id,
+      body({ roomId: roomA, replaceClasses: true }),
+    );
+    expect(exam.room.id).toBe(roomA);
+    expect(sessionCalls).toEqual([`clear CS101 ${NEXT_MONDAY}`, 'sync CS101']);
+  });
+
+  it('คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว สร้างไม่ได้', async () => {
+    const { owner, cs101, service, addSchedule, body, sessions } = setup();
+    addSchedule({ courseId: cs101.id, courseCode: 'CS101' });
+    sessions.opened = true;
+    expect(
+      (await rejection(service.create(owner, cs101.id, body({ replaceClasses: true })))).code,
+    ).toBe('SESSION_STARTED');
+  });
+
+  it('ไม่ทับคาบเรียน ไม่ต้องยืนยัน และหลังแก้/ลบ สร้างคาบของวิชาใหม่ (คาบเรียนกลับมา)', async () => {
+    const { owner, cs101, service, body, sessionCalls } = setup();
+    const exam = await service.create(owner, cs101.id, body());
+    await service.update(owner, exam.id, body({ end: '12:30' }));
+    await service.remove(owner, exam.id);
+    expect(sessionCalls.filter((c) => c.startsWith('sync'))).toEqual([
+      'sync CS101',
+      'sync CS101',
+      'sync CS101',
+    ]);
+  });
+
+  it('คาบสอบของวิชาเดียวกันทับกันเอง ได้ TIME_CONFLICT', async () => {
+    const { owner, cs101, roomA, service, body } = setup();
+    await service.create(owner, cs101.id, body());
+    expect(
+      (await rejection(service.create(owner, cs101.id, body({ roomId: roomA, title: 'สอบย่อย' }))))
+        .code,
+    ).toBe('TIME_CONFLICT');
   });
 
   it('ทับห้องของคาบสอบอื่น ได้ ROOM_CONFLICT แต่แก้คาบสอบตัวเองไม่นับว่าชนกับตัวเอง', async () => {

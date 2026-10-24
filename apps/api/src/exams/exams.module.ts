@@ -3,12 +3,13 @@ import { CLOCK } from '../common/clock.js';
 import { CoursesModule } from '../courses/courses.module.js';
 import { RoomsModule } from '../rooms/rooms.module.js';
 import { SchedulesModule } from '../schedules/schedules.module.js';
+import { SessionsModule } from '../sessions/sessions.module.js';
 import { ExamsController } from './exams.controller.js';
 import { EXAMS_REPO, SupabaseExamsRepo } from './exams.repo.js';
 import { ExamsService } from './exams.service.js';
 
 @Module({
-  imports: [CoursesModule, RoomsModule, SchedulesModule],
+  imports: [CoursesModule, RoomsModule, SchedulesModule, SessionsModule],
   controllers: [ExamsController],
   providers: [
     ExamsService,

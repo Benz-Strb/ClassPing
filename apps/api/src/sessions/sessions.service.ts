@@ -12,6 +12,7 @@ import {
   cameraOpened,
   daysBetween,
   isDate,
+  overlaps,
   planDay,
   type PlannedSession,
 } from './plan-day.js';
@@ -56,9 +57,30 @@ export class SessionsService implements SessionSyncer {
   ) {}
 
   syncCourse(courseId: string): Promise<void> {
+    return this.enqueue(courseId, () => this.syncNow(courseId));
+  }
+
+  // คาบสอบแทนคาบเรียนของวิชาเดียวกันที่ทับ เอาคาบเรียนออกก่อนบันทึกคาบสอบ
+  // (ไม่งั้นชน unique course_id + starts_at) sync รอบหลังจะไม่สร้างกลับมาเพราะมีคาบสอบทับอยู่
+  clearClassesFor(
+    courseId: string,
+    slot: { onDate: string; startsAt: Date; endsAt: Date },
+  ): Promise<void> {
+    return this.enqueue(courseId, async () => {
+      const rows = await this.repo.listByCourse(courseId, slot.onDate, slot.onDate);
+      const hit = rows.filter((r) => r.kind === 'class' && overlaps(r, slot));
+      const now = this.now();
+      if (hit.some((r) => cameraOpened(r.startsAt, now, this.config?.cameraOpenBeforeMin))) {
+        throw new AppError(400, 'SESSION_STARTED', 'คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว แก้ไม่ได้');
+      }
+      await this.repo.remove(hit.map((r) => r.id));
+    });
+  }
+
+  private enqueue(courseId: string, task: () => Promise<void>): Promise<void> {
     const run = (this.queues.get(courseId) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.syncNow(courseId));
+      .then(task);
     this.queues.set(courseId, run);
     void run
       .finally(() => {
@@ -87,7 +109,15 @@ export class SessionsService implements SessionSyncer {
       }
     }
 
-    const existing = await this.repo.listByCourse(courseId, from, to, { classOnly: true });
+    // คาบสอบแทนคาบเรียนของวิชาเดียวกันที่ทับในวันนั้น และ sync ไม่แตะคาบสอบ
+    const rows = await this.repo.listByCourse(courseId, from, to);
+    const exams = rows.filter((r) => r.kind === 'exam');
+    for (const [key, session] of planned) {
+      if (exams.some((e) => e.onDate === session.onDate && overlaps(e, session))) {
+        planned.delete(key);
+      }
+    }
+    const existing = rows.filter((r) => r.kind === 'class');
     const existingKeys = new Set(existing.map(keyOf));
     const toRemove: string[] = [];
     const toUpdate: { id: string; session: PlannedSession }[] = [];

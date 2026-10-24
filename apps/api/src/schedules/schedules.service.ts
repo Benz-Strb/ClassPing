@@ -91,17 +91,20 @@ export function checkTimes(start: string, end: string, label = 'เวลาเ�
   }
 }
 
-// คาบเรียนของตารางนี้ทับห้องสอบ หรือทับเวลาสอบของวิชาเดียวกัน
+// คาบเรียนของตารางนี้ทับห้องสอบของวิชาอื่น
+// คาบสอบของวิชาเดียวกันไม่นับ เพราะวันนั้นคาบสอบแทนคาบเรียน
 function checkExamClash(session: PlannedSession | undefined, exams: ExamSlot[]) {
   if (!session) return;
   const hit = exams.find(
-    (e) => (e.roomId === session.roomId || e.courseId === session.courseId) && overlaps(e, session),
+    (e) => e.courseId !== session.courseId && e.roomId === session.roomId && overlaps(e, session),
   );
   if (!hit) return;
-  const start = bangkokTime(hit.startsAt);
-  const end = bangkokTime(hit.endsAt);
-  if (hit.roomId === session.roomId) throw roomConflict(hit.roomName, hit.courseCode, start, end);
-  throw timeConflict(start, end);
+  throw roomConflict(
+    hit.roomName,
+    hit.courseCode,
+    bangkokTime(hit.startsAt),
+    bangkokTime(hit.endsAt),
+  );
 }
 
 @Injectable()
