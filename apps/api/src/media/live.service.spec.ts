@@ -1,6 +1,8 @@
 import type { AppConfig } from '../config/config.js';
 import type { AppUser } from '../users/users.service.js';
 import type { LiveRepo } from './live.repo.js';
+import { LiveFaces } from '../attendance/live-faces.js';
+import type { RosterService } from '../courses/roster.service.js';
 import { LiveService } from './live.service.js';
 import { verifyMediaToken } from './media-token.js';
 import type { WatchableSession } from './video-access.js';
@@ -41,7 +43,10 @@ const make = (patch: Partial<WatchableSession>): WatchableSession => ({
   ...patch,
 });
 
-function setup(sessions: WatchableSession[], opts: { secret?: boolean } = {}) {
+function setup(
+  sessions: WatchableSession[],
+  opts: { secret?: boolean; current?: string | null } = {},
+) {
   const views: string[] = [];
   const dates: string[] = [];
   const repo: LiveRepo = {
@@ -57,7 +62,29 @@ function setup(sessions: WatchableSession[], opts: { secret?: boolean } = {}) {
     mediaWebrtcUrl: 'http://media.test:8889',
     cameraOpenBeforeMin: 20,
   } as AppConfig;
-  return { service: new LiveService(repo, config, () => NOW), views, dates };
+  const liveFaces = new LiveFaces();
+  const roster = {
+    entries: async () => [
+      { studentCode: '66000001', userId: 'ua', fullName: 'สมชาย ใจดี' },
+      { studentCode: '66000002', userId: null, fullName: null },
+    ],
+  } as unknown as Pick<RosterService, 'entries'>;
+  // คาบปัจจุบันของห้อง ค่าเริ่มต้น = คาบในห้องนั้นที่กล้องเปิดอยู่ตอนนี้
+  const cameras = {
+    liveSessionFor: async (camera: { roomId: string }) => {
+      if (opts.current !== undefined)
+        return opts.current === null ? null : ({ id: opts.current } as never);
+      const open = sessions.find(
+        (s) =>
+          s.roomId === camera.roomId &&
+          s.startsAt.getTime() - 20 * 60_000 <= NOW.getTime() &&
+          NOW < s.endsAt,
+      );
+      return open ? ({ id: open.id } as never) : null;
+    },
+  };
+  const service = new LiveService(repo, config, () => NOW, liveFaces, roster, cameras);
+  return { service, views, dates, liveFaces };
 }
 
 async function rejection(promise: Promise<unknown>) {
@@ -74,12 +101,13 @@ describe('LiveService.listForDate', () => {
   const classA = make({ id: 'a' });
   const examB = make({
     id: 'b',
+    roomId: 'r2',
     kind: 'exam',
     title: 'สอบ',
     teacherId: other.id,
     proctorIds: [proctor.id],
   });
-  const classC = make({ id: 'c', teacherId: other.id, cameraId: null });
+  const classC = make({ id: 'c', roomId: 'r3', teacherId: other.id, cameraId: null });
 
   it('แต่ละคนเห็นเฉพาะคาบที่ดูได้', async () => {
     const { service } = setup([classA, examB, classC]);
@@ -108,8 +136,8 @@ describe('LiveService.listForDate', () => {
   });
 
   it('กล้องเปิดก่อนเวลา 20 นาที ถือว่าเปิดอยู่ หมดคาบแล้วไม่เปิด', async () => {
-    const soon = make({ id: 'soon', startsAt: new Date('2026-10-24T02:25:00Z') });
-    const ended = make({ id: 'ended', endsAt: new Date('2026-10-24T02:10:00Z') });
+    const soon = make({ id: 'soon', roomId: 'r2', startsAt: new Date('2026-10-24T02:25:00Z') });
+    const ended = make({ id: 'ended', roomId: 'r3', endsAt: new Date('2026-10-24T02:10:00Z') });
     const [s, e] = await setup([soon, ended]).service.listForDate(admin, '2026-10-24');
     expect(s).toMatchObject({ status: 'upcoming', cameraOpen: true });
     expect(e).toMatchObject({ status: 'ended', cameraOpen: false });
@@ -159,10 +187,60 @@ describe('LiveService.startLive', () => {
     expect((await rejection(setup([noCam]).service.startLive(owner, S1))).code).toBe('NO_CAMERA');
   });
 
+  it('ห้องยังมีคาบก่อนหน้าอยู่ (กล้องเปิดก่อนเวลา) ขอดูไม่ได้ 409 NOT_LIVE และรายการขึ้นว่ายังไม่เปิด', async () => {
+    const before = '33333333-3333-3333-3333-333333333333';
+    const { service } = setup([make({})], { current: before });
+    expect((await rejection(service.startLive(owner, S1))).code).toBe('NOT_LIVE');
+    const [row] = await service.listForDate(owner, '2026-10-24');
+    expect(row.cameraOpen).toBe(false);
+  });
+
   it('ยังไม่ได้ตั้ง MEDIA_TOKEN_SECRET ได้ 503', async () => {
     const result = await rejection(
       setup([make({})], { secret: false }).service.startLive(owner, S1),
     );
     expect(result).toEqual({ status: 503, code: 'MEDIA_NOT_CONFIGURED' });
+  });
+});
+
+describe('LiveService.faces', () => {
+  it('ตอบกรอบล่าสุด เรียงซ้ายไปขวาพร้อมเลขที่ ชื่อ รหัส และไม่บันทึกการเปิดดูซ้ำ', async () => {
+    const { service, liveFaces, views } = setup([make({})]);
+    liveFaces.set(S1, new Date(NOW.getTime() - 500), [
+      { box: [0.6, 0.2, 0.7, 0.3], userId: null, kind: 'unknown' },
+      { box: [0.1, 0.2, 0.2, 0.3], userId: 'ua', kind: 'match' },
+      { box: [0.3, 0.2, 0.4, 0.3], userId: 'ua', kind: 'review' },
+    ]);
+    expect(await service.faces(owner, S1)).toEqual({
+      at: new Date(NOW.getTime() - 500).toISOString(),
+      faces: [
+        {
+          n: 1,
+          box: [0.1, 0.2, 0.2, 0.3],
+          kind: 'match',
+          name: 'สมชาย ใจดี',
+          studentCode: '66000001',
+        },
+        {
+          n: 2,
+          box: [0.3, 0.2, 0.4, 0.3],
+          kind: 'review',
+          name: 'สมชาย ใจดี',
+          studentCode: '66000001',
+        },
+        { n: 3, box: [0.6, 0.2, 0.7, 0.3], kind: 'unknown', name: null, studentCode: null },
+      ],
+    });
+    expect(views).toEqual([]);
+  });
+
+  it('ยังไม่มีผลหรือผลเก่าเกิน ได้รายการว่าง', async () => {
+    const { service } = setup([make({})]);
+    expect(await service.faces(owner, S1)).toEqual({ at: null, faces: [] });
+  });
+
+  it('ไม่มีสิทธิ์ดูคาบนี้ได้ 404', async () => {
+    const { service } = setup([make({})]);
+    expect((await rejection(service.faces(other, S1))).code).toBe('SESSION_NOT_FOUND');
   });
 });

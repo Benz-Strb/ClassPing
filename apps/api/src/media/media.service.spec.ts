@@ -151,6 +151,11 @@ describe('MediaService.authorize คนดูสด', () => {
     await expect(service.authorize(read(viewer({ act: 'clip' })))).resolves.toBe(false);
   });
 
+  it('token ของคาบอื่น (ห้องนี้เปลี่ยนคาบแล้ว) หรือห้องไม่มีคาบแล้ว ไม่ผ่าน', async () => {
+    await expect(setup().authorize(read(viewer({ sid: 's0' })))).resolves.toBe(false);
+    await expect(setup({ live: false }).authorize(read(viewer()))).resolves.toBe(false);
+  });
+
   it('อ่านผ่าน RTSP ไม่ผ่าน (ดูได้ทางเว็บเท่านั้น)', async () => {
     await expect(setup().authorize({ ...read(viewer()), protocol: 'rtsp' })).resolves.toBe(false);
   });

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AttendanceModule } from '../attendance/attendance.module.js';
 import { CameraModule } from '../camera/camera.module.js';
+import { CoursesModule } from '../courses/courses.module.js';
 import { CLOCK } from '../common/clock.js';
 import { HttpMediaControl, MEDIA_CONTROL } from './media-control.client.js';
 import { MediaWatchdogRunner } from './media-watchdog.runner.js';
@@ -10,7 +12,7 @@ import { MediaController } from './media.controller.js';
 import { MediaService } from './media.service.js';
 
 @Module({
-  imports: [CameraModule],
+  imports: [CameraModule, AttendanceModule, CoursesModule],
   controllers: [MediaController, LiveController],
   providers: [
     MediaService,

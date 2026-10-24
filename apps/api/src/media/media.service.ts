@@ -4,7 +4,7 @@ import { CAMERA_REPO, type CameraRepo } from '../camera/camera.repo.js';
 import { CameraService } from '../camera/camera.service.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
-import { cameraPath } from './media-path.js';
+import { CAMERA_PATH, cameraPath } from './media-path.js';
 import { verifyMediaToken } from './media-token.js';
 
 // ข้อมูลที่ MediaMTX ส่งมาถามทุกครั้งที่มีคนเชื่อมต่อ (authMethod: http)
@@ -40,7 +40,7 @@ export class MediaService {
       case 'publish':
         return this.canPublish(req);
       case 'read':
-        return this.canRead(req);
+        return await this.canRead(req);
       // playback = API ดึงคลิป, api = API ตัดสายตอนหมดคาบ
       case 'playback':
       case 'api': {
@@ -67,10 +67,15 @@ export class MediaService {
   }
 
   // คนดูสดใช้ token ที่ API ออกให้หลังตรวจสิทธิ์แล้ว (ส่งมาเป็น Bearer หรือช่อง password)
-  private canRead(req: MediaAuthRequest): boolean {
+  // token ผูกกับคาบ ต้องเป็นคาบที่ห้องนั้นกำลังใช้กล้องอยู่ตอนต่อ
+  private async canRead(req: MediaAuthRequest): Promise<boolean> {
     const secret = this.config.mediaTokenSecret;
     if (secret === null || req.protocol !== 'webrtc') return false;
     const payload = verifyMediaToken(secret, req.token || req.password || '', this.now());
-    return payload !== null && payload.act === 'read' && payload.path === req.path;
+    if (!payload || payload.act !== 'read' || payload.path !== req.path) return false;
+    const cameraId = CAMERA_PATH.exec(req.path ?? '')?.[1];
+    const camera = cameraId ? await this.cameras.findById(cameraId) : null;
+    if (!camera) return false;
+    return (await this.sessions.liveSessionFor(camera, this.now()))?.id === payload.sid;
   }
 }

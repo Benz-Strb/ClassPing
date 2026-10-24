@@ -9,6 +9,7 @@ import type {
 } from './attendance.repo.js';
 import type { FrameJob } from './frame-queue.js';
 import { FrameProcessor, type FrameDeps } from './frame.processor.js';
+import { LiveFaces } from './live-faces.js';
 import { RejectedGuesses } from './rejected-guesses.js';
 
 const POSES = ['front', 'left', 'right', 'up', 'down'];
@@ -27,8 +28,12 @@ const context: SessionContext = {
   rules: { lateAfterMin: 15, absentAfterMin: null, outOfRoomLimitMin: 15 },
 };
 
-const face = (embedding: number[], crop: string | null = 'Y3JvcA=='): DetectedFace => ({
-  bbox: [0, 0, 100, 100],
+const face = (
+  embedding: number[],
+  crop: string | null = 'Y3JvcA==',
+  bbox: [number, number, number, number] = [0, 0, 100, 100],
+): DetectedFace => ({
+  bbox,
   detScore: 0.9,
   embedding,
   pose: null,
@@ -96,12 +101,14 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
   };
   const config = { matchAcceptMin: 0.5, matchReviewMin: 0.36, matchLog: false } as AppConfig;
   const rejected = new RejectedGuesses(() => new Date(START.getTime() + 3_600_000));
+  const liveFaces = new LiveFaces();
   const processor = new FrameProcessor(
     repo,
     deps,
     config,
     () => new Date(START.getTime() + 3_600_000),
     rejected,
+    liveFaces,
   );
 
   return {
@@ -118,6 +125,7 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
     },
     detectCalls: () => detectCalls,
     rejected,
+    liveFaces,
     // จำลองอาจารย์กดแก้ระหว่างที่กล้องกำลังอัปโหลดรูป
     whileWriting: (fn: () => void) => (beforeWrite = fn),
   };
@@ -271,5 +279,34 @@ describe('FrameProcessor', () => {
     t.show([face(A)]);
     await t.processor.process(job(6));
     expect(t.rows.get('a')?.status).toBe('present');
+  });
+});
+
+describe('FrameProcessor กรอบหน้าสำหรับกล้องสด', () => {
+  it('เก็บกรอบทุกหน้าในเฟรมเป็นสัดส่วนของภาพ พร้อมว่าเป็นใคร/ไม่แน่ใจ/ไม่รู้จัก', async () => {
+    const { processor, show, liveFaces } = setup();
+    show([
+      face(A, 'Y3JvcA==', [64, 48, 128, 96]),
+      face(between, 'Y3JvcA==', [320, 240, 384, 288]),
+      face(stranger, 'Y3JvcA==', [0, 0, 64, 48]),
+    ]);
+    await processor.process(job(1));
+    expect(liveFaces.get('s1', new Date(job(1).receivedAt))).toEqual({
+      at: new Date(job(1).receivedAt),
+      faces: [
+        { box: [0.1, 0.1, 0.2, 0.2], userId: 'a', kind: 'match' },
+        { box: [0.5, 0.5, 0.6, 0.6], userId: 'a', kind: 'review' },
+        { box: [0, 0, 0.1, 0.1], userId: null, kind: 'unknown' },
+      ],
+    });
+  });
+
+  it('เฟรมที่ไม่มีหน้า ล้างกรอบเก่า', async () => {
+    const { processor, show, liveFaces } = setup();
+    show([face(A)]);
+    await processor.process(job(1));
+    show([]);
+    await processor.process(job(1));
+    expect(liveFaces.get('s1', new Date(job(1).receivedAt))?.faces).toEqual([]);
   });
 });
