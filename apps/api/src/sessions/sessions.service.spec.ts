@@ -306,25 +306,39 @@ describe('SessionsService กับคาบสอบ', () => {
     addSchedule(); // จันทร์ 09:00-12:00
     addSchedule({ weekday: 1, startTime: '13:00', endTime: '15:00' });
     await service.syncCourse(course.id);
-    await service.clearClassesFor(course.id, {
+    const slot = {
       onDate: NEXT_MONDAY,
       startsAt: new Date('2026-10-26T03:00:00Z'),
       endsAt: new Date('2026-10-26T04:00:00Z'),
-    });
+    };
+    await service.clearClassesFor(course.id, slot, async () => undefined);
     expect(sessions().map((s) => s.startsAt)).toEqual([new Date('2026-10-26T06:00:00Z')]);
+  });
+
+  it('clearClassesFor บันทึกคาบสอบในคิวเดียวกัน sync ที่แทรกมาไม่สร้างคาบเรียนคืน', async () => {
+    const { course, repo, service, addSchedule, sessions } = setup();
+    addSchedule(); // จันทร์ 09:00-12:00
+    await service.syncCourse(course.id);
+    const midterm = exam(course.id, NEXT_MONDAY, '2026-10-26T02:00:00Z', '2026-10-26T04:00:00Z');
+    const replacing = service.clearClassesFor(course.id, midterm, async () => {
+      await Promise.resolve();
+      repo.rows.set(midterm.id, midterm);
+    });
+    const hourly = service.syncCourse(course.id);
+    await Promise.all([replacing, hourly]);
+    expect(sessions().map((s) => s.kind)).toEqual(['exam']);
   });
 
   it('clearClassesFor คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว ได้ SESSION_STARTED และไม่ลบ', async () => {
     const { course, service, addSchedule, sessions } = setup(20);
     addSchedule({ weekday: 2, startTime: '10:15', endTime: '12:00' });
     await service.syncCourse(course.id);
-    const result = await rejection(
-      service.clearClassesFor(course.id, {
-        onDate: TODAY,
-        startsAt: new Date('2026-10-20T04:00:00Z'),
-        endsAt: new Date('2026-10-20T05:00:00Z'),
-      }),
-    );
+    const slot = {
+      onDate: TODAY,
+      startsAt: new Date('2026-10-20T04:00:00Z'),
+      endsAt: new Date('2026-10-20T05:00:00Z'),
+    };
+    const result = await rejection(service.clearClassesFor(course.id, slot, async () => undefined));
     expect(result.code).toBe('SESSION_STARTED');
     expect(sessions()).toHaveLength(1);
   });

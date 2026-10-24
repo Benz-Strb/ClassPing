@@ -117,10 +117,17 @@ export class ExamsService {
   async create(user: AppUser, courseId: string, body: unknown): Promise<ExamView> {
     await this.courses.getOwned(user, courseId);
     const input = parseBody(examSchema, body);
-    const { exam, replaces } = await this.validate(courseId, input, null);
-    if (replaces) await this.sessions.clearClassesFor(courseId, exam);
-    const id = await this.repo.insert(exam, input.proctorIds);
-    await this.sync(courseId);
+    const { exam, replaces, proctorIds } = await this.validate(courseId, input, null);
+    let id = '';
+    const save = async () => {
+      id = await this.repo.insert(exam, proctorIds);
+    };
+    try {
+      await (replaces ? this.sessions.clearClassesFor(courseId, exam, save) : save());
+    } finally {
+      // บันทึกไม่สำเร็จ คาบเรียนที่เอาออกไปแล้วก็กลับมา
+      await this.sync(courseId);
+    }
     return this.view((await this.repo.findById(id))!);
   }
 
@@ -141,11 +148,16 @@ export class ExamsService {
       if (!same) throw sessionStarted();
       await this.repo.setProctors(examId, await this.checkProctors(input.proctorIds));
     } else {
-      const { exam, replaces } = await this.validate(current.courseId, input, examId);
-      if (replaces) await this.sessions.clearClassesFor(current.courseId, exam);
-      await this.repo.update(examId, exam);
-      await this.repo.setProctors(examId, input.proctorIds);
-      await this.sync(current.courseId);
+      const { exam, replaces, proctorIds } = await this.validate(current.courseId, input, examId);
+      const save = async () => {
+        await this.repo.update(examId, exam);
+        await this.repo.setProctors(examId, proctorIds);
+      };
+      try {
+        await (replaces ? this.sessions.clearClassesFor(current.courseId, exam, save) : save());
+      } finally {
+        await this.sync(current.courseId);
+      }
     }
     return this.view((await this.repo.findById(examId))!);
   }
@@ -201,7 +213,7 @@ export class ExamsService {
     if (!UUID.test(input.roomId) || !(await this.rooms.findById(input.roomId))) {
       throw new AppError(400, 'ROOM_NOT_FOUND', 'ไม่พบห้องนี้');
     }
-    await this.checkProctors(input.proctorIds);
+    const proctorIds = await this.checkProctors(input.proctorIds);
     const replaced = await this.checkClash(exam, selfId);
     if (replaced.length && !input.replaceClasses) {
       const times = replaced
@@ -213,7 +225,7 @@ export class ExamsService {
         `คาบสอบนี้ทับคาบเรียน ${times} ของวันนั้น คาบเรียนจะถูกแทนด้วยคาบสอบ`,
       );
     }
-    return { exam, replaces: replaced.length > 0 };
+    return { exam, replaces: replaced.length > 0, proctorIds };
   }
 
   private async checkProctors(ids: string[]): Promise<string[]> {
