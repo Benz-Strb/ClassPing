@@ -14,6 +14,7 @@ services:
       - "8889:8889"
       - "8189:8189/udp"
       - "127.0.0.1:9996:9996"
+      - "127.0.0.1:9997:9997"
     volumes:
       - ./services/media/mediamtx.yml:/mediamtx.yml:ro
       - ./recordings:/recordings
