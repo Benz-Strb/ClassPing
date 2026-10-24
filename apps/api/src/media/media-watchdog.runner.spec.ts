@@ -13,6 +13,7 @@ const cameras: Record<string, CameraIdentity> = {
 };
 
 function setup(conns: MediaConn[], opts: { secret?: boolean; failList?: boolean } = {}) {
+  const current = { id: 's1' };
   const kicked: string[] = [];
   const lookups: string[] = [];
   const control: MediaControl = {
@@ -32,12 +33,12 @@ function setup(conns: MediaConn[], opts: { secret?: boolean; failList?: boolean 
     },
     {
       liveSessionFor: async (camera: CameraIdentity) =>
-        camera.id === LIVE_CAM ? ({ id: 's1' } as never) : null,
+        camera.id === LIVE_CAM ? ({ id: current.id } as never) : null,
     },
     { mediaServerSecret: opts.secret === false ? null : 's'.repeat(32) } as AppConfig,
     () => new Date('2026-10-24T05:00:00Z'),
   );
-  return { runner, kicked, lookups };
+  return { runner, kicked, lookups, current };
 }
 
 const conn = (kind: 'rtsp' | 'webrtc', id: string, path: string, state = 'publish'): MediaConn => ({
@@ -90,5 +91,21 @@ describe('MediaWatchdogRunner', () => {
     expect(off.kicked).toEqual([]);
     const down = setup([], { failList: true });
     await expect(down.runner.run()).resolves.toBeUndefined();
+  });
+});
+
+describe('MediaWatchdogRunner เปลี่ยนคาบในห้องเดียวกัน', () => {
+  it('คาบเปลี่ยน ตัดคนดูที่ต่ออยู่ทั้งหมด (คนของคาบใหม่ต่อใหม่เอง) แต่ไม่ตัดกล้อง', async () => {
+    const { runner, kicked, current } = setup([
+      conn('rtsp', 'p', `cam/${LIVE_CAM}`),
+      conn('webrtc', 'v', `cam/${LIVE_CAM}`, 'read'),
+    ]);
+    await runner.run();
+    expect(kicked).toEqual([]);
+    current.id = 's2';
+    await runner.run();
+    expect(kicked).toEqual(['webrtc:v']);
+    await runner.run();
+    expect(kicked).toEqual(['webrtc:v']);
   });
 });
