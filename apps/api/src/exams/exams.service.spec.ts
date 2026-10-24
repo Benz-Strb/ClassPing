@@ -58,6 +58,7 @@ function setup(openBeforeMin = 20) {
   ]);
 
   const exams = new Map<string, ExamRow>();
+  const failInsert = { on: false };
   const toPerson = (id: string): Person => ({
     id,
     name: people.get(id)!.fullName,
@@ -70,6 +71,7 @@ function setup(openBeforeMin = 20) {
         .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()),
     findById: async (id) => exams.get(id) ?? null,
     insert: async (exam: NewExam, proctorIds) => {
+      if (failInsert.on) throw new Error('db down');
       const id = randomUUID();
       exams.set(id, {
         ...exam,
@@ -107,10 +109,15 @@ function setup(openBeforeMin = 20) {
   const sessionCalls: string[] = [];
   const sessions = {
     opened: false,
-    clearClassesFor: async (courseId: string, slot: { onDate: string }) => {
+    clearClassesFor: async (
+      courseId: string,
+      slot: { onDate: string },
+      save: () => Promise<void>,
+    ) => {
       if (sessions.opened)
         throw new AppError(400, 'SESSION_STARTED', 'คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว');
       sessionCalls.push(`clear ${courseId === cs101.id ? 'CS101' : 'CS102'} ${slot.onDate}`);
+      await save();
     },
     syncCourse: async (courseId: string) =>
       void sessionCalls.push(`sync ${courseId === cs101.id ? 'CS101' : 'CS102'}`),
@@ -170,6 +177,7 @@ function setup(openBeforeMin = 20) {
     config,
     sessions,
     sessionCalls,
+    failInsert,
     overrides,
     addSchedule,
     body,
@@ -280,6 +288,25 @@ describe('ExamsService ห้องและเวลาชน', () => {
     );
     expect(exam.room.id).toBe(roomA);
     expect(sessionCalls).toEqual([`clear CS101 ${NEXT_MONDAY}`, 'sync CS101']);
+  });
+
+  it('บันทึกคาบสอบไม่สำเร็จหลังเอาคาบเรียนออก ยังสร้างคาบของวิชาใหม่ (คาบเรียนกลับมา)', async () => {
+    const { owner, cs101, roomA, service, addSchedule, body, sessionCalls, failInsert } = setup();
+    addSchedule({ courseId: cs101.id, courseCode: 'CS101', roomId: roomA });
+    failInsert.on = true;
+    await expect(
+      service.create(owner, cs101.id, body({ roomId: roomA, replaceClasses: true })),
+    ).rejects.toThrow('db down');
+    expect(sessionCalls).toEqual([`clear CS101 ${NEXT_MONDAY}`, 'sync CS101']);
+  });
+
+  it('คนคุมสอบซ้ำในรายการ บันทึกครั้งเดียว ทั้งตอนสร้างและแก้', async () => {
+    const { owner, proctor, cs101, service, body } = setup();
+    const twice = [proctor.id, proctor.id];
+    const exam = await service.create(owner, cs101.id, body({ proctorIds: twice }));
+    expect(exam.proctors.map((p) => p.id)).toEqual([proctor.id]);
+    const updated = await service.update(owner, exam.id, body({ end: '12:30', proctorIds: twice }));
+    expect(updated.proctors.map((p) => p.id)).toEqual([proctor.id]);
   });
 
   it('คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว สร้างไม่ได้', async () => {
