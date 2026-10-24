@@ -9,14 +9,19 @@ import { LiveController } from './live.controller.js';
 import { LIVE_REPO, SupabaseLiveRepo } from './live.repo.js';
 import { LiveService } from './live.service.js';
 import { MediaController } from './media.controller.js';
+import { HttpPlaybackClient, PLAYBACK_CLIENT } from './playback.client.js';
+import { ClipsController, RecordingController } from './recording.controller.js';
+import { RecordingService } from './recording.service.js';
 import { MediaService } from './media.service.js';
 
 @Module({
   imports: [CameraModule, AttendanceModule, CoursesModule],
-  controllers: [MediaController, LiveController],
+  controllers: [MediaController, LiveController, RecordingController, ClipsController],
   providers: [
     MediaService,
     LiveService,
+    RecordingService,
+    { provide: PLAYBACK_CLIENT, useClass: HttpPlaybackClient },
     { provide: LIVE_REPO, useClass: SupabaseLiveRepo },
     MediaWatchdogRunner,
     { provide: MEDIA_CONTROL, useClass: HttpMediaControl },
