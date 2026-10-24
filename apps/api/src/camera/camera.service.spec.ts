@@ -22,7 +22,9 @@ const jpeg = (size = 100) => {
   return { buffer, mimetype: 'image/jpeg', size };
 };
 
-function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?: number } = {}) {
+function setup(
+  opts: { live?: LiveSession | null; waiting?: number; openBefore?: number; media?: boolean } = {},
+) {
   const calls: { roomId: string; opensBy: Date; now: Date }[] = [];
   const added: FrameJob[] = [];
   const repo: CameraRepo = {
@@ -40,7 +42,11 @@ function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?:
     },
     waiting: async () => opts.waiting ?? 0,
   };
-  const config = { cameraOpenBeforeMin: opts.openBefore ?? 0 } as AppConfig;
+  const config = {
+    cameraOpenBeforeMin: opts.openBefore ?? 0,
+    mediaServerSecret: opts.media ? 's'.repeat(32) : null,
+    mediaRtspUrl: 'rtsp://media.test:8554',
+  } as AppConfig;
   const service = new CameraService(repo, queue, config, () => NOW);
   return { service, calls, added };
 }
@@ -48,7 +54,11 @@ function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?:
 describe('CameraService.currentSession', () => {
   it('ไม่มีคาบได้ null', async () => {
     const { service } = setup({ live: null });
-    await expect(service.currentSession(front)).resolves.toEqual({ session: null, fps: 1 });
+    await expect(service.currentSession(front)).resolves.toEqual({
+      session: null,
+      fps: 1,
+      stream: null,
+    });
   });
 
   it('มีคาบได้ข้อมูลคาบเป็นเวลา ISO', async () => {
@@ -62,6 +72,23 @@ describe('CameraService.currentSession', () => {
         endsAt: '2026-10-22T05:00:00.000Z',
       },
       fps: 1,
+      stream: null,
+    });
+  });
+
+  it('ตั้ง media server แล้ว มีคาบ = บอกที่ส่งวิดีโอ 15 fps 1500 kbps (ไม่มี token ใน URL)', async () => {
+    const { service } = setup({ media: true });
+    await expect(service.currentSession(front)).resolves.toMatchObject({
+      stream: { url: 'rtsp://media.test:8554/cam/cam1', fps: 15, bitrateKbps: 1500 },
+    });
+  });
+
+  it('ไม่มีคาบ หรือเป็นกล้องประตู ไม่ส่งวิดีโอ', async () => {
+    await expect(
+      setup({ media: true, live: null }).service.currentSession(front),
+    ).resolves.toMatchObject({ stream: null });
+    await expect(setup({ media: true }).service.currentSession(door)).resolves.toMatchObject({
+      stream: null,
     });
   });
 

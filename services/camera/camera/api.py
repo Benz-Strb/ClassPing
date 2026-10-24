@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import quote
 
 import httpx
 
@@ -15,15 +16,26 @@ class ApiDown(Exception):
 
 
 @dataclass(frozen=True)
+class Stream:
+    """ที่ส่งวิดีโอดูสด/อัดเก็บ url มี token กล้องแล้ว ห้าม log ตรง ๆ"""
+
+    url: str
+    fps: int
+    bitrate_kbps: int
+
+
+@dataclass(frozen=True)
 class Session:
     id: str
     course: str
     ends_at: datetime
     fps: float
+    stream: Stream | None = None
 
 
 class CameraApi:
     def __init__(self, base_url: str, token: str, transport: httpx.BaseTransport | None = None):
+        self._token = token
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers={"X-Camera-Token": token},
@@ -36,11 +48,20 @@ class CameraApi:
         current = data["session"]
         if current is None:
             return None
+        stream = data.get("stream")
         return Session(
             id=current["id"],
             course=f"{current['courseCode']} {current['courseName']}".strip(),
             ends_at=datetime.fromisoformat(current["endsAt"]),
             fps=float(data["fps"]),
+            # media server ถามสิทธิ์จาก API ด้วย token กล้องตัวเดียวกัน
+            stream=Stream(
+                url=f"{stream['url']}?token={quote(self._token, safe='')}",
+                fps=int(stream["fps"]),
+                bitrate_kbps=int(stream["bitrateKbps"]),
+            )
+            if stream
+            else None,
         )
 
     def send(self, frame: bytes) -> str:
