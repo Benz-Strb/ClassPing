@@ -45,6 +45,7 @@ describe('API (e2e)', () => {
     '/courses/x/sessions?from=2026-10-20&to=2026-10-26',
     '/courses/x/exams',
     '/teachers',
+    '/live/sessions?date=2026-10-24',
   ])('GET %s ต้อง login ก่อน', (path) => {
     return request(app.getHttpServer()).get(path).expect(401);
   });
@@ -55,6 +56,7 @@ describe('API (e2e)', () => {
     ['put', '/me/face/front'],
     ['post', '/me/identity'],
     ['delete', '/users/00000000-0000-0000-0000-000000000000/face'],
+    ['post', '/sessions/00000000-0000-0000-0000-000000000000/live'],
   ] as const)('%s %s ต้อง login ก่อน', (method, path) => {
     return request(app.getHttpServer())[method](path).expect(401);
   });

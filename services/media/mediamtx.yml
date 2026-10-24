@@ -16,6 +16,10 @@ rtmp: no
 hls: no
 srt: no
 
+# Docker ให้ IP ของ container ที่เบราว์เซอร์ต่อไม่ถึง บอกที่อยู่ของเครื่องแทน
+# ดูจากเครื่องอื่นในวงเดียวกันให้เพิ่มชื่อเครื่อง เช่น MTX_WEBRTCADDITIONALHOSTS=127.0.0.1,BMac.local
+webrtcAdditionalHosts: [127.0.0.1]
+
 # ดูย้อนหลัง/ดาวน์โหลดผ่าน API เท่านั้น (compose ผูกพอร์ตนี้ไว้กับ 127.0.0.1)
 playback: yes
 playbackAddress: :9996

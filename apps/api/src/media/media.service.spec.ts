@@ -1,5 +1,4 @@
 import type { CameraIdentity, LiveSession } from '../camera/camera.repo.js';
-import { hashToken } from '../camera/camera-token.js';
 import type { AppConfig } from '../config/config.js';
 import { signMediaToken, type MediaTokenPayload } from './media-token.js';
 import { MediaService, type MediaAuthRequest } from './media.service.js';
@@ -23,11 +22,6 @@ const door: CameraIdentity = {
   roomId: 'r1',
   kind: 'door',
 };
-const tokens: Record<string, CameraIdentity> = {
-  [hashToken('tokA')]: camA,
-  [hashToken('tokB')]: camB,
-  [hashToken('tokDoor')]: door,
-};
 const byId: Record<string, CameraIdentity> = { [camA.id]: camA, [camB.id]: camB, [door.id]: door };
 
 const session: LiveSession = {
@@ -45,7 +39,6 @@ function setup(opts: { live?: boolean; secrets?: boolean } = {}) {
   } as AppConfig;
   const service = new MediaService(
     {
-      findByTokenHash: async (hash: string) => tokens[hash] ?? null,
       findById: async (id: string) => byId[id] ?? null,
     },
     { liveSessionFor: async () => (opts.live === false ? null : session) },
