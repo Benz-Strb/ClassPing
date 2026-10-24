@@ -9,6 +9,7 @@ import { formatDate, formatTime } from "@/lib/time";
 import type { AttendanceRow, AttendanceStatus, SessionAttendance } from "@/lib/types";
 import { Photo } from "./photo";
 import { ReviewCard, type ReviewAction } from "./review-card";
+import { ExamBadge } from "./exam-badge";
 
 const POLL_MS = 5000;
 
@@ -104,6 +105,11 @@ export function CheckinView() {
         <h2 className="font-medium">
           {formatDate(session.onDate)} {formatTime(session.startsAt)}-{formatTime(session.endsAt)}{" "}
           · {session.roomName}
+          {session.kind === "exam" && (
+            <span className="ml-2">
+              <ExamBadge title={session.title} />
+            </span>
+          )}
           {session.status === "live" && (
             <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">
               กำลังเรียน
