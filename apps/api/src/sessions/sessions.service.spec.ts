@@ -17,16 +17,10 @@ class InMemorySessionsRepo implements SessionsRepo {
   rows = new Map<string, SessionRow>();
   writes = 0;
 
-  async listByCourse(
-    courseId: string,
-    from: string,
-    to: string,
-    opts: { classOnly?: boolean } = {},
-  ) {
+  async listByCourse(courseId: string, from: string, to: string) {
     await new Promise((resolve) => setImmediate(resolve));
     return [...this.rows.values()]
       .filter((r) => r.courseId === courseId && r.onDate >= from && r.onDate <= to)
-      .filter((r) => !opts.classOnly || r.kind === 'class')
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
   }
   async courseIdsInRange(from: string, to: string) {
@@ -37,7 +31,10 @@ class InMemorySessionsRepo implements SessionsRepo {
     ];
   }
   // unique เหมือนใน DB: (course_id, starts_at) และ (schedule_id, on_date)
-  private clash(row: Omit<SessionRow, 'id' | 'roomName'>, ignoreId?: string) {
+  private clash(
+    row: Pick<SessionRow, 'courseId' | 'startsAt' | 'scheduleId' | 'onDate'>,
+    ignoreId?: string,
+  ) {
     return [...this.rows.values()].some(
       (r) =>
         r.id !== ignoreId &&
@@ -287,6 +284,49 @@ describe('SessionsService กับคาบสอบ', () => {
     await service.syncAll();
     const kept = sessions().filter((s) => s.kind === 'exam');
     expect(kept).toEqual([later, soon]);
+  });
+
+  it('คาบสอบแทนคาบเรียนของวิชาเดียวกันที่ทับ ลบคาบสอบแล้วคาบเรียนกลับมา', async () => {
+    const { course, repo, service, addSchedule, sessions } = setup();
+    addSchedule(); // จันทร์ 09:00-12:00
+    await service.syncCourse(course.id);
+    const midterm = exam(course.id, NEXT_MONDAY, '2026-10-26T03:00:00Z', '2026-10-26T04:00:00Z');
+    repo.rows.set(midterm.id, midterm);
+
+    await service.syncCourse(course.id);
+    expect(sessions().map((s) => s.kind)).toEqual(['exam']);
+
+    repo.rows.delete(midterm.id);
+    await service.syncCourse(course.id);
+    expect(sessions().map((s) => [s.kind, s.onDate])).toEqual([['class', NEXT_MONDAY]]);
+  });
+
+  it('clearClassesFor เอาคาบเรียนที่ทับช่วงสอบออก ไม่แตะคาบอื่น', async () => {
+    const { course, service, addSchedule, sessions } = setup();
+    addSchedule(); // จันทร์ 09:00-12:00
+    addSchedule({ weekday: 1, startTime: '13:00', endTime: '15:00' });
+    await service.syncCourse(course.id);
+    await service.clearClassesFor(course.id, {
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T03:00:00Z'),
+      endsAt: new Date('2026-10-26T04:00:00Z'),
+    });
+    expect(sessions().map((s) => s.startsAt)).toEqual([new Date('2026-10-26T06:00:00Z')]);
+  });
+
+  it('clearClassesFor คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว ได้ SESSION_STARTED และไม่ลบ', async () => {
+    const { course, service, addSchedule, sessions } = setup(20);
+    addSchedule({ weekday: 2, startTime: '10:15', endTime: '12:00' });
+    await service.syncCourse(course.id);
+    const result = await rejection(
+      service.clearClassesFor(course.id, {
+        onDate: TODAY,
+        startsAt: new Date('2026-10-20T04:00:00Z'),
+        endsAt: new Date('2026-10-20T05:00:00Z'),
+      }),
+    );
+    expect(result.code).toBe('SESSION_STARTED');
+    expect(sessions()).toHaveLength(1);
   });
 
   it('รายการคาบของวิชาแสดงคาบสอบพร้อมชื่อ', async () => {
