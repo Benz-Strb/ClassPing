@@ -79,7 +79,7 @@ export class RecordingService {
       return { session: info, segments: [], expiresOn: null, canDownload: allowed };
     }
 
-    const { from, to } = this.range(session);
+    const { from, to } = await this.range(session);
     const found = await this.playback.list(cameraPath(session.cameraId), from, to);
     const segments = found.flatMap((seg) => {
       const start = Math.max(seg.start.getTime(), from.getTime());
@@ -110,7 +110,7 @@ export class RecordingService {
       );
     }
     const start = new Date(input.start);
-    const { from, to } = this.range(session);
+    const { from, to } = await this.range(session);
     if (start < from || start.getTime() + input.duration * 1000 > to.getTime() + 1000) {
       throw new AppError(400, 'BAD_REQUEST', 'ช่วงเวลาอยู่นอกคาบนี้');
     }
@@ -149,9 +149,17 @@ export class RecordingService {
     };
   }
 
-  private range(session: WatchableSession) {
+  // ตั้งแต่กล้องเปิด (ก่อนคาบ) ถึงหมดคาบ แต่ถ้าห้องเดียวกันมีคาบก่อนหน้าที่ยังไม่จบตอนกล้องเปิด
+  // เริ่มนับหลังคาบนั้นจบ ไม่งั้นจะเห็นภาพของวิชาอื่น
+  private async range(session: WatchableSession) {
+    const opensAt = new Date(session.startsAt.getTime() - this.config.cameraOpenBeforeMin * MINUTE);
+    const previousEnd = await this.repo.previousEndInRoom(
+      session.roomId,
+      opensAt,
+      session.startsAt,
+    );
     return {
-      from: new Date(session.startsAt.getTime() - this.config.cameraOpenBeforeMin * MINUTE),
+      from: previousEnd && previousEnd > opensAt ? previousEnd : opensAt,
       to: session.endsAt,
     };
   }
