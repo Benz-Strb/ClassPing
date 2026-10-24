@@ -1,10 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-// token สั้น ๆ ที่ API ออกให้คนดูกล้อง: read = ดูสด, clip = ดูย้อนหลัง/ดาวน์โหลด
+// token สั้น ๆ ที่ API ออกให้: read = ดูสด, clip = ดูย้อนหลัง/ดาวน์โหลด, publish = กล้องส่งวิดีโอ
 export interface MediaTokenPayload {
   sub: string;
   path: string;
-  act: 'read' | 'clip';
+  act: 'read' | 'clip' | 'publish';
   sid: string;
   exp: number;
 }

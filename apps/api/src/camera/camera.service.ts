@@ -6,6 +6,7 @@ import { looksLike } from '../common/image-type.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import type { UploadedImage } from '../enrollment/enrollment.service.js';
 import { cameraPath } from '../media/media-path.js';
+import { signMediaToken } from '../media/media-token.js';
 import { CAMERA_REPO, type CameraIdentity, type CameraRepo } from './camera.repo.js';
 
 export interface CameraSession {
@@ -25,6 +26,8 @@ const FRAMES_PER_SECOND = 1;
 // วิดีโอดูสด/อัดเก็บ วัดจากเว็บแคมจริงตอนแผน 7 Task 0 (1500 kbps ≈ 689 MB/ชม.)
 const VIDEO_FPS = 15;
 const VIDEO_BITRATE_KBPS = 1500;
+// MediaMTX ถามสิทธิ์แค่ตอนเริ่มต่อ กล้องถามคาบทุก 30 วิ เริ่มส่งใหม่เมื่อไหร่ก็ได้ token ใหม่
+const PUBLISH_TOKEN_MINUTES = 10;
 // worker ตามไม่ทันเกินนี้ ให้กล้องข้ามภาพไปก่อน ผลจะได้ไม่ช้ากว่าความจริงมาก
 export const MAX_WAITING_FRAMES = 20;
 
@@ -50,14 +53,7 @@ export class CameraService {
         endsAt: live.endsAt.toISOString(),
       },
       fps: FRAMES_PER_SECOND,
-      stream:
-        live && camera.kind === 'front' && this.config.mediaServerSecret
-          ? {
-              url: `${this.config.mediaRtspUrl}/${cameraPath(camera.id)}`,
-              fps: VIDEO_FPS,
-              bitrateKbps: VIDEO_BITRATE_KBPS,
-            }
-          : null,
+      stream: live ? this.streamFor(camera, live.id) : null,
     };
   }
 
@@ -87,6 +83,24 @@ export class CameraService {
       image: file.buffer.toString('base64'),
     });
     return { queued: true };
+  }
+
+  private streamFor(camera: CameraIdentity, sessionId: string): CameraSession['stream'] {
+    const { mediaTokenSecret, mediaServerSecret } = this.config;
+    if (camera.kind !== 'front' || !mediaTokenSecret || !mediaServerSecret) return null;
+    const path = cameraPath(camera.id);
+    const token = signMediaToken(mediaTokenSecret, {
+      sub: camera.id,
+      path,
+      act: 'publish',
+      sid: sessionId,
+      exp: this.now().getTime() + PUBLISH_TOKEN_MINUTES * MINUTE,
+    });
+    return {
+      url: `${this.config.mediaRtspUrl}/${path}?token=${token}`,
+      fps: VIDEO_FPS,
+      bitrateKbps: VIDEO_BITRATE_KBPS,
+    };
   }
 
   // คาบของห้องกล้องนี้ที่กล้องควรเปิดอยู่ (รวมช่วงเปิดก่อนเวลา)

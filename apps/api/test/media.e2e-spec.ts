@@ -12,15 +12,24 @@ import type { App } from 'supertest/types.js';
 import { IS_PUBLIC_KEY } from './../src/auth/auth.decorators.js';
 import { CAMERA_REPO } from './../src/camera/camera.repo.js';
 import { CameraService } from './../src/camera/camera.service.js';
-import { hashToken } from './../src/camera/camera-token.js';
 import { CLOCK } from './../src/common/clock.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
 import { APP_CONFIG } from './../src/config/config.js';
 import { MediaController } from './../src/media/media.controller.js';
+import { signMediaToken } from './../src/media/media-token.js';
 import { MediaService } from './../src/media/media.service.js';
 
 const CAMERA = '11111111-1111-1111-1111-111111111111';
+const SECRET = 't'.repeat(32);
+const NOW = new Date('2026-10-24T02:00:00Z');
+const token = signMediaToken(SECRET, {
+  sub: CAMERA,
+  path: `cam/${CAMERA}`,
+  act: 'publish',
+  sid: 's1',
+  exp: NOW.getTime() + 600_000,
+});
 
 // ไม่มีใคร login ได้ route ที่ไม่ได้ติด @Public() จะได้ 403
 @Injectable()
@@ -45,13 +54,13 @@ describe('POST /media/auth (e2e)', () => {
         {
           provide: CAMERA_REPO,
           useValue: {
-            findByTokenHash: async (hash: string) =>
-              hash === hashToken('good') ? { id: CAMERA, roomId: 'r1', kind: 'front' } : null,
+            findById: async (id: string) =>
+              id === CAMERA ? { id: CAMERA, roomId: 'r1', kind: 'front' } : null,
           },
         },
         { provide: CameraService, useValue: { liveSessionFor: async () => ({ id: 's1' }) } },
-        { provide: APP_CONFIG, useValue: { mediaTokenSecret: null, mediaPlaybackSecret: null } },
-        { provide: CLOCK, useValue: () => new Date('2026-10-24T02:00:00Z') },
+        { provide: APP_CONFIG, useValue: { mediaTokenSecret: SECRET, mediaServerSecret: null } },
+        { provide: CLOCK, useValue: () => NOW },
         { provide: APP_GUARD, useClass: NoLogin },
       ],
     }).compile();
@@ -65,10 +74,10 @@ describe('POST /media/auth (e2e)', () => {
     await app.close();
   });
 
-  it('กล้องที่ token ถูกส่งภาพเข้า path ตัวเองได้ 204 โดยไม่ต้อง login', async () => {
+  it('กล้องที่ token ส่งวิดีโอถูก ส่งเข้า path ตัวเองได้ 204 โดยไม่ต้อง login', async () => {
     await request(app.getHttpServer())
       .post('/media/auth')
-      .send({ action: 'publish', protocol: 'rtsp', path: `cam/${CAMERA}`, query: 'token=good' })
+      .send({ action: 'publish', protocol: 'rtsp', path: `cam/${CAMERA}`, query: `token=${token}` })
       .expect(204);
   });
 
