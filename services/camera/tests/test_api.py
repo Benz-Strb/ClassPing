@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from camera.api import ApiDown, BadToken, CameraApi
+from camera.api import ApiDown, BadToken, CameraApi, Stream
 
 
 def api_with(handler) -> CameraApi:
@@ -73,3 +73,51 @@ def test_server_error_or_no_connection_is_api_down():
 
     with pytest.raises(ApiDown):
         api_with(refuse).session()
+
+
+def test_session_with_stream_adds_camera_token_to_url():
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "session": {
+                        "id": "s1",
+                        "courseCode": "EXAMPLE101",
+                        "courseName": "test",
+                        "startsAt": "2026-10-23T05:00:00.000Z",
+                        "endsAt": "2026-10-23T11:00:00.000Z",
+                    },
+                    "fps": 1,
+                    "stream": {"url": "rtsp://media:8554/cam/c1", "fps": 15, "bitrateKbps": 1500},
+                }
+            },
+        )
+
+    current = api_with(handler).session()
+    assert current is not None
+    assert current.stream == Stream(
+        url="rtsp://media:8554/cam/c1?token=tok", fps=15, bitrate_kbps=1500
+    )
+
+
+def test_session_without_stream_field_is_none():
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "session": {
+                        "id": "s1",
+                        "courseCode": "X",
+                        "courseName": "",
+                        "startsAt": "2026-10-23T05:00:00.000Z",
+                        "endsAt": "2026-10-23T11:00:00.000Z",
+                    },
+                    "fps": 1,
+                }
+            },
+        )
+
+    current = api_with(handler).session()
+    assert current is not None and current.stream is None

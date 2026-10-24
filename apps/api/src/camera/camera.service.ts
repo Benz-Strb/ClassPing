@@ -5,6 +5,7 @@ import { CLOCK, type Clock } from '../common/clock.js';
 import { looksLike } from '../common/image-type.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import type { UploadedImage } from '../enrollment/enrollment.service.js';
+import { cameraPath } from '../media/media-path.js';
 import { CAMERA_REPO, type CameraIdentity, type CameraRepo } from './camera.repo.js';
 
 export interface CameraSession {
@@ -16,9 +17,14 @@ export interface CameraSession {
     endsAt: string;
   } | null;
   fps: number;
+  // ที่ส่งวิดีโอให้ media server null = ไม่ต้องส่ง (ไม่มีคาบ หรือยังไม่ได้ตั้ง media server)
+  stream: { url: string; fps: number; bitrateKbps: number } | null;
 }
 
 const FRAMES_PER_SECOND = 1;
+// วิดีโอดูสด/อัดเก็บ วัดจากเว็บแคมจริงตอนแผน 7 Task 0 (1500 kbps ≈ 689 MB/ชม.)
+const VIDEO_FPS = 15;
+const VIDEO_BITRATE_KBPS = 1500;
 // worker ตามไม่ทันเกินนี้ ให้กล้องข้ามภาพไปก่อน ผลจะได้ไม่ช้ากว่าความจริงมาก
 export const MAX_WAITING_FRAMES = 20;
 
@@ -44,6 +50,14 @@ export class CameraService {
         endsAt: live.endsAt.toISOString(),
       },
       fps: FRAMES_PER_SECOND,
+      stream:
+        live && camera.kind === 'front' && this.config.mediaServerSecret
+          ? {
+              url: `${this.config.mediaRtspUrl}/${cameraPath(camera.id)}`,
+              fps: VIDEO_FPS,
+              bitrateKbps: VIDEO_BITRATE_KBPS,
+            }
+          : null,
     };
   }
 
