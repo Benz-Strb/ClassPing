@@ -82,11 +82,23 @@ export function LiveSessions() {
               <span className="ml-auto text-sm">
                 {!s.hasCamera ? (
                   <span className="text-gray-500">ห้องนี้ไม่มีกล้อง</span>
-                ) : s.cameraOpen ? (
-                  <Link href={`/live/${s.id}`} className="text-blue-600 hover:underline">
-                    ดูสด
-                  </Link>
-                ) : null}
+                ) : (
+                  <span className="space-x-3">
+                    {s.cameraOpen && (
+                      <Link href={`/live/${s.id}`} className="text-blue-600 hover:underline">
+                        ดูสด
+                      </Link>
+                    )}
+                    {(s.cameraOpen || s.status !== "upcoming") && (
+                      <Link
+                        href={`/live/${s.id}/recording`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        ดูย้อนหลัง
+                      </Link>
+                    )}
+                  </span>
+                )}
               </span>
             </li>
           ))}

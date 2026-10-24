@@ -137,6 +137,22 @@ export interface LiveFaces {
   }[];
 }
 
+export interface Recording {
+  session: {
+    kind: "class" | "exam";
+    title: string | null;
+    courseCode: string;
+    courseName: string;
+    roomName: string;
+    startsAt: string;
+    endsAt: string;
+  };
+  // ไฟล์อัดแยกเป็นช่วง ๆ ตามที่กล้องต่ออยู่ duration เป็นวินาที
+  segments: { start: string; duration: number }[];
+  expiresOn: string | null;
+  canDownload: boolean;
+}
+
 export type AttendanceStatus = "present" | "late" | "absent" | "leave" | "pending";
 
 export interface AttendanceRow {
