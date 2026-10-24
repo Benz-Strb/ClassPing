@@ -41,6 +41,9 @@ export default function CoursesPage() {
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">วิชาของฉัน</h1>
+        <Link href="/live" className="ml-auto mr-4 text-sm text-blue-600 underline">
+          กล้อง
+        </Link>
         <Link href="/me" className="text-sm text-blue-600 underline">
           บัญชีของฉัน
         </Link>
