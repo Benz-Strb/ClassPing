@@ -9,6 +9,8 @@ export type ViewKind = 'live' | 'playback' | 'download';
 export interface LiveRepo {
   session(id: string): Promise<WatchableSession | null>;
   sessionsOnDate(date: string): Promise<WatchableSession[]>;
+  // เวลาจบล่าสุดของคาบอื่นในห้องเดียวกันที่จบหลัง after แต่เริ่มก่อน before
+  previousEndInRoom(roomId: string, after: Date, before: Date): Promise<Date | null>;
   logView(sessionId: string, userId: string, kind: ViewKind): Promise<void>;
 }
 
@@ -54,6 +56,20 @@ export class SupabaseLiveRepo implements LiveRepo {
       .order('starts_at');
     if (error) throw dbError();
     return this.withCameras(data as unknown as Row[]);
+  }
+
+  async previousEndInRoom(roomId: string, after: Date, before: Date): Promise<Date | null> {
+    const { data, error } = await this.db
+      .from('sessions')
+      .select('ends_at')
+      .eq('room_id', roomId)
+      .gt('ends_at', after.toISOString())
+      .lt('starts_at', before.toISOString())
+      .order('ends_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw dbError();
+    return data ? new Date((data as { ends_at: string }).ends_at) : null;
   }
 
   async logView(sessionId: string, userId: string, kind: ViewKind): Promise<void> {

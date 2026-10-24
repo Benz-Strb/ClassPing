@@ -51,6 +51,7 @@ function setup(
   const dates: string[] = [];
   const repo: LiveRepo = {
     session: async (id) => sessions.find((s) => s.id === id) ?? null,
+    previousEndInRoom: async () => null,
     sessionsOnDate: async (date) => {
       dates.push(date);
       return sessions;
