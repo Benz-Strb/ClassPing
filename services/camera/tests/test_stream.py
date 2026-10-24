@@ -68,7 +68,8 @@ def test_command_is_h264_baseline_without_audio():
     cmd = procs[0].cmd
     joined = " ".join(cmd)
     assert cmd[0] == "ffmpeg"
-    assert "-f rawvideo -pix_fmt bgr24 -s 1280x720 -r 15 -i -" in joined
+    assert "-f rawvideo -pix_fmt bgr24 -s 1280x720 -use_wallclock_as_timestamps 1 -i -" in joined
+    assert "-fps_mode cfr -r 15" in joined
     assert "-c:v libx264 -profile:v baseline -tune zerolatency" in joined
     assert "-pix_fmt yuv420p" in joined
     assert "-b:v 1500k" in joined
