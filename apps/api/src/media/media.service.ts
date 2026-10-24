@@ -2,7 +2,6 @@ import { timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { CAMERA_REPO, type CameraRepo } from '../camera/camera.repo.js';
 import { CameraService } from '../camera/camera.service.js';
-import { hashToken } from '../camera/camera-token.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { cameraPath } from './media-path.js';
@@ -21,7 +20,6 @@ export interface MediaAuthRequest {
   query?: string;
 }
 
-
 const same = (a: string, b: string) => {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -31,7 +29,7 @@ const same = (a: string, b: string) => {
 @Injectable()
 export class MediaService {
   constructor(
-    @Inject(CAMERA_REPO) private readonly cameras: Pick<CameraRepo, 'findByTokenHash'>,
+    @Inject(CAMERA_REPO) private readonly cameras: Pick<CameraRepo, 'findById'>,
     @Inject(CameraService) private readonly sessions: Pick<CameraService, 'liveSessionFor'>,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly now: Clock,
@@ -55,12 +53,15 @@ export class MediaService {
     }
   }
 
-  // กล้องส่งภาพได้เฉพาะ path ของตัวเอง และเฉพาะตอนที่ห้องมีคาบ (ไม่อัดนอกคาบ)
+  // กล้องส่งวิดีโอด้วย token ส่งวิดีโอที่ได้จาก GET /camera/session (ไม่ใช่ token กล้องตัวจริง
+  // เพราะ URL ไปอยู่ใน argv ของ ffmpeg) ได้เฉพาะ path ของตัวเอง และเฉพาะตอนที่ห้องมีคาบ
   private async canPublish(req: MediaAuthRequest): Promise<boolean> {
-    if (req.protocol !== 'rtsp') return false;
-    const token = new URLSearchParams(req.query ?? '').get('token');
-    if (!token) return false;
-    const camera = await this.cameras.findByTokenHash(hashToken(token));
+    const secret = this.config.mediaTokenSecret;
+    if (secret === null || req.protocol !== 'rtsp') return false;
+    const token = new URLSearchParams(req.query ?? '').get('token') ?? '';
+    const payload = verifyMediaToken(secret, token, this.now());
+    if (!payload || payload.act !== 'publish' || payload.path !== req.path) return false;
+    const camera = await this.cameras.findById(payload.sub);
     if (!camera || camera.kind !== 'front' || req.path !== cameraPath(camera.id)) return false;
     return (await this.sessions.liveSessionFor(camera, this.now())) !== null;
   }

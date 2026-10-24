@@ -28,6 +28,7 @@ const tokens: Record<string, CameraIdentity> = {
   [hashToken('tokB')]: camB,
   [hashToken('tokDoor')]: door,
 };
+const byId: Record<string, CameraIdentity> = { [camA.id]: camA, [camB.id]: camB, [door.id]: door };
 
 const session: LiveSession = {
   id: 's1',
@@ -43,7 +44,10 @@ function setup(opts: { live?: boolean; secrets?: boolean } = {}) {
     mediaServerSecret: opts.secrets === false ? null : SERVER_SECRET,
   } as AppConfig;
   const service = new MediaService(
-    { findByTokenHash: async (hash: string) => tokens[hash] ?? null },
+    {
+      findByTokenHash: async (hash: string) => tokens[hash] ?? null,
+      findById: async (id: string) => byId[id] ?? null,
+    },
     { liveSessionFor: async () => (opts.live === false ? null : session) },
     config,
     () => NOW,
@@ -75,34 +79,59 @@ const read = (token: string, path = `cam/${camA.id}`): MediaAuthRequest => ({
   token,
 });
 
-describe('MediaService.authorize กล้องส่งภาพ', () => {
-  it('token กล้องถูก path ของตัวเอง และมีคาบอยู่ ผ่าน', async () => {
-    await expect(setup().authorize(publish(`cam/${camA.id}`, 'tokA'))).resolves.toBe(true);
+const publishToken = (extra: Partial<MediaTokenPayload> = {}) =>
+  signMediaToken(TOKEN_SECRET, {
+    sub: camA.id,
+    path: `cam/${camA.id}`,
+    act: 'publish',
+    sid: 's1',
+    exp: NOW.getTime() + 600_000,
+    ...extra,
   });
 
-  it('ใช้ token ห้อง A ส่งเข้า path ของกล้อง B ไม่ผ่าน', async () => {
-    await expect(setup().authorize(publish(`cam/${camB.id}`, 'tokA'))).resolves.toBe(false);
+describe('MediaService.authorize กล้องส่งวิดีโอ', () => {
+  it('token ส่งวิดีโอที่ API ออกให้ path ตรง และห้องยังมีคาบ ผ่าน', async () => {
+    await expect(setup().authorize(publish(`cam/${camA.id}`, publishToken()))).resolves.toBe(true);
   });
 
-  it('ไม่มีคาบ ไม่ผ่าน จึงไม่มีการอัดนอกคาบ', async () => {
-    await expect(setup({ live: false }).authorize(publish(`cam/${camA.id}`, 'tokA'))).resolves.toBe(
+  it('token ของกล้องห้อง A ส่งเข้า path ของกล้อง B ไม่ผ่าน', async () => {
+    await expect(setup().authorize(publish(`cam/${camB.id}`, publishToken()))).resolves.toBe(false);
+  });
+
+  it('ไม่มีคาบแล้ว ไม่ผ่าน จึงไม่มีการอัดนอกคาบ', async () => {
+    await expect(
+      setup({ live: false }).authorize(publish(`cam/${camA.id}`, publishToken())),
+    ).resolves.toBe(false);
+  });
+
+  it('token กล้องตัวจริงใช้ส่งวิดีโอไม่ได้แล้ว (ไม่ให้ไปอยู่ใน argv ของ ffmpeg)', async () => {
+    await expect(setup().authorize(publish(`cam/${camA.id}`, 'tokA'))).resolves.toBe(false);
+  });
+
+  it('token หมดอายุ เป็น token ดูสด กล้องถูกลบ หรือกล้องประตู ไม่ผ่าน', async () => {
+    const service = setup();
+    const path = `cam/${camA.id}`;
+    await expect(
+      service.authorize(publish(path, publishToken({ exp: NOW.getTime() }))),
+    ).resolves.toBe(false);
+    await expect(service.authorize(publish(path, publishToken({ act: 'read' })))).resolves.toBe(
       false,
     );
+    const gone = '44444444-4444-4444-4444-444444444444';
+    await expect(
+      service.authorize(publish(`cam/${gone}`, publishToken({ sub: gone, path: `cam/${gone}` }))),
+    ).resolves.toBe(false);
+    await expect(
+      service.authorize(
+        publish(`cam/${door.id}`, publishToken({ sub: door.id, path: `cam/${door.id}` })),
+      ),
+    ).resolves.toBe(false);
   });
 
-  it('token ผิด ไม่มี token หรือกล้องประตู ไม่ผ่าน', async () => {
-    const service = setup();
-    await expect(service.authorize(publish(`cam/${camA.id}`, 'nope'))).resolves.toBe(false);
-    await expect(
-      service.authorize({ action: 'publish', protocol: 'rtsp', path: `cam/${camA.id}`, query: '' }),
-    ).resolves.toBe(false);
-    await expect(service.authorize(publish(`cam/${door.id}`, 'tokDoor'))).resolves.toBe(false);
-  });
-
-  it('ส่งภาพผ่านช่องทางอื่นที่ไม่ใช่ RTSP ไม่ผ่าน', async () => {
-    await expect(
-      setup().authorize({ ...publish(`cam/${camA.id}`, 'tokA'), protocol: 'webrtc' }),
-    ).resolves.toBe(false);
+  it('ส่งผ่านช่องทางอื่นที่ไม่ใช่ RTSP หรือยังไม่ได้ตั้ง secret ไม่ผ่าน', async () => {
+    const req = publish(`cam/${camA.id}`, publishToken());
+    await expect(setup().authorize({ ...req, protocol: 'webrtc' })).resolves.toBe(false);
+    await expect(setup({ secrets: false }).authorize(req)).resolves.toBe(false);
   });
 });
 

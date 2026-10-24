@@ -2,6 +2,7 @@ import type { AppConfig } from '../config/config.js';
 import type { FrameJob, FrameQueue } from '../attendance/frame-queue.js';
 import type { CameraIdentity, CameraRepo, LiveSession } from './camera.repo.js';
 import { CameraService, MAX_WAITING_FRAMES } from './camera.service.js';
+import { verifyMediaToken } from '../media/media-token.js';
 
 const NOW = new Date('2026-10-22T02:00:00Z'); // 09:00 เวลาไทย
 
@@ -45,6 +46,7 @@ function setup(
   const config = {
     cameraOpenBeforeMin: opts.openBefore ?? 0,
     mediaServerSecret: opts.media ? 's'.repeat(32) : null,
+    mediaTokenSecret: opts.media ? 't'.repeat(32) : null,
     mediaRtspUrl: 'rtsp://media.test:8554',
   } as AppConfig;
   const service = new CameraService(repo, queue, config, () => NOW);
@@ -76,10 +78,18 @@ describe('CameraService.currentSession', () => {
     });
   });
 
-  it('ตั้ง media server แล้ว มีคาบ = บอกที่ส่งวิดีโอ 15 fps 1500 kbps (ไม่มี token ใน URL)', async () => {
+  it('ตั้ง media server แล้ว มีคาบ = บอกที่ส่งวิดีโอ 15 fps 1500 kbps พร้อม token ส่งวิดีโออายุ 10 นาที', async () => {
     const { service } = setup({ media: true });
-    await expect(service.currentSession(front)).resolves.toMatchObject({
-      stream: { url: 'rtsp://media.test:8554/cam/cam1', fps: 15, bitrateKbps: 1500 },
+    const { stream } = await service.currentSession(front);
+    expect(stream).toMatchObject({ fps: 15, bitrateKbps: 1500 });
+    const url = new URL(stream!.url);
+    expect(`${url.protocol}//${url.host}${url.pathname}`).toBe('rtsp://media.test:8554/cam/cam1');
+    expect(verifyMediaToken('t'.repeat(32), url.searchParams.get('token')!, NOW)).toEqual({
+      sub: 'cam1',
+      path: 'cam/cam1',
+      act: 'publish',
+      sid: 's1',
+      exp: NOW.getTime() + 10 * 60_000,
     });
   });
 

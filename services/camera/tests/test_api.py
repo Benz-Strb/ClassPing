@@ -75,7 +75,7 @@ def test_server_error_or_no_connection_is_api_down():
         api_with(refuse).session()
 
 
-def test_session_with_stream_adds_camera_token_to_url():
+def test_session_with_stream_uses_url_from_api_without_camera_token():
     def handler(request: httpx.Request):
         return httpx.Response(
             200,
@@ -89,7 +89,11 @@ def test_session_with_stream_adds_camera_token_to_url():
                         "endsAt": "2026-10-23T11:00:00.000Z",
                     },
                     "fps": 1,
-                    "stream": {"url": "rtsp://media:8554/cam/c1", "fps": 15, "bitrateKbps": 1500},
+                    "stream": {
+                        "url": "rtsp://media:8554/cam/c1?token=short",
+                        "fps": 15,
+                        "bitrateKbps": 1500,
+                    },
                 }
             },
         )
@@ -97,7 +101,7 @@ def test_session_with_stream_adds_camera_token_to_url():
     current = api_with(handler).session()
     assert current is not None
     assert current.stream == Stream(
-        url="rtsp://media:8554/cam/c1?token=tok", fps=15, bitrate_kbps=1500
+        url="rtsp://media:8554/cam/c1?token=short", fps=15, bitrate_kbps=1500
     )
 
 
