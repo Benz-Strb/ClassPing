@@ -13,7 +13,7 @@ import {
   type SessionInfo,
   type StoredAttendance,
 } from './attendance-admin.repo.js';
-import { statusAt, type AttendanceStatus } from './decide.js';
+import { rulesFor, statusAt, type AttendanceStatus } from './decide.js';
 import { RejectedGuesses } from './rejected-guesses.js';
 
 export interface AttendanceView {
@@ -171,7 +171,7 @@ export class AttendanceService {
 
   private async statusFor(session: SessionInfo, row: StoredAttendance): Promise<AttendanceStatus> {
     if (!row.firstSeenAt) return 'present';
-    const rules = await this.repo.rules(session.courseId);
+    const rules = rulesFor(session, await this.repo.rules(session.courseId));
     return statusAt(row.firstSeenAt, session.startsAt, session.endsAt, rules);
   }
 
@@ -207,6 +207,8 @@ export class AttendanceService {
     const now = this.now();
     return {
       id: session.id,
+      kind: session.kind,
+      title: session.title,
       scheduleId: session.scheduleId,
       courseId: session.courseId,
       roomId: session.roomId,

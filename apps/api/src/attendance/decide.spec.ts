@@ -1,5 +1,5 @@
 import type { Rules } from '../courses/courses.repo.js';
-import { classify, nextWrite, statusAt, type Thresholds } from './decide.js';
+import { classify, nextWrite, rulesFor, statusAt, type Thresholds } from './decide.js';
 import type { BestTwo } from './gallery.js';
 
 const t: Thresholds = { acceptMin: 0.5, reviewMin: 0.36 };
@@ -62,6 +62,32 @@ describe('statusAt', () => {
   it('ไม่ตั้งเวลาตัดขาด: มาก่อนหมดคาบนับสาย', () => {
     expect(statusAt(at('11:59:00'), startsAt, endsAt, rules(null))).toBe('late');
     expect(statusAt(at('12:00:00'), startsAt, endsAt, rules(null))).toBe('absent');
+  });
+});
+
+describe('rulesFor', () => {
+  const course: Rules = { lateAfterMin: 15, absentAfterMin: 30, outOfRoomLimitMin: 20 };
+
+  it('คาบเรียนใช้เกณฑ์ของวิชา', () => {
+    expect(rulesFor({ kind: 'class', lateAfterMin: null, absentAfterMin: null }, course)).toEqual(
+      course,
+    );
+  });
+
+  it('คาบสอบใช้เกณฑ์ของคาบ (ขาดว่าง = หมดคาบ) เวลานอกห้องยังใช้ของวิชา', () => {
+    expect(rulesFor({ kind: 'exam', lateAfterMin: 10, absentAfterMin: null }, course)).toEqual({
+      lateAfterMin: 10,
+      absentAfterMin: null,
+      outOfRoomLimitMin: 20,
+    });
+  });
+
+  it('คาบสอบตั้งสาย 10 นาที: เห็นนาทีที่ 10:59 = มา, 11:00 = สาย', () => {
+    const rules = rulesFor({ kind: 'exam', lateAfterMin: 10, absentAfterMin: 30 }, course);
+    const startsAt = new Date('2026-10-22T02:00:00Z');
+    const endsAt = new Date('2026-10-22T04:00:00Z');
+    expect(statusAt(new Date('2026-10-22T02:10:59Z'), startsAt, endsAt, rules)).toBe('present');
+    expect(statusAt(new Date('2026-10-22T02:11:00Z'), startsAt, endsAt, rules)).toBe('late');
   });
 });
 

@@ -4,7 +4,7 @@ import type { Course, CoursesRepo } from '../courses/courses.repo.js';
 import { CoursesService } from '../courses/courses.service.js';
 import type { RoomsRepo } from '../rooms/rooms.repo.js';
 import type { AppUser } from '../users/users.service.js';
-import type { NewSchedule, Override, Schedule, SchedulesRepo } from './schedules.repo.js';
+import type { ExamSlot, NewSchedule, Override, Schedule, SchedulesRepo } from './schedules.repo.js';
 import { SchedulesService, type SessionSyncer } from './schedules.service.js';
 
 // อังคาร 20 ต.ค. 2569 10:00 เวลาไทย
@@ -15,6 +15,7 @@ const LAST_MONDAY = '2026-10-19';
 class InMemorySchedulesRepo implements SchedulesRepo {
   schedules = new Map<string, NewSchedule & { id: string }>();
   overrides: Override[] = [];
+  exams: ExamSlot[] = [];
 
   constructor(
     private readonly courseCodes: Map<string, string>,
@@ -61,6 +62,9 @@ class InMemorySchedulesRepo implements SchedulesRepo {
   }
   async listOverridesBetween(from: string, to: string) {
     return this.overrides.filter((o) => o.onDate >= from && o.onDate <= to);
+  }
+  async listExamsBetween(from: string, to: string) {
+    return this.exams.filter((e) => e.onDate >= from && e.onDate <= to);
   }
   async listOverridesOnDate(date: string) {
     return this.overrides.filter((o) => o.onDate === date);
@@ -511,5 +515,83 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
       status: 400,
       code: 'SESSION_STARTED',
     });
+  });
+});
+
+describe('SchedulesService ชนกับคาบสอบ', () => {
+  // สอบวันจันทร์หน้า 10:00-12:00 ห้อง B ของวิชา CS102
+  const withExam = (openBeforeMin = 0) => {
+    const ctx = setup(openBeforeMin);
+    ctx.repo.exams.push({
+      id: randomUUID(),
+      courseId: ctx.cs102.id,
+      courseCode: 'CS102',
+      roomId: ctx.roomB,
+      roomName: 'ห้อง B',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T03:00:00Z'),
+      endsAt: new Date('2026-10-26T05:00:00Z'),
+    });
+    return ctx;
+  };
+
+  it('ตารางประจำวันจันทร์ห้องเดียวกันทับเวลาสอบ ได้ ROOM_CONFLICT', async () => {
+    const { owner, cs101, roomB, service, monday } = withExam();
+    expect(await rejection(service.create(owner, cs101.id, monday({ roomId: roomB })))).toEqual({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+      message: 'ห้อง B มีวิชา CS102 เวลา 10:00-12:00 แล้ว',
+    });
+  });
+
+  it('ตารางของวิชาที่สอบอยู่ ทับเวลาสอบคนละห้อง ได้ TIME_CONFLICT', async () => {
+    const { otherTeacher, cs102, service, monday } = withExam();
+    expect((await rejection(service.create(otherTeacher, cs102.id, monday()))).code).toBe(
+      'TIME_CONFLICT',
+    );
+  });
+
+  it('ห้องอื่นหรือเวลาไม่ทับ สร้างได้', async () => {
+    const { owner, cs101, roomB, service, monday } = withExam();
+    await expect(service.create(owner, cs101.id, monday())).resolves.toBeTruthy();
+    await expect(
+      service.create(
+        owner,
+        cs101.id,
+        monday({ roomId: roomB, startTime: '13:00', endTime: '15:00' }),
+      ),
+    ).resolves.toBeTruthy();
+  });
+
+  it('ย้ายห้องเฉพาะวันไปทับห้องสอบ ได้ ROOM_CONFLICT · งดสอนวันนั้นได้', async () => {
+    const { owner, cs101, roomB, service, monday } = withExam();
+    const schedule = await service.create(owner, cs101.id, monday());
+    expect(
+      (await rejection(service.setOverride(owner, schedule.id, NEXT_MONDAY, { roomId: roomB })))
+        .code,
+    ).toBe('ROOM_CONFLICT');
+    await expect(
+      service.setOverride(owner, schedule.id, NEXT_MONDAY, { cancelled: true }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('วันสอบที่ตารางนี้งดสอนไว้แล้ว เปลี่ยนเวลาตารางประจำให้ทับเวลาสอบได้', async () => {
+    const { owner, cs101, roomB, repo, service, monday } = withExam();
+    const schedule = await service.create(
+      owner,
+      cs101.id,
+      monday({ roomId: roomB, startTime: '13:00', endTime: '15:00' }),
+    );
+    repo.overrides.push({
+      scheduleId: schedule.id,
+      onDate: NEXT_MONDAY,
+      cancelled: true,
+      roomId: null,
+      startTime: null,
+      endTime: null,
+    });
+    await expect(
+      service.update(owner, schedule.id, { startTime: '09:00', endTime: '12:00' }),
+    ).resolves.toBeTruthy();
   });
 });
