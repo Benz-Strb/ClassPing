@@ -34,7 +34,7 @@ export class CameraService {
   ) {}
 
   async currentSession(camera: CameraIdentity): Promise<CameraSession> {
-    const live = await this.live(camera, this.now());
+    const live = await this.liveSessionFor(camera, this.now());
     return {
       session: live && {
         id: live.id,
@@ -60,7 +60,7 @@ export class CameraService {
     }
 
     const receivedAt = this.now();
-    const live = await this.live(camera, receivedAt);
+    const live = await this.liveSessionFor(camera, receivedAt);
     if (!live) throw new AppError(409, 'NO_LIVE_SESSION', 'ตอนนี้ห้องนี้ไม่มีคาบ');
     if ((await this.queue.waiting()) > MAX_WAITING_FRAMES) {
       throw new AppError(429, 'BUSY', 'ภาพรอตรวจเยอะเกินไป ข้ามภาพนี้ไปก่อน');
@@ -75,7 +75,8 @@ export class CameraService {
     return { queued: true };
   }
 
-  private live(camera: CameraIdentity, now: Date) {
+  // คาบของห้องกล้องนี้ที่กล้องควรเปิดอยู่ (รวมช่วงเปิดก่อนเวลา)
+  liveSessionFor(camera: CameraIdentity, now: Date) {
     const opensBy = new Date(now.getTime() + this.config.cameraOpenBeforeMin * MINUTE);
     return this.repo.liveSession(camera.roomId, opensBy, now);
   }

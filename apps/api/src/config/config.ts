@@ -13,6 +13,12 @@ export interface AppConfig {
   matchReviewMin: number;
   cameraOpenBeforeMin: number;
   matchLog: boolean;
+  // media server (MediaMTX) ไม่ตั้ง secret = ยังไม่เปิดใช้กล้องสด/ดูย้อนหลัง
+  mediaTokenSecret: string | null;
+  mediaPlaybackSecret: string | null;
+  mediaRtspUrl: string;
+  mediaWebrtcUrl: string;
+  mediaPlaybackUrl: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -39,6 +45,19 @@ function faceToken(env: NodeJS.ProcessEnv): string {
     throw new Error(`FACE_SERVICE_TOKEN ต้องยาวอย่างน้อย ${MIN_FACE_TOKEN_LENGTH} ตัว`);
   }
   return token;
+}
+
+function optionalSecret(env: NodeJS.ProcessEnv, name: string): string | null {
+  const value = env[name]?.trim();
+  if (!value) return null;
+  if (value.length < MIN_FACE_TOKEN_LENGTH) {
+    throw new Error(`${name} ต้องยาวอย่างน้อย ${MIN_FACE_TOKEN_LENGTH} ตัว`);
+  }
+  return value;
+}
+
+function url(env: NodeJS.ProcessEnv, name: string, fallback: string): string {
+  return (env[name]?.trim() || fallback).replace(/\/+$/, '');
 }
 
 function score(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
@@ -82,5 +101,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     matchReviewMin,
     cameraOpenBeforeMin: wholeNumber(env, 'CAMERA_OPEN_BEFORE_MIN', 20),
     matchLog: env.MATCH_LOG?.trim() === '1',
+    mediaTokenSecret: optionalSecret(env, 'MEDIA_TOKEN_SECRET'),
+    mediaPlaybackSecret: optionalSecret(env, 'MEDIA_PLAYBACK_SECRET'),
+    mediaRtspUrl: url(env, 'MEDIA_RTSP_URL', 'rtsp://127.0.0.1:8554'),
+    mediaWebrtcUrl: url(env, 'MEDIA_WEBRTC_URL', 'http://localhost:8889'),
+    mediaPlaybackUrl: url(env, 'MEDIA_PLAYBACK_URL', 'http://127.0.0.1:9996'),
   };
 }
