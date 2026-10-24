@@ -99,26 +99,27 @@ describe('loadConfig', () => {
   it('media server: ไม่ตั้ง secret = ปิดกล้องสด ค่า URL เริ่มต้นเป็นเครื่องตัวเอง', () => {
     const config = loadConfig(base({}));
     expect(config.mediaTokenSecret).toBeNull();
-    expect(config.mediaPlaybackSecret).toBeNull();
+    expect(config.mediaServerSecret).toBeNull();
     expect(config.mediaRtspUrl).toBe('rtsp://127.0.0.1:8554');
     expect(config.mediaWebrtcUrl).toBe('http://localhost:8889');
     expect(config.mediaPlaybackUrl).toBe('http://127.0.0.1:9996');
+    expect(config.mediaApiUrl).toBe('http://127.0.0.1:9997');
   });
 
   it('media secret ที่ตั้งไว้ต้องยาวอย่างน้อย 32 ตัว และ URL ตัด / ท้าย', () => {
     const config = loadConfig(
       base({
         MEDIA_TOKEN_SECRET: 'm'.repeat(32),
-        MEDIA_PLAYBACK_SECRET: 'p'.repeat(32),
+        MEDIA_SERVER_SECRET: 'p'.repeat(32),
         MEDIA_WEBRTC_URL: 'http://BMac.local:8889/',
       }),
     );
     expect(config.mediaTokenSecret).toBe('m'.repeat(32));
-    expect(config.mediaPlaybackSecret).toBe('p'.repeat(32));
+    expect(config.mediaServerSecret).toBe('p'.repeat(32));
     expect(config.mediaWebrtcUrl).toBe('http://BMac.local:8889');
     expect(() => loadConfig(base({ MEDIA_TOKEN_SECRET: 'short' }))).toThrow('MEDIA_TOKEN_SECRET');
-    expect(() => loadConfig(base({ MEDIA_PLAYBACK_SECRET: 'short' }))).toThrow(
-      'MEDIA_PLAYBACK_SECRET',
+    expect(() => loadConfig(base({ MEDIA_SERVER_SECRET: 'short' }))).toThrow(
+      'MEDIA_SERVER_SECRET',
     );
   });
 });

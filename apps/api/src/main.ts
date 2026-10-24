@@ -5,6 +5,7 @@ import { FrameWorker } from './attendance/frame.worker.js';
 import { UnknownCleanupRunner } from './attendance/unknown-cleanup.runner.js';
 import { configureApp } from './app.setup.js';
 import { OrphanFilesRunner } from './cleanup/orphan-files.runner.js';
+import { MediaWatchdogRunner } from './media/media-watchdog.runner.js';
 import { SessionSyncRunner } from './sessions/session-sync.runner.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -17,5 +18,6 @@ async function bootstrap() {
   app.get(FrameWorker).start();
   app.get(UnknownCleanupRunner).start();
   app.get(OrphanFilesRunner).start();
+  app.get(MediaWatchdogRunner).start();
 }
 await bootstrap();

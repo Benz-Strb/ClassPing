@@ -15,10 +15,12 @@ export interface AppConfig {
   matchLog: boolean;
   // media server (MediaMTX) ไม่ตั้ง secret = ยังไม่เปิดใช้กล้องสด/ดูย้อนหลัง
   mediaTokenSecret: string | null;
-  mediaPlaybackSecret: string | null;
+  // ใช้เรียก playback และ control API ของ MediaMTX
+  mediaServerSecret: string | null;
   mediaRtspUrl: string;
   mediaWebrtcUrl: string;
   mediaPlaybackUrl: string;
+  mediaApiUrl: string;
 }
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -102,9 +104,10 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     cameraOpenBeforeMin: wholeNumber(env, 'CAMERA_OPEN_BEFORE_MIN', 20),
     matchLog: env.MATCH_LOG?.trim() === '1',
     mediaTokenSecret: optionalSecret(env, 'MEDIA_TOKEN_SECRET'),
-    mediaPlaybackSecret: optionalSecret(env, 'MEDIA_PLAYBACK_SECRET'),
+    mediaServerSecret: optionalSecret(env, 'MEDIA_SERVER_SECRET'),
     mediaRtspUrl: url(env, 'MEDIA_RTSP_URL', 'rtsp://127.0.0.1:8554'),
     mediaWebrtcUrl: url(env, 'MEDIA_WEBRTC_URL', 'http://localhost:8889'),
     mediaPlaybackUrl: url(env, 'MEDIA_PLAYBACK_URL', 'http://127.0.0.1:9996'),
+    mediaApiUrl: url(env, 'MEDIA_API_URL', 'http://127.0.0.1:9997'),
   };
 }

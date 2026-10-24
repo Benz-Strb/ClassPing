@@ -43,8 +43,10 @@ export class MediaService {
         return this.canPublish(req);
       case 'read':
         return this.canRead(req);
-      case 'playback': {
-        const secret = this.config.mediaPlaybackSecret;
+      // playback = API ดึงคลิป, api = API ตัดสายตอนหมดคาบ
+      case 'playback':
+      case 'api': {
+        const secret = this.config.mediaServerSecret;
         const given = req.token || req.password || '';
         return secret !== null && same(given, secret);
       }
