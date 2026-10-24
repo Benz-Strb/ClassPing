@@ -62,9 +62,11 @@ export class SessionsService implements SessionSyncer {
 
   // คาบสอบแทนคาบเรียนของวิชาเดียวกันที่ทับ เอาคาบเรียนออกก่อนบันทึกคาบสอบ
   // (ไม่งั้นชน unique course_id + starts_at) sync รอบหลังจะไม่สร้างกลับมาเพราะมีคาบสอบทับอยู่
+  // save (บันทึกคาบสอบ) อยู่ในคิวเดียวกัน ไม่ให้ sync แทรกระหว่างลบกับบันทึก
   clearClassesFor(
     courseId: string,
     slot: { onDate: string; startsAt: Date; endsAt: Date },
+    save: () => Promise<void>,
   ): Promise<void> {
     return this.enqueue(courseId, async () => {
       const rows = await this.repo.listByCourse(courseId, slot.onDate, slot.onDate);
@@ -74,6 +76,7 @@ export class SessionsService implements SessionSyncer {
         throw new AppError(400, 'SESSION_STARTED', 'คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว แก้ไม่ได้');
       }
       await this.repo.remove(hit.map((r) => r.id));
+      await save();
     });
   }
 
