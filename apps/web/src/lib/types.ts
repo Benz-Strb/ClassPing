@@ -101,6 +101,30 @@ export interface Exam {
   locked: boolean;
 }
 
+export interface LiveSession {
+  id: string;
+  kind: "class" | "exam";
+  title: string | null;
+  courseCode: string;
+  courseName: string;
+  roomName: string;
+  startsAt: string;
+  endsAt: string;
+  status: "upcoming" | "live" | "ended";
+  // กล้องกำลังเปิดอยู่ ดูสดได้
+  cameraOpen: boolean;
+  hasCamera: boolean;
+  canDownload: boolean;
+}
+
+// ใช้ต่อกล้องสด token ใช้ได้แค่ตอนเริ่มต่อ หลุดแล้วขอใหม่
+export interface LiveTicket {
+  whepUrl: string;
+  token: string;
+  expiresAt: string;
+  session: LiveSession;
+}
+
 export type AttendanceStatus = "present" | "late" | "absent" | "leave" | "pending";
 
 export interface AttendanceRow {
