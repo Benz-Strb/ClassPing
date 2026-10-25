@@ -123,7 +123,8 @@ export class RecordingService {
       path: cameraPath(session.cameraId),
       act: 'clip',
       sid: session.id,
-      exp: this.now().getTime() + LINK_MS,
+      // ดูย้อนหลังใช้ลิงก์เดิมขอทีละช่วงตอนกรอ ต้องอยู่ได้ทั้งคลิป
+      exp: this.now().getTime() + LINK_MS + (input.download ? 0 : input.duration * 1000),
       start: start.toISOString(),
       dur: input.duration,
       dl: input.download,
