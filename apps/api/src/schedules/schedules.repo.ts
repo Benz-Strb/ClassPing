@@ -28,7 +28,7 @@ export interface Override {
   endTime: string | null;
 }
 
-// คาบสอบ ใช้เช็คห้อง/เวลาชนกับตารางเรียน
+// แถวคาบใน sessions ใช้เช็คห้อง/เวลาชน
 export interface ExamSlot {
   id: string;
   courseId: string;
@@ -52,6 +52,8 @@ export interface SchedulesRepo {
   listOverridesBetween(from: string, to: string): Promise<Override[]>;
   listOverridesOnDate(date: string): Promise<Override[]>;
   listExamsBetween(from: string, to: string): Promise<ExamSlot[]>;
+  // แถวคาบเรียนจริงของวันนั้น มีแถวที่ไม่ตรงตารางได้ (กล้องเปิดแล้วไม่ถูกแก้/ลบตาม)
+  listClassSessionsOn(date: string): Promise<ExamSlot[]>;
   saveOverride(override: Override): Promise<Override>;
   removeOverride(scheduleId: string, date: string): Promise<boolean>;
 }
@@ -202,11 +204,19 @@ export class SupabaseSchedulesRepo implements SchedulesRepo {
     return (data as OverrideRow[]).map(toOverride);
   }
 
-  async listExamsBetween(from: string, to: string): Promise<ExamSlot[]> {
+  listExamsBetween(from: string, to: string): Promise<ExamSlot[]> {
+    return this.listSlots('exam', from, to);
+  }
+
+  listClassSessionsOn(date: string): Promise<ExamSlot[]> {
+    return this.listSlots('class', date, date);
+  }
+
+  private async listSlots(kind: 'class' | 'exam', from: string, to: string): Promise<ExamSlot[]> {
     const { data, error } = await this.db
       .from('sessions')
       .select('id, course_id, room_id, on_date, starts_at, ends_at, rooms(name), courses(code)')
-      .eq('kind', 'exam')
+      .eq('kind', kind)
       .gte('on_date', from)
       .lte('on_date', to);
     if (error) throw dbError();
