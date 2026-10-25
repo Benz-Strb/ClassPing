@@ -27,6 +27,10 @@ const student: AppUser = { ...teacher, id: 'x', role: 'student' };
 
 const session: SessionInfo = {
   id: SESSION_ID,
+  kind: 'class',
+  title: null,
+  lateAfterMin: null,
+  absentAfterMin: null,
   courseId: 'c1',
   scheduleId: 'sch1',
   roomId: 'r1',

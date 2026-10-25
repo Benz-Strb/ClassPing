@@ -54,6 +54,11 @@ class Webcam:
             # กล้องหลุดแล้ว read() คืนทันที ถ้าไม่พักจะกิน CPU เต็ม
             time.sleep(0.1)
 
+    def latest_raw(self):
+        """ภาพล่าสุดแบบยังไม่ย่อ ไม่ล้างภาพ (ให้วิดีโอใช้ร่วมกับการส่งภาพเช็คชื่อ)"""
+        with self._lock:
+            return self._frame
+
     def read(self) -> bytes | None:
         with self._lock:
             frame, self._frame = self._frame, None

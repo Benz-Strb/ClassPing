@@ -9,6 +9,7 @@ function setup() {
   const touched: string[] = [];
   const repo: CameraRepo = {
     findByTokenHash: async (hash) => (hash === hashToken('good') ? camera : null),
+    findById: async () => null,
     touch: async (id) => {
       touched.push(id);
     },

@@ -5,7 +5,7 @@ import { dbError } from '../common/db-error.js';
 import { DEFAULT_RULES } from '../courses/courses.service.js';
 import type { Rules } from '../courses/courses.repo.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
-import type { AttendanceStatus } from './decide.js';
+import { rulesFor, type AttendanceStatus } from './decide.js';
 
 export interface SessionContext {
   courseId: string;
@@ -75,12 +75,19 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
   async sessionContext(sessionId: string): Promise<SessionContext | null> {
     const { data, error } = await this.db
       .from('sessions')
-      .select('course_id, starts_at, ends_at')
+      .select('course_id, starts_at, ends_at, kind, late_after_min, absent_after_min')
       .eq('id', sessionId)
       .maybeSingle();
     if (error) throw dbError();
     if (!data) return null;
-    const session = data as { course_id: string; starts_at: string; ends_at: string };
+    const session = data as {
+      course_id: string;
+      starts_at: string;
+      ends_at: string;
+      kind: 'class' | 'exam';
+      late_after_min: number | null;
+      absent_after_min: number | null;
+    };
 
     const { data: rules, error: rulesError } = await this.db
       .from('attendance_rules')
@@ -98,13 +105,20 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
       courseId: session.course_id,
       startsAt: new Date(session.starts_at),
       endsAt: new Date(session.ends_at),
-      rules: r
-        ? {
-            lateAfterMin: r.late_after_min,
-            absentAfterMin: r.absent_after_min,
-            outOfRoomLimitMin: r.out_of_room_limit_min,
-          }
-        : DEFAULT_RULES,
+      rules: rulesFor(
+        {
+          kind: session.kind,
+          lateAfterMin: session.late_after_min,
+          absentAfterMin: session.absent_after_min,
+        },
+        r
+          ? {
+              lateAfterMin: r.late_after_min,
+              absentAfterMin: r.absent_after_min,
+              outOfRoomLimitMin: r.out_of_room_limit_min,
+            }
+          : DEFAULT_RULES,
+      ),
     };
   }
 
