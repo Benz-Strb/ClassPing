@@ -79,7 +79,8 @@ export class MediaService {
     const camera = cameraId ? await this.cameras.findById(cameraId) : null;
     if (!camera) return false;
     if ((await this.sessions.liveSessionFor(camera, this.now()))?.id !== payload.sid) return false;
-    this.viewers.bind(req.id, payload.sid);
+    // จำไว้ให้ watchdog ใช้ ไม่มี watchdog ก็ไม่มีใครล้าง ไม่ต้องจำ
+    if (this.config.mediaServerSecret) this.viewers.bind(req.id, payload.sid);
     return true;
   }
 }
