@@ -15,11 +15,21 @@ class ApiDown(Exception):
 
 
 @dataclass(frozen=True)
+class Stream:
+    """ที่ส่งวิดีโอดูสด/อัดเก็บ url มี token ส่งวิดีโออายุสั้นจาก API ห้าม log ตรง ๆ"""
+
+    url: str
+    fps: int
+    bitrate_kbps: int
+
+
+@dataclass(frozen=True)
 class Session:
     id: str
     course: str
     ends_at: datetime
     fps: float
+    stream: Stream | None = None
 
 
 class CameraApi:
@@ -36,11 +46,19 @@ class CameraApi:
         current = data["session"]
         if current is None:
             return None
+        stream = data.get("stream")
         return Session(
             id=current["id"],
             course=f"{current['courseCode']} {current['courseName']}".strip(),
             ends_at=datetime.fromisoformat(current["endsAt"]),
             fps=float(data["fps"]),
+            stream=Stream(
+                url=stream["url"],
+                fps=int(stream["fps"]),
+                bitrate_kbps=int(stream["bitrateKbps"]),
+            )
+            if stream
+            else None,
         )
 
     def send(self, frame: bytes) -> str:

@@ -36,6 +36,22 @@ export function statusAt(
   return minutesLate <= rules.absentAfterMin ? 'late' : 'absent';
 }
 
+export interface SessionRules {
+  kind: 'class' | 'exam';
+  lateAfterMin: number | null;
+  absentAfterMin: number | null;
+}
+
+// คาบสอบตั้งเกณฑ์สาย/ขาดเองในแถวคาบ ส่วนคาบเรียนใช้เกณฑ์ของวิชา
+export function rulesFor(session: SessionRules, course: Rules): Rules {
+  if (session.kind !== 'exam') return course;
+  return {
+    lateAfterMin: session.lateAfterMin ?? course.lateAfterMin,
+    absentAfterMin: session.absentAfterMin,
+    outOfRoomLimitMin: course.outOfRoomLimitMin,
+  };
+}
+
 export interface Current {
   status: AttendanceStatus;
   byTeacher: boolean;

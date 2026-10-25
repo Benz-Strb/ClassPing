@@ -2,15 +2,22 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from camera.api import ApiDown, BadToken, Session
-from camera.loop import POLL_SECONDS, RETRY_SECONDS, CameraLoop
+from camera.api import ApiDown, BadToken, Session, Stream
+from camera.loop import POLL_SECONDS, RETRY_SECONDS, STREAM_RETRY_SECONDS, CameraLoop
 
 START = datetime(2026, 10, 23, 5, 0, tzinfo=UTC)
 
 
-def session(minutes: int = 180, fps: float = 1.0) -> Session:
+STREAM = Stream(url="rtsp://media:8554/cam/c1?token=tok", fps=15, bitrate_kbps=1500)
+
+
+def session(minutes: int = 180, fps: float = 1.0, stream: Stream | None = None) -> Session:
     return Session(
-        id="s1", course="EXAMPLE101 test", ends_at=START + timedelta(minutes=minutes), fps=fps
+        id="s1",
+        course="EXAMPLE101 test",
+        ends_at=START + timedelta(minutes=minutes),
+        fps=fps,
+        stream=stream,
     )
 
 
@@ -68,10 +75,37 @@ class Clock:
         self.now += timedelta(seconds=seconds)
 
 
+class FakeStreamer:
+    def __init__(self):
+        self.ok = True
+        self.started: list[str] = []
+        self.stopped = 0
+        self.alive = False
+        self.running = False
+
+    def start(self, url: str, fps: int, bitrate_kbps: int) -> bool:
+        if not self.ok:
+            return False
+        self.started.append(url)
+        self.alive = self.running = True
+        return True
+
+    def stop(self):
+        if self.running:
+            self.stopped += 1
+        self.alive = self.running = False
+
+
 @pytest.fixture
 def setup():
     api, cam, clock = FakeApi(), FakeCamera(), Clock()
     return api, cam, clock, CameraLoop(api, cam, clock)
+
+
+@pytest.fixture
+def streaming():
+    api, cam, clock, streamer = FakeApi(), FakeCamera(), Clock(), FakeStreamer()
+    return api, cam, clock, streamer, CameraLoop(api, cam, clock, streamer)
 
 
 def test_no_session_polls_every_30s_without_camera(setup):
@@ -175,3 +209,50 @@ def test_camera_open_failure_retries_instead_of_crashing(setup):
     assert loop.tick() == 1.0
     assert cam.opened == 1
     assert api.sent == [b"jpeg"]
+
+
+def test_stream_starts_with_session_and_stops_at_end(streaming):
+    api, cam, clock, streamer, loop = streaming
+    api.current = session(minutes=1, stream=STREAM)
+    loop.tick()
+    assert streamer.started == [STREAM.url]
+    clock.advance(60)
+    api.current = None
+    loop.tick()
+    assert streamer.stopped == 1
+    assert cam.closed == 1
+
+
+def test_stream_restarts_after_ffmpeg_dies_and_frames_keep_going(streaming):
+    api, _cam, clock, streamer, loop = streaming
+    api.current = session(stream=STREAM)
+    loop.tick()
+    streamer.alive = False
+    sent = len(api.sent)
+    clock.advance(1)
+    loop.tick()
+    assert len(api.sent) == sent + 1
+    clock.advance(STREAM_RETRY_SECONDS)
+    loop.tick()
+    assert streamer.started == [STREAM.url, STREAM.url]
+
+
+def test_stream_start_failure_retries_later(streaming):
+    api, _cam, clock, streamer, loop = streaming
+    streamer.ok = False
+    api.current = session(stream=STREAM)
+    loop.tick()
+    streamer.ok = True
+    clock.advance(1)
+    loop.tick()
+    assert streamer.started == []
+    clock.advance(STREAM_RETRY_SECONDS)
+    loop.tick()
+    assert streamer.started == [STREAM.url]
+
+
+def test_no_stream_info_never_starts(streaming):
+    api, _cam, _clock, streamer, loop = streaming
+    api.current = session()
+    loop.tick()
+    assert streamer.started == []

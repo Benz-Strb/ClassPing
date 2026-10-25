@@ -5,6 +5,8 @@ import { CLOCK, type Clock } from '../common/clock.js';
 import { looksLike } from '../common/image-type.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import type { UploadedImage } from '../enrollment/enrollment.service.js';
+import { cameraPath } from '../media/media-path.js';
+import { signMediaToken } from '../media/media-token.js';
 import { CAMERA_REPO, type CameraIdentity, type CameraRepo } from './camera.repo.js';
 
 export interface CameraSession {
@@ -16,9 +18,16 @@ export interface CameraSession {
     endsAt: string;
   } | null;
   fps: number;
+  // ที่ส่งวิดีโอให้ media server null = ไม่ต้องส่ง (ไม่มีคาบ หรือยังไม่ได้ตั้ง media server)
+  stream: { url: string; fps: number; bitrateKbps: number } | null;
 }
 
 const FRAMES_PER_SECOND = 1;
+// วิดีโอดูสด/อัดเก็บ วัดจากเว็บแคมจริงตอนแผน 7 Task 0 (1500 kbps ≈ 689 MB/ชม.)
+const VIDEO_FPS = 15;
+const VIDEO_BITRATE_KBPS = 1500;
+// MediaMTX ถามสิทธิ์แค่ตอนเริ่มต่อ กล้องถามคาบทุก 30 วิ เริ่มส่งใหม่เมื่อไหร่ก็ได้ token ใหม่
+const PUBLISH_TOKEN_MINUTES = 10;
 // worker ตามไม่ทันเกินนี้ ให้กล้องข้ามภาพไปก่อน ผลจะได้ไม่ช้ากว่าความจริงมาก
 export const MAX_WAITING_FRAMES = 20;
 
@@ -34,7 +43,7 @@ export class CameraService {
   ) {}
 
   async currentSession(camera: CameraIdentity): Promise<CameraSession> {
-    const live = await this.live(camera, this.now());
+    const live = await this.liveSessionFor(camera, this.now());
     return {
       session: live && {
         id: live.id,
@@ -44,6 +53,7 @@ export class CameraService {
         endsAt: live.endsAt.toISOString(),
       },
       fps: FRAMES_PER_SECOND,
+      stream: live ? this.streamFor(camera, live.id) : null,
     };
   }
 
@@ -60,7 +70,7 @@ export class CameraService {
     }
 
     const receivedAt = this.now();
-    const live = await this.live(camera, receivedAt);
+    const live = await this.liveSessionFor(camera, receivedAt);
     if (!live) throw new AppError(409, 'NO_LIVE_SESSION', 'ตอนนี้ห้องนี้ไม่มีคาบ');
     if ((await this.queue.waiting()) > MAX_WAITING_FRAMES) {
       throw new AppError(429, 'BUSY', 'ภาพรอตรวจเยอะเกินไป ข้ามภาพนี้ไปก่อน');
@@ -75,7 +85,26 @@ export class CameraService {
     return { queued: true };
   }
 
-  private live(camera: CameraIdentity, now: Date) {
+  private streamFor(camera: CameraIdentity, sessionId: string): CameraSession['stream'] {
+    const { mediaTokenSecret, mediaServerSecret } = this.config;
+    if (camera.kind !== 'front' || !mediaTokenSecret || !mediaServerSecret) return null;
+    const path = cameraPath(camera.id);
+    const token = signMediaToken(mediaTokenSecret, {
+      sub: camera.id,
+      path,
+      act: 'publish',
+      sid: sessionId,
+      exp: this.now().getTime() + PUBLISH_TOKEN_MINUTES * MINUTE,
+    });
+    return {
+      url: `${this.config.mediaRtspUrl}/${path}?token=${token}`,
+      fps: VIDEO_FPS,
+      bitrateKbps: VIDEO_BITRATE_KBPS,
+    };
+  }
+
+  // คาบของห้องกล้องนี้ที่กล้องควรเปิดอยู่ (รวมช่วงเปิดก่อนเวลา)
+  liveSessionFor(camera: CameraIdentity, now: Date) {
     const opensBy = new Date(now.getTime() + this.config.cameraOpenBeforeMin * MINUTE);
     return this.repo.liveSession(camera.roomId, opensBy, now);
   }

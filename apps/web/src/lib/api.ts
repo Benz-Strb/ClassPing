@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 // เรียก API ของ ClassPing พร้อมแนบ token ของคนที่ login อยู่
 // สำเร็จคืนค่าใน data, ไม่สำเร็จ throw ApiError ที่มี code ให้เช็กต่อ

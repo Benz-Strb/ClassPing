@@ -15,6 +15,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "redis:up": "docker compose up -d redis",
     "redis:down": "docker compose down",
+    "media:up": "docker compose up -d media",
     "dev:mobile": "npm run start --workspace @classping/mobile",
     "dev:mobile:share": "npm run share --workspace @classping/mobile",
     "mobile:android": "npm run android --workspace @classping/mobile",
@@ -31,11 +32,11 @@
     "test:camera": "cd services/camera && uv run pytest"
   },
   "overrides": {
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@types/react": "~19.2.2",
+    "@types/react": "~19.3.0",
     "supabase": "^2.121.0"
   }
 }

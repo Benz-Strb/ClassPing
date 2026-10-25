@@ -26,6 +26,7 @@ describe('กล้องหน้าห้อง (e2e)', () => {
     const repo: CameraRepo = {
       findByTokenHash: async (hash) =>
         hash === hashToken('good') ? { id: 'cam1', roomId: 'r1', kind: 'front' } : null,
+      findById: async () => null,
       touch: async () => undefined,
       liveSession: async () => ({
         id: 's1',

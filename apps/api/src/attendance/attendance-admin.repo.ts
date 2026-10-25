@@ -5,10 +5,11 @@ import { dbError } from '../common/db-error.js';
 import type { Rules } from '../courses/courses.repo.js';
 import { DEFAULT_RULES } from '../courses/courses.service.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
-import type { AttendanceStatus } from './decide.js';
+import type { AttendanceStatus, SessionRules } from './decide.js';
 
-export interface SessionInfo {
+export interface SessionInfo extends SessionRules {
   id: string;
+  title: string | null;
   courseId: string;
   scheduleId: string | null;
   roomId: string;
@@ -74,7 +75,9 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
   async session(sessionId: string): Promise<SessionInfo | null> {
     const { data, error } = await this.db
       .from('sessions')
-      .select('id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, rooms(name)')
+      .select(
+        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, rooms(name)',
+      )
       .eq('id', sessionId)
       .maybeSingle();
     if (error) throw dbError();
@@ -87,10 +90,18 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       on_date: string;
       starts_at: string;
       ends_at: string;
+      kind: 'class' | 'exam';
+      title: string | null;
+      late_after_min: number | null;
+      absent_after_min: number | null;
       rooms: { name: string } | null;
     };
     return {
       id: row.id,
+      kind: row.kind,
+      title: row.title,
+      lateAfterMin: row.late_after_min,
+      absentAfterMin: row.absent_after_min,
       courseId: row.course_id,
       scheduleId: row.schedule_id,
       roomId: row.room_id,

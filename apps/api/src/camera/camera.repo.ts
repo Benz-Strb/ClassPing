@@ -19,6 +19,7 @@ export interface LiveSession {
 
 export interface CameraRepo {
   findByTokenHash(hash: string): Promise<CameraIdentity | null>;
+  findById(id: string): Promise<CameraIdentity | null>;
   touch(cameraId: string, at: Date): Promise<void>;
   // คาบของห้องที่เริ่มไม่เกิน opensBy และยังไม่จบ ณ now
   liveSession(roomId: string, opensBy: Date, now: Date): Promise<LiveSession | null>;
@@ -42,6 +43,18 @@ export class SupabaseCameraRepo implements CameraRepo {
       .from('cameras')
       .select('id, room_id, kind')
       .eq('token_hash', hash)
+      .maybeSingle();
+    if (error) throw dbError();
+    if (!data) return null;
+    const row = data as { id: string; room_id: string; kind: 'front' | 'door' };
+    return { id: row.id, roomId: row.room_id, kind: row.kind };
+  }
+
+  async findById(id: string): Promise<CameraIdentity | null> {
+    const { data, error } = await this.db
+      .from('cameras')
+      .select('id, room_id, kind')
+      .eq('id', id)
       .maybeSingle();
     if (error) throw dbError();
     if (!data) return null;

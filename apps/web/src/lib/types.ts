@@ -65,6 +65,9 @@ export interface Override {
 
 export interface SessionView {
   id: string;
+  kind: "class" | "exam";
+  // ชื่อคาบสอบ คาบเรียนเป็น null
+  title: string | null;
   scheduleId: string | null;
   courseId: string;
   roomId: string;
@@ -73,6 +76,81 @@ export interface SessionView {
   startsAt: string;
   endsAt: string;
   status: "upcoming" | "live" | "ended";
+}
+
+export interface Person {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+export interface Exam {
+  id: string;
+  title: string;
+  onDate: string;
+  start: string;
+  end: string;
+  startsAt: string;
+  endsAt: string;
+  room: Room;
+  lateAfterMin: number;
+  // null = นับขาดตอนหมดคาบ
+  absentAfterMin: number | null;
+  proctors: Person[];
+  // กล้องเปิดแล้ว แก้ได้แค่คนคุมสอบ
+  locked: boolean;
+}
+
+export interface LiveSession {
+  id: string;
+  kind: "class" | "exam";
+  title: string | null;
+  courseCode: string;
+  courseName: string;
+  roomName: string;
+  startsAt: string;
+  endsAt: string;
+  status: "upcoming" | "live" | "ended";
+  // กล้องกำลังเปิดอยู่ ดูสดได้
+  cameraOpen: boolean;
+  hasCamera: boolean;
+  canDownload: boolean;
+}
+
+// ใช้ต่อกล้องสด token ใช้ได้แค่ตอนเริ่มต่อ หลุดแล้วขอใหม่
+export interface LiveTicket {
+  whepUrl: string;
+  token: string;
+  expiresAt: string;
+  session: LiveSession;
+}
+
+// กรอบหน้าล่าสุดจากกล้องเช็คชื่อ box เป็นสัดส่วนของภาพ [ซ้าย, บน, ขวา, ล่าง]
+export interface LiveFaces {
+  at: string | null;
+  faces: {
+    n: number;
+    box: [number, number, number, number];
+    kind: "match" | "review" | "unknown";
+    name: string | null;
+    studentCode: string | null;
+  }[];
+}
+
+export interface Recording {
+  session: {
+    kind: "class" | "exam";
+    title: string | null;
+    courseCode: string;
+    courseName: string;
+    roomName: string;
+    startsAt: string;
+    endsAt: string;
+  };
+  // ไฟล์อัดแยกเป็นช่วง ๆ ตามที่กล้องต่ออยู่ duration เป็นวินาที
+  segments: { start: string; duration: number }[];
+  expiresOn: string | null;
+  canDownload: boolean;
 }
 
 export type AttendanceStatus = "present" | "late" | "absent" | "leave" | "pending";

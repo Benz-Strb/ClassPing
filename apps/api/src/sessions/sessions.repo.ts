@@ -15,6 +15,8 @@ export interface NewSessionRow {
 
 export interface SessionRow extends NewSessionRow {
   id: string;
+  kind: 'class' | 'exam';
+  title: string | null;
   roomName: string;
 }
 
@@ -30,6 +32,8 @@ export const SESSIONS_REPO = Symbol('SESSIONS_REPO');
 
 interface Row {
   id: string;
+  kind: 'class' | 'exam';
+  title: string | null;
   schedule_id: string | null;
   course_id: string;
   room_id: string;
@@ -41,6 +45,8 @@ interface Row {
 
 const toSession = (row: Row): SessionRow => ({
   id: row.id,
+  kind: row.kind,
+  title: row.title,
   scheduleId: row.schedule_id,
   courseId: row.course_id,
   roomId: row.room_id,
@@ -57,7 +63,9 @@ export class SupabaseSessionsRepo implements SessionsRepo {
   async listByCourse(courseId: string, from: string, to: string): Promise<SessionRow[]> {
     const { data, error } = await this.db
       .from('sessions')
-      .select('id, schedule_id, course_id, room_id, on_date, starts_at, ends_at, rooms(name)')
+      .select(
+        'id, kind, title, schedule_id, course_id, room_id, on_date, starts_at, ends_at, rooms(name)',
+      )
       .eq('course_id', courseId)
       .gte('on_date', from)
       .lte('on_date', to)

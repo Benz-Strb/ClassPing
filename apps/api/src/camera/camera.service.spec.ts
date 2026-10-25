@@ -2,6 +2,7 @@ import type { AppConfig } from '../config/config.js';
 import type { FrameJob, FrameQueue } from '../attendance/frame-queue.js';
 import type { CameraIdentity, CameraRepo, LiveSession } from './camera.repo.js';
 import { CameraService, MAX_WAITING_FRAMES } from './camera.service.js';
+import { verifyMediaToken } from '../media/media-token.js';
 
 const NOW = new Date('2026-10-22T02:00:00Z'); // 09:00 เวลาไทย
 
@@ -22,11 +23,14 @@ const jpeg = (size = 100) => {
   return { buffer, mimetype: 'image/jpeg', size };
 };
 
-function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?: number } = {}) {
+function setup(
+  opts: { live?: LiveSession | null; waiting?: number; openBefore?: number; media?: boolean } = {},
+) {
   const calls: { roomId: string; opensBy: Date; now: Date }[] = [];
   const added: FrameJob[] = [];
   const repo: CameraRepo = {
     findByTokenHash: async () => null,
+    findById: async () => null,
     touch: async () => undefined,
     liveSession: async (roomId, opensBy, now) => {
       calls.push({ roomId, opensBy, now });
@@ -39,7 +43,12 @@ function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?:
     },
     waiting: async () => opts.waiting ?? 0,
   };
-  const config = { cameraOpenBeforeMin: opts.openBefore ?? 0 } as AppConfig;
+  const config = {
+    cameraOpenBeforeMin: opts.openBefore ?? 0,
+    mediaServerSecret: opts.media ? 's'.repeat(32) : null,
+    mediaTokenSecret: opts.media ? 't'.repeat(32) : null,
+    mediaRtspUrl: 'rtsp://media.test:8554',
+  } as AppConfig;
   const service = new CameraService(repo, queue, config, () => NOW);
   return { service, calls, added };
 }
@@ -47,7 +56,11 @@ function setup(opts: { live?: LiveSession | null; waiting?: number; openBefore?:
 describe('CameraService.currentSession', () => {
   it('ไม่มีคาบได้ null', async () => {
     const { service } = setup({ live: null });
-    await expect(service.currentSession(front)).resolves.toEqual({ session: null, fps: 1 });
+    await expect(service.currentSession(front)).resolves.toEqual({
+      session: null,
+      fps: 1,
+      stream: null,
+    });
   });
 
   it('มีคาบได้ข้อมูลคาบเป็นเวลา ISO', async () => {
@@ -61,6 +74,31 @@ describe('CameraService.currentSession', () => {
         endsAt: '2026-10-22T05:00:00.000Z',
       },
       fps: 1,
+      stream: null,
+    });
+  });
+
+  it('ตั้ง media server แล้ว มีคาบ = บอกที่ส่งวิดีโอ 15 fps 1500 kbps พร้อม token ส่งวิดีโออายุ 10 นาที', async () => {
+    const { service } = setup({ media: true });
+    const { stream } = await service.currentSession(front);
+    expect(stream).toMatchObject({ fps: 15, bitrateKbps: 1500 });
+    const url = new URL(stream!.url);
+    expect(`${url.protocol}//${url.host}${url.pathname}`).toBe('rtsp://media.test:8554/cam/cam1');
+    expect(verifyMediaToken('t'.repeat(32), url.searchParams.get('token')!, NOW)).toEqual({
+      sub: 'cam1',
+      path: 'cam/cam1',
+      act: 'publish',
+      sid: 's1',
+      exp: NOW.getTime() + 10 * 60_000,
+    });
+  });
+
+  it('ไม่มีคาบ หรือเป็นกล้องประตู ไม่ส่งวิดีโอ', async () => {
+    await expect(
+      setup({ media: true, live: null }).service.currentSession(front),
+    ).resolves.toMatchObject({ stream: null });
+    await expect(setup({ media: true }).service.currentSession(door)).resolves.toMatchObject({
+      stream: null,
     });
   });
 
