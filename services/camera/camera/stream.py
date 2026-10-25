@@ -99,8 +99,11 @@ class Streamer:
             f"{bitrate_kbps}k",
             "-bufsize",
             f"{bitrate_kbps * 2}k",
+            # keyframe ทุก 2 วิพอดี ไม่ให้ x264 แทรกเองตอนภาพเปลี่ยน (ไฟล์ใหญ่ขึ้น และดูย้อนหลังตัดท่อนไม่ตรง)
             "-g",
             str(fps * 2),
+            "-sc_threshold",
+            "0",
             "-an",
             "-f",
             "rtsp",
