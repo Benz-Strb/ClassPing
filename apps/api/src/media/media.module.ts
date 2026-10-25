@@ -13,6 +13,7 @@ import { HttpPlaybackClient, PLAYBACK_CLIENT } from './playback.client.js';
 import { ClipsController, RecordingController } from './recording.controller.js';
 import { RecordingService } from './recording.service.js';
 import { MediaService } from './media.service.js';
+import { ViewerSessions } from './viewer-sessions.js';
 
 @Module({
   imports: [CameraModule, AttendanceModule, CoursesModule],
@@ -24,6 +25,7 @@ import { MediaService } from './media.service.js';
     { provide: PLAYBACK_CLIENT, useClass: HttpPlaybackClient },
     { provide: LIVE_REPO, useClass: SupabaseLiveRepo },
     MediaWatchdogRunner,
+    ViewerSessions,
     { provide: MEDIA_CONTROL, useClass: HttpMediaControl },
     { provide: CLOCK, useValue: () => new Date() },
   ],

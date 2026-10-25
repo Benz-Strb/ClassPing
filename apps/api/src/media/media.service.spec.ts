@@ -2,6 +2,7 @@ import type { CameraIdentity, LiveSession } from '../camera/camera.repo.js';
 import type { AppConfig } from '../config/config.js';
 import { signMediaToken, type MediaTokenPayload } from './media-token.js';
 import { MediaService, type MediaAuthRequest } from './media.service.js';
+import { ViewerSessions } from './viewer-sessions.js';
 
 const NOW = new Date('2026-10-24T02:00:00Z');
 const TOKEN_SECRET = 't'.repeat(32);
@@ -32,7 +33,10 @@ const session: LiveSession = {
   endsAt: new Date('2026-10-24T05:00:00Z'),
 };
 
+let viewers: ViewerSessions;
+
 function setup(opts: { live?: boolean; secrets?: boolean } = {}) {
+  viewers = new ViewerSessions();
   const config = {
     mediaTokenSecret: opts.secrets === false ? null : TOKEN_SECRET,
     mediaServerSecret: opts.secrets === false ? null : SERVER_SECRET,
@@ -44,6 +48,7 @@ function setup(opts: { live?: boolean; secrets?: boolean } = {}) {
     { liveSessionFor: async () => (opts.live === false ? null : session) },
     config,
     () => NOW,
+    viewers,
   );
   return service;
 }
@@ -70,6 +75,7 @@ const read = (token: string, path = `cam/${camA.id}`): MediaAuthRequest => ({
   protocol: 'webrtc',
   path,
   token,
+  id: 'conn-1',
 });
 
 const publishToken = (extra: Partial<MediaTokenPayload> = {}) =>
@@ -140,6 +146,7 @@ describe('MediaService.authorize คนดูสด', () => {
         protocol: 'webrtc',
         path: `cam/${camA.id}`,
         password: viewer(),
+        id: 'conn-1',
       }),
     ).resolves.toBe(true);
   });
@@ -162,6 +169,18 @@ describe('MediaService.authorize คนดูสด', () => {
 
   it('ยังไม่ได้ตั้ง MEDIA_TOKEN_SECRET ไม่ผ่านทุกกรณี', async () => {
     await expect(setup({ secrets: false }).authorize(read(viewer()))).resolves.toBe(false);
+  });
+
+  it('ผ่านแล้วจำว่าสายนี้เป็นของคาบไหน ไม่ผ่านไม่จำ', async () => {
+    const service = setup();
+    await service.authorize(read(viewer()));
+    expect(viewers.sessionOf('conn-1')).toBe('s1');
+    await service.authorize({ ...read(viewer({ sid: 's0' })), id: 'conn-2' });
+    expect(viewers.sessionOf('conn-2')).toBeUndefined();
+  });
+
+  it('ไม่มีรหัสสายจาก MediaMTX ไม่ผ่าน (ตัดตอนเปลี่ยนคาบไม่ได้)', async () => {
+    await expect(setup().authorize({ ...read(viewer()), id: null })).resolves.toBe(false);
   });
 });
 
