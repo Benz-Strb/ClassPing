@@ -94,6 +94,17 @@ const examNotFound = () => new AppError(404, 'EXAM_NOT_FOUND', 'ไม่พบ�
 
 type Slot = { startsAt: Date; endsAt: Date };
 
+// แถวคาบที่ตรงกับตารางจะมาซ้ำกับคาบจากตาราง
+const uniqueTimes = <T extends Slot>(list: T[]): T[] =>
+  list.filter(
+    (a, i) =>
+      list.findIndex(
+        (b) =>
+          b.startsAt.getTime() === a.startsAt.getTime() &&
+          b.endsAt.getTime() === a.endsAt.getTime(),
+      ) === i,
+  );
+
 @Injectable()
 export class ExamsService {
   private readonly logger = new Logger(ExamsService.name);
@@ -240,23 +251,24 @@ export class ExamsService {
 
   // ทับห้องของวิชาอื่น หรือทับคาบสอบอื่นของวิชาเดียวกัน = ห้าม
   // ทับคาบเรียนของวิชาเดียวกัน = คืนรายการไว้ให้อาจารย์ยืนยันว่าจะแทน
+  // ดูทั้งตารางและแถวคาบจริง แถวที่กล้องเปิดไปแล้วอาจไม่ตรงตาราง (เช่นลบตารางทีหลัง)
   private async checkClash(exam: NewExam, selfId: string | null): Promise<Slot[]> {
     const date = exam.onDate;
     const schedules = await this.schedules.listByWeekday(weekdayOf(date));
-    const classes = planDay(date, schedules, await this.schedules.listOverridesOnDate(date));
+    const planned = planDay(date, schedules, await this.schedules.listOverridesOnDate(date)).map(
+      (c) => ({
+        ...c,
+        courseCode: schedules.find((s) => s.id === c.scheduleId)?.courseCode ?? '',
+      }),
+    );
+    const classes = [...planned, ...(await this.schedules.listClassSessionsOn(date))];
     const exams = (await this.schedules.listExamsBetween(date, date)).filter(
       (e) => e.id !== selfId,
     );
-    const replaced = classes.filter((c) => c.courseId === exam.courseId && overlaps(c, exam));
-    const slots = [
-      ...classes
-        .filter((c) => c.courseId !== exam.courseId)
-        .map((c) => ({
-          ...c,
-          courseCode: schedules.find((s) => s.id === c.scheduleId)?.courseCode ?? '',
-        })),
-      ...exams,
-    ];
+    const replaced = uniqueTimes(
+      classes.filter((c) => c.courseId === exam.courseId && overlaps(c, exam)),
+    );
+    const slots = [...classes.filter((c) => c.courseId !== exam.courseId), ...exams];
     const hit = slots.find(
       (s) => (s.roomId === exam.roomId || s.courseId === exam.courseId) && overlaps(s, exam),
     );

@@ -66,6 +66,9 @@ class InMemorySchedulesRepo implements SchedulesRepo {
   async listExamsBetween(from: string, to: string) {
     return this.exams.filter((e) => e.onDate >= from && e.onDate <= to);
   }
+  async listClassSessionsOn(_date: string) {
+    return [];
+  }
   async listOverridesOnDate(date: string) {
     return this.overrides.filter((o) => o.onDate === date);
   }
