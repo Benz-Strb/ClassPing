@@ -74,13 +74,19 @@ export class ClipsController {
   @Get(':token')
   async download(@Param('token') token: string, @Res() res: Response): Promise<void> {
     const clip = this.recording.openClip(token);
+    // ลิงก์ดูย้อนหลังใช้ได้แค่ทีละท่อน คนที่ไม่มีสิทธิ์ดาวน์โหลดจะได้ไม่ได้ไฟล์ทั้งคลิป
+    if (!clip.download) {
+      throw new AppError(
+        403,
+        'DOWNLOAD_NOT_ALLOWED',
+        'ดาวน์โหลดได้เฉพาะอาจารย์ประจำวิชาและผู้ดูแลระบบ',
+      );
+    }
     const upstream = await this.playback.clip(clip.path, clip.start, clip.duration, 'mp4');
     res.status(200);
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Cache-Control', 'private, no-store');
-    if (clip.download) {
-      res.setHeader('Content-Disposition', `attachment; filename="${clip.filename}"`);
-    }
+    res.setHeader('Content-Disposition', `attachment; filename="${clip.filename}"`);
     if (!upstream.body) {
       res.end();
       return;
