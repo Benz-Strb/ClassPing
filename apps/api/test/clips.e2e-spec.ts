@@ -124,4 +124,10 @@ describe('GET /clips/:token (e2e)', () => {
     );
     expect(requested).toEqual([{ start: START.toISOString(), duration: 14, format: 'mp4' }]);
   });
+
+  it('ลิงก์ดูย้อนหลังเอาไปโหลดทั้งคลิปไม่ได้', async () => {
+    const res = await request(app.getHttpServer()).get('/clips/play').expect(403);
+    expect(res.body.error.code).toBe('DOWNLOAD_NOT_ALLOWED');
+    expect(requested).toEqual([]);
+  });
 });
