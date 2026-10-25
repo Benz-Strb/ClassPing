@@ -179,6 +179,36 @@ describe('MediaService.authorize คนดูสด', () => {
     expect(viewers.sessionOf('conn-2')).toBeUndefined();
   });
 
+  it('token เดียวต่อสายได้ครั้งเดียว ยิงซ้ำไม่ผ่านและไม่ถามฐานข้อมูล', async () => {
+    let lookups = 0;
+    const service = new MediaService(
+      {
+        findById: async (id: string) => {
+          lookups++;
+          return byId[id] ?? null;
+        },
+      },
+      { liveSessionFor: async () => session },
+      { mediaTokenSecret: TOKEN_SECRET, mediaServerSecret: SERVER_SECRET } as AppConfig,
+      () => NOW,
+      new ViewerSessions(),
+    );
+    const token = viewer();
+    await expect(service.authorize(read(token))).resolves.toBe(true);
+    await expect(service.authorize({ ...read(token), id: 'conn-2' })).resolves.toBe(false);
+    expect(lookups).toBe(1);
+    await expect(service.authorize({ ...read(viewer({ sub: 'u2' })), id: 'conn-3' })).resolves.toBe(
+      true,
+    );
+  });
+
+  it('MediaMTX ถามก่อนเริ่มต่อ (ไม่มีรหัสสาย) ไม่ทำให้ token ใช้ไม่ได้', async () => {
+    const service = setup();
+    const token = viewer();
+    await service.authorize({ ...read(token), id: null });
+    await expect(service.authorize(read(token))).resolves.toBe(true);
+  });
+
   it('ไม่ได้เปิด watchdog (ไม่มี MEDIA_SERVER_SECRET) ดูได้แต่ไม่จำ เพราะไม่มีใครล้าง', async () => {
     await expect(setup({ watchdog: false }).authorize(read(viewer()))).resolves.toBe(true);
     expect(viewers.sessionOf('conn-1')).toBeUndefined();

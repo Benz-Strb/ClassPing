@@ -29,6 +29,9 @@ const same = (a: string, b: string) => {
 
 @Injectable()
 export class MediaService {
+  // token ดูสดที่ใช้ต่อสายไปแล้ว → เวลาหมดอายุ ใช้ซ้ำไม่ได้ เว็บขอ token ใหม่ทุกครั้งที่ต่อใหม่อยู่แล้ว
+  private readonly usedReads = new Map<string, number>();
+
   constructor(
     @Inject(CAMERA_REPO) private readonly cameras: Pick<CameraRepo, 'findById'>,
     @Inject(CameraService) private readonly sessions: Pick<CameraService, 'liveSessionFor'>,
@@ -72,15 +75,27 @@ export class MediaService {
   // token ผูกกับคาบ ต้องเป็นคาบที่ห้องนั้นกำลังใช้กล้องอยู่ตอนต่อ ผ่านแล้วจำว่าสายนี้เป็นของคาบไหน
   private async canRead(req: MediaAuthRequest): Promise<boolean> {
     const secret = this.config.mediaTokenSecret;
+    // ไม่มีรหัสสาย = MediaMTX ถามก่อนเริ่มต่อ (OPTIONS) ต้องไม่ทำให้ token ถูกใช้ไป
     if (secret === null || req.protocol !== 'webrtc' || !req.id) return false;
-    const payload = verifyMediaToken(secret, req.token || req.password || '', this.now());
+    const token = req.token || req.password || '';
+    const payload = verifyMediaToken(secret, token, this.now());
     if (!payload || payload.act !== 'read' || payload.path !== req.path) return false;
+    if (!this.useOnce(token, payload.exp)) return false;
     const cameraId = CAMERA_PATH.exec(req.path ?? '')?.[1];
     const camera = cameraId ? await this.cameras.findById(cameraId) : null;
     if (!camera) return false;
     if ((await this.sessions.liveSessionFor(camera, this.now()))?.id !== payload.sid) return false;
     // จำไว้ให้ watchdog ใช้ ไม่มี watchdog ก็ไม่มีใครล้าง ไม่ต้องจำ
     if (this.config.mediaServerSecret) this.viewers.bind(req.id, payload.sid);
+    return true;
+  }
+
+  // ยิง token เดิมซ้ำไม่ถึงฐานข้อมูล
+  private useOnce(token: string, exp: number): boolean {
+    const now = this.now().getTime();
+    for (const [used, until] of this.usedReads) if (until <= now) this.usedReads.delete(used);
+    if (this.usedReads.has(token)) return false;
+    this.usedReads.set(token, exp);
     return true;
   }
 }
