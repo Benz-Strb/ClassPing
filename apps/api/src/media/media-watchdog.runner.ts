@@ -5,6 +5,7 @@ import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { MEDIA_CONTROL, type MediaConn, type MediaControl } from './media-control.client.js';
 import { CAMERA_PATH } from './media-path.js';
+import { ViewerSessions } from './viewer-sessions.js';
 
 const CHECK_EVERY_MS = 30_000;
 
@@ -14,8 +15,6 @@ const CHECK_EVERY_MS = 30_000;
 export class MediaWatchdogRunner implements OnModuleDestroy {
   private readonly logger = new Logger(MediaWatchdogRunner.name);
   private timer?: NodeJS.Timeout;
-  // คาบที่แต่ละกล้องใช้อยู่รอบก่อน เปลี่ยนคาบแล้วต้องตัดคนดูของคาบเก่า
-  private readonly lastSession = new Map<string, string>();
 
   constructor(
     @Inject(MEDIA_CONTROL) private readonly control: MediaControl,
@@ -23,6 +22,7 @@ export class MediaWatchdogRunner implements OnModuleDestroy {
     @Inject(CameraService) private readonly sessions: Pick<CameraService, 'liveSessionFor'>,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly now: Clock,
+    @Inject(ViewerSessions) private readonly viewers: ViewerSessions,
   ) {}
 
   start() {
@@ -38,30 +38,24 @@ export class MediaWatchdogRunner implements OnModuleDestroy {
   async run() {
     if (!this.config.mediaServerSecret) return;
     try {
-      const conns = (await this.control.list()).filter((c) => c.state !== 'idle');
+      const mark = this.viewers.mark();
+      const all = await this.control.list();
+      this.viewers.prune(new Set(all.filter((c) => c.kind === 'webrtc').map((c) => c.id)), mark);
+      const conns = all.filter((c) => c.state !== 'idle');
       const current = new Map<string, Promise<string | null>>();
-      const changed = new Set<string>();
       for (const conn of conns) {
         const cameraId = CAMERA_PATH.exec(conn.path)?.[1];
         if (!cameraId) {
           await this.kick(conn, 'path ไม่ใช่ของกล้อง');
           continue;
         }
-        if (!current.has(cameraId)) {
-          const pending = this.currentSession(cameraId);
-          current.set(cameraId, pending);
-          const sessionId = await pending;
-          const before = this.lastSession.get(cameraId);
-          if (sessionId && before && before !== sessionId) changed.add(cameraId);
-          if (sessionId) this.lastSession.set(cameraId, sessionId);
-          else this.lastSession.delete(cameraId);
-        }
+        if (!current.has(cameraId)) current.set(cameraId, this.currentSession(cameraId));
         const sessionId = await current.get(cameraId);
         if (!sessionId) {
           await this.kick(conn, 'ไม่มีคาบแล้ว');
-        } else if (changed.has(cameraId) && conn.kind === 'webrtc') {
-          // กล้องส่งต่อได้ คนดูของคาบเก่าต้องออก (คนของคาบใหม่ต่อใหม่เองด้วย token ใหม่)
-          await this.kick(conn, 'เปลี่ยนคาบ');
+        } else if (conn.kind === 'webrtc' && this.viewers.sessionOf(conn.id) !== sessionId) {
+          // คนดูของคาบเก่า หรือต่อไว้ก่อน API เริ่มใหม่ ต้องต่อใหม่ด้วย token ของคาบนี้
+          await this.kick(conn, 'คาบไม่ตรง');
         }
       }
     } catch (error) {

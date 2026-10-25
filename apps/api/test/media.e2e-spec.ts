@@ -19,6 +19,7 @@ import { APP_CONFIG } from './../src/config/config.js';
 import { MediaController } from './../src/media/media.controller.js';
 import { signMediaToken } from './../src/media/media-token.js';
 import { MediaService } from './../src/media/media.service.js';
+import { ViewerSessions } from './../src/media/viewer-sessions.js';
 
 const CAMERA = '11111111-1111-1111-1111-111111111111';
 const SECRET = 't'.repeat(32);
@@ -51,6 +52,7 @@ describe('POST /media/auth (e2e)', () => {
       controllers: [MediaController],
       providers: [
         MediaService,
+        ViewerSessions,
         {
           provide: CAMERA_REPO,
           useValue: {

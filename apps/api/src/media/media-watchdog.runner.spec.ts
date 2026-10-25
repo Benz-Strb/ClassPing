@@ -2,6 +2,7 @@ import type { CameraIdentity } from '../camera/camera.repo.js';
 import type { AppConfig } from '../config/config.js';
 import type { MediaConn, MediaControl } from './media-control.client.js';
 import { MediaWatchdogRunner } from './media-watchdog.runner.js';
+import { ViewerSessions } from './viewer-sessions.js';
 
 const LIVE_CAM = '11111111-1111-1111-1111-111111111111';
 const IDLE_CAM = '22222222-2222-2222-2222-222222222222';
@@ -12,10 +13,15 @@ const cameras: Record<string, CameraIdentity> = {
   [IDLE_CAM]: { id: IDLE_CAM, roomId: 'r2', kind: 'front' },
 };
 
-function setup(conns: MediaConn[], opts: { secret?: boolean; failList?: boolean } = {}) {
+function setup(
+  conns: MediaConn[],
+  opts: { secret?: boolean; failList?: boolean; unbound?: boolean } = {},
+) {
   const current = { id: 's1' };
   const kicked: string[] = [];
   const lookups: string[] = [];
+  const viewers = new ViewerSessions();
+  if (!opts.unbound) for (const c of conns) if (c.kind === 'webrtc') viewers.bind(c.id, 's1');
   const control: MediaControl = {
     list: async () => {
       if (opts.failList) throw new Error('media down');
@@ -37,8 +43,9 @@ function setup(conns: MediaConn[], opts: { secret?: boolean; failList?: boolean 
     },
     { mediaServerSecret: opts.secret === false ? null : 's'.repeat(32) } as AppConfig,
     () => new Date('2026-10-24T05:00:00Z'),
+    viewers,
   );
-  return { runner, kicked, lookups, current };
+  return { runner, kicked, lookups, current, viewers };
 }
 
 const conn = (kind: 'rtsp' | 'webrtc', id: string, path: string, state = 'publish'): MediaConn => ({
@@ -95,7 +102,7 @@ describe('MediaWatchdogRunner', () => {
 });
 
 describe('MediaWatchdogRunner เปลี่ยนคาบในห้องเดียวกัน', () => {
-  it('คาบเปลี่ยน ตัดคนดูที่ต่ออยู่ทั้งหมด (คนของคาบใหม่ต่อใหม่เอง) แต่ไม่ตัดกล้อง', async () => {
+  it('คาบเปลี่ยน ตัดคนดูของคาบเก่า แต่ไม่ตัดกล้อง', async () => {
     const { runner, kicked, current } = setup([
       conn('rtsp', 'p', `cam/${LIVE_CAM}`),
       conn('webrtc', 'v', `cam/${LIVE_CAM}`, 'read'),
@@ -105,7 +112,27 @@ describe('MediaWatchdogRunner เปลี่ยนคาบในห้อง�
     current.id = 's2';
     await runner.run();
     expect(kicked).toEqual(['webrtc:v']);
+  });
+
+  it('API เพิ่งเริ่มใหม่ตอนคาบเปลี่ยนไปแล้ว ก็ยังตัดคนดูของคาบเก่า', async () => {
+    const { runner, kicked, current } = setup([conn('webrtc', 'v', `cam/${LIVE_CAM}`, 'read')]);
+    current.id = 's2';
     await runner.run();
     expect(kicked).toEqual(['webrtc:v']);
+  });
+
+  it('คนดูที่ไม่รู้ว่าต่อจากคาบไหน (ต่อไว้ก่อน API เริ่มใหม่) ถูกตัด ให้ต่อใหม่ด้วย token ใหม่', async () => {
+    const { runner, kicked } = setup([conn('webrtc', 'x', `cam/${LIVE_CAM}`, 'read')], {
+      unbound: true,
+    });
+    await runner.run();
+    expect(kicked).toEqual(['webrtc:x']);
+  });
+
+  it('ลืมสายที่ปิดไปแล้ว', async () => {
+    const { runner, viewers } = setup([]);
+    viewers.bind('closed', 's1');
+    await runner.run();
+    expect(viewers.sessionOf('closed')).toBeUndefined();
   });
 });
