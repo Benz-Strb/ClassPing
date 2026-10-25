@@ -127,4 +127,9 @@ class CameraLoop:
                 self.streamer.stop()
             self.next_stream_try = None
             self.camera.close()
+        elif session is not None and self.session is not None and session.id != self.session.id:
+            # คาบติดกันในห้องเดียวกัน กล้องเปิดค้างไว้ บอกแค่ว่าเปลี่ยนคาบ
+            log.info("หยุดส่งภาพ %s (ส่งไป %d ภาพ)", self.session.course, self.sent)
+            log.info("เริ่มส่งภาพ %s (ถึง %s)", session.course, session.ends_at.astimezone())
+            self.sent = 0
         self.session = session
