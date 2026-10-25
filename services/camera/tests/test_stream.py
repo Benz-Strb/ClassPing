@@ -73,6 +73,7 @@ def test_command_is_h264_baseline_without_audio():
     assert "-c:v libx264 -profile:v baseline -tune zerolatency" in joined
     assert "-pix_fmt yuv420p" in joined
     assert "-b:v 1500k" in joined
+    assert "-g 30 -sc_threshold 0" in joined
     assert "-an" in cmd
     assert "-f rtsp -rtsp_transport tcp" in joined
     assert cmd[-1] == URL
