@@ -35,11 +35,11 @@ const session: LiveSession = {
 
 let viewers: ViewerSessions;
 
-function setup(opts: { live?: boolean; secrets?: boolean } = {}) {
+function setup(opts: { live?: boolean; secrets?: boolean; watchdog?: boolean } = {}) {
   viewers = new ViewerSessions();
   const config = {
     mediaTokenSecret: opts.secrets === false ? null : TOKEN_SECRET,
-    mediaServerSecret: opts.secrets === false ? null : SERVER_SECRET,
+    mediaServerSecret: opts.secrets === false || opts.watchdog === false ? null : SERVER_SECRET,
   } as AppConfig;
   const service = new MediaService(
     {
@@ -177,6 +177,11 @@ describe('MediaService.authorize คนดูสด', () => {
     expect(viewers.sessionOf('conn-1')).toBe('s1');
     await service.authorize({ ...read(viewer({ sid: 's0' })), id: 'conn-2' });
     expect(viewers.sessionOf('conn-2')).toBeUndefined();
+  });
+
+  it('ไม่ได้เปิด watchdog (ไม่มี MEDIA_SERVER_SECRET) ดูได้แต่ไม่จำ เพราะไม่มีใครล้าง', async () => {
+    await expect(setup({ watchdog: false }).authorize(read(viewer()))).resolves.toBe(true);
+    expect(viewers.sessionOf('conn-1')).toBeUndefined();
   });
 
   it('ไม่มีรหัสสายจาก MediaMTX ไม่ผ่าน (ตัดตอนเปลี่ยนคาบไม่ได้)', async () => {
