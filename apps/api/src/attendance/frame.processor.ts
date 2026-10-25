@@ -13,6 +13,7 @@ import {
 import { classify, nextWrite, statusAt, type Verdict } from './decide.js';
 import type { FrameJob } from './frame-queue.js';
 import { bestTwo, type GalleryEntry } from './gallery.js';
+import { LiveFaces, type LiveFace } from './live-faces.js';
 import { RejectedGuesses } from './rejected-guesses.js';
 
 // ของที่ต้องใช้จาก module อื่น แยกออกมาให้เทสต์ใส่ของปลอมได้ง่าย
@@ -52,6 +53,7 @@ export class FrameProcessor {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly now: Clock,
     private readonly rejected: RejectedGuesses,
+    private readonly liveFaces: LiveFaces,
   ) {}
 
   async process(job: FrameJob): Promise<FrameOutcome> {
@@ -63,15 +65,21 @@ export class FrameProcessor {
     );
     if (!context) return outcome;
 
-    const { faces } = await this.deps.detect(Buffer.from(job.image, 'base64'), 'image/jpeg', {
-      crops: true,
-    });
-    if (!faces.length) return outcome;
+    const { faces, width, height } = await this.deps.detect(
+      Buffer.from(job.image, 'base64'),
+      'image/jpeg',
+      { crops: true },
+    );
+    const seenAt = new Date(job.receivedAt);
+    const live: LiveFace[] = [];
+    if (!faces.length) {
+      this.liveFaces.set(job.sessionId, seenAt, live);
+      return outcome;
+    }
 
     const gallery = await this.cached(this.galleries, context.courseId, () =>
       this.loadGallery(context.courseId),
     );
-    const seenAt = new Date(job.receivedAt);
     const thresholds = {
       acceptMin: this.config.matchAcceptMin,
       reviewMin: this.config.matchReviewMin,
@@ -91,6 +99,13 @@ export class FrameProcessor {
         );
       }
 
+      const [x1, y1, x2, y2] = face.bbox;
+      live.push({
+        box: [x1 / width, y1 / height, x2 / width, y2 / height],
+        userId: verdict.kind === 'unknown' ? null : verdict.userId,
+        kind: verdict.kind,
+      });
+
       if (verdict.kind === 'unknown') {
         await this.saveUnknown(job.sessionId, context.endsAt, face, seenAt);
         outcome.unknown++;
@@ -99,6 +114,7 @@ export class FrameProcessor {
         outcome[verdict.kind === 'match' ? 'matched' : 'review']++;
       }
     }
+    this.liveFaces.set(job.sessionId, seenAt, live);
     return outcome;
   }
 

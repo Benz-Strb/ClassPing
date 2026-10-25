@@ -1,0 +1,36 @@
+# MediaMTX สำหรับกล้องสดและอัดเก็บ (ใช้กับ compose.yaml)
+# ทุกการเชื่อมต่อถามสิทธิ์จาก API ที่ POST /media/auth
+logLevel: info
+
+authMethod: http
+authHTTPAddress: http://host.docker.internal:3001/media/auth
+# ไม่ยกเว้นอะไร control API ต้องใช้ MEDIA_SERVER_SECRET ส่วน metrics/pprof ปิดอยู่และ API ตอบไม่ผ่านเสมอ
+authHTTPExclude: []
+
+# control API ให้ API ตัดสายตอนหมดคาบ (MediaMTX ถามสิทธิ์แค่ตอนเริ่มต่อ)
+api: yes
+apiAddress: :9997
+
+# ใช้แค่ RTSP (กล้องส่งเข้า) กับ WebRTC (หน้าเว็บดู)
+rtmp: no
+hls: no
+srt: no
+
+# Docker ให้ IP ของ container ที่เบราว์เซอร์ต่อไม่ถึง บอกที่อยู่ของเครื่องแทน
+# ดูจากเครื่องอื่นในวงเดียวกันให้เพิ่มชื่อเครื่อง เช่น MTX_WEBRTCADDITIONALHOSTS=127.0.0.1,BMac.local
+webrtcAdditionalHosts: [127.0.0.1]
+
+# ดูย้อนหลัง/ดาวน์โหลดผ่าน API เท่านั้น (compose ผูกพอร์ตนี้ไว้กับ 127.0.0.1)
+playback: yes
+playbackAddress: :9996
+
+pathDefaults:
+  record: yes
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  # เก็บ 30 วันแล้วลบเอง
+  recordDeleteAfter: 30d
+
+paths:
+  # path ของกล้อง = cam/<id ในตาราง cameras>
+  "~^cam/[0-9a-f-]{36}$": {}

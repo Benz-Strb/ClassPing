@@ -31,7 +31,10 @@ class InMemorySessionsRepo implements SessionsRepo {
     ];
   }
   // unique เหมือนใน DB: (course_id, starts_at) และ (schedule_id, on_date)
-  private clash(row: Omit<SessionRow, 'id' | 'roomName'>, ignoreId?: string) {
+  private clash(
+    row: Pick<SessionRow, 'courseId' | 'startsAt' | 'scheduleId' | 'onDate'>,
+    ignoreId?: string,
+  ) {
     return [...this.rows.values()].some(
       (r) =>
         r.id !== ignoreId &&
@@ -45,7 +48,7 @@ class InMemorySessionsRepo implements SessionsRepo {
     if (sessions.some((s) => this.clash(s))) throw new Error('duplicate key 23505');
     for (const s of sessions) {
       const id = randomUUID();
-      this.rows.set(id, { ...s, id, roomName: `ห้อง ${s.roomId}` });
+      this.rows.set(id, { kind: 'class', title: null, ...s, id, roomName: `ห้อง ${s.roomId}` });
     }
   }
   async update(id: string, patch: Pick<SessionRow, 'roomId' | 'startsAt' | 'endsAt'>) {
@@ -247,6 +250,105 @@ describe('SessionsService.syncCourse', () => {
     addSchedule({ weekday: 2, startTime: '13:00', endTime: '15:00' });
     await service.syncCourse(course.id);
     expect(sessions().map((s) => s.onDate)).toEqual([TODAY]);
+  });
+});
+
+describe('SessionsService กับคาบสอบ', () => {
+  const exam = (
+    courseId: string,
+    onDate: string,
+    startsAt: string,
+    endsAt: string,
+  ): SessionRow => ({
+    id: randomUUID(),
+    kind: 'exam',
+    title: 'สอบกลางภาค',
+    scheduleId: null,
+    courseId,
+    roomId: 'B',
+    roomName: 'ห้อง B',
+    onDate,
+    startsAt: new Date(startsAt),
+    endsAt: new Date(endsAt),
+  });
+
+  it('sync ไม่ลบหรือแก้คาบสอบ ทั้งที่กล้องยังไม่เปิดและเปิดแล้ว', async () => {
+    const { course, repo, service, addSchedule, sessions } = setup(20);
+    addSchedule();
+    const later = exam(course.id, '2026-10-23', '2026-10-23T02:00:00Z', '2026-10-23T04:00:00Z');
+    const soon = exam(course.id, TODAY, '2026-10-20T03:10:00Z', '2026-10-20T05:00:00Z');
+    repo.rows.set(later.id, later);
+    repo.rows.set(soon.id, soon);
+
+    await service.syncCourse(course.id);
+    await service.syncAll();
+    const kept = sessions().filter((s) => s.kind === 'exam');
+    expect(kept).toEqual([later, soon]);
+  });
+
+  it('คาบสอบแทนคาบเรียนของวิชาเดียวกันที่ทับ ลบคาบสอบแล้วคาบเรียนกลับมา', async () => {
+    const { course, repo, service, addSchedule, sessions } = setup();
+    addSchedule(); // จันทร์ 09:00-12:00
+    await service.syncCourse(course.id);
+    const midterm = exam(course.id, NEXT_MONDAY, '2026-10-26T03:00:00Z', '2026-10-26T04:00:00Z');
+    repo.rows.set(midterm.id, midterm);
+
+    await service.syncCourse(course.id);
+    expect(sessions().map((s) => s.kind)).toEqual(['exam']);
+
+    repo.rows.delete(midterm.id);
+    await service.syncCourse(course.id);
+    expect(sessions().map((s) => [s.kind, s.onDate])).toEqual([['class', NEXT_MONDAY]]);
+  });
+
+  it('clearClassesFor เอาคาบเรียนที่ทับช่วงสอบออก ไม่แตะคาบอื่น', async () => {
+    const { course, service, addSchedule, sessions } = setup();
+    addSchedule(); // จันทร์ 09:00-12:00
+    addSchedule({ weekday: 1, startTime: '13:00', endTime: '15:00' });
+    await service.syncCourse(course.id);
+    const slot = {
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T03:00:00Z'),
+      endsAt: new Date('2026-10-26T04:00:00Z'),
+    };
+    await service.clearClassesFor(course.id, slot, async () => undefined);
+    expect(sessions().map((s) => s.startsAt)).toEqual([new Date('2026-10-26T06:00:00Z')]);
+  });
+
+  it('clearClassesFor บันทึกคาบสอบในคิวเดียวกัน sync ที่แทรกมาไม่สร้างคาบเรียนคืน', async () => {
+    const { course, repo, service, addSchedule, sessions } = setup();
+    addSchedule(); // จันทร์ 09:00-12:00
+    await service.syncCourse(course.id);
+    const midterm = exam(course.id, NEXT_MONDAY, '2026-10-26T02:00:00Z', '2026-10-26T04:00:00Z');
+    const replacing = service.clearClassesFor(course.id, midterm, async () => {
+      await Promise.resolve();
+      repo.rows.set(midterm.id, midterm);
+    });
+    const hourly = service.syncCourse(course.id);
+    await Promise.all([replacing, hourly]);
+    expect(sessions().map((s) => s.kind)).toEqual(['exam']);
+  });
+
+  it('clearClassesFor คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว ได้ SESSION_STARTED และไม่ลบ', async () => {
+    const { course, service, addSchedule, sessions } = setup(20);
+    addSchedule({ weekday: 2, startTime: '10:15', endTime: '12:00' });
+    await service.syncCourse(course.id);
+    const slot = {
+      onDate: TODAY,
+      startsAt: new Date('2026-10-20T04:00:00Z'),
+      endsAt: new Date('2026-10-20T05:00:00Z'),
+    };
+    const result = await rejection(service.clearClassesFor(course.id, slot, async () => undefined));
+    expect(result.code).toBe('SESSION_STARTED');
+    expect(sessions()).toHaveLength(1);
+  });
+
+  it('รายการคาบของวิชาแสดงคาบสอบพร้อมชื่อ', async () => {
+    const { owner, course, repo, service } = setup();
+    const row = exam(course.id, '2026-10-23', '2026-10-23T02:00:00Z', '2026-10-23T04:00:00Z');
+    repo.rows.set(row.id, row);
+    const list = await service.listForCourse(owner, course.id, TODAY, NEXT_MONDAY);
+    expect(list.map((s) => [s.kind, s.title])).toEqual([['exam', 'สอบกลางภาค']]);
   });
 });
 
