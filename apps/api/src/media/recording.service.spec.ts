@@ -134,7 +134,7 @@ const body = (patch: Record<string, unknown> = {}) => ({
 });
 
 describe('RecordingService.link', () => {
-  it('ดูย้อนหลัง: ลิงก์อายุ 10 นาทีผูกคาบ path และช่วงเวลา บันทึก playback', async () => {
+  it('ดูย้อนหลัง: ลิงก์อายุ 10 นาทีบวกความยาวคลิป ผูกคาบ path และช่วงเวลา บันทึก playback', async () => {
     const { service, views } = setup();
     const { url } = await service.link(owner, S1, body());
     expect(url.startsWith('/clips/')).toBe(true);
@@ -143,7 +143,7 @@ describe('RecordingService.link', () => {
       path: `cam/${CAM}`,
       act: 'clip',
       sid: S1,
-      exp: NOW.getTime() + 10 * 60_000,
+      exp: NOW.getTime() + 10 * 60_000 + 600_000,
       start: '2026-10-24T10:20:00.000Z',
       dur: 600,
       dl: false,

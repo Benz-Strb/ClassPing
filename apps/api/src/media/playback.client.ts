@@ -36,6 +36,7 @@ export class HttpPlaybackClient implements PlaybackClient {
     return items.map((i) => ({ start: new Date(i.start), duration: i.duration }));
   }
 
+  // mp4 สำหรับดาวน์โหลด (ไฟล์บอกความยาวครบ) fmp4 สำหรับท่อน HLS
   async clip(
     path: string,
     start: Date,
