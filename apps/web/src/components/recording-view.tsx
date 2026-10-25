@@ -8,6 +8,7 @@ import { handleApiError } from "@/lib/auth-error";
 import { bangkokDate, formatDate, formatTime } from "@/lib/time";
 import type { Recording } from "@/lib/types";
 import { ExamBadge } from "./exam-badge";
+import { HlsVideo } from "./hls-video";
 
 type Segment = Recording["segments"][number];
 
@@ -47,7 +48,7 @@ export function RecordingView() {
         link.href = `${API_URL}${url}`;
         link.click();
       } else {
-        setPlaying({ start: seg.start, src: `${API_URL}${url}` });
+        setPlaying({ start: seg.start, src: `${API_URL}${url}/index.m3u8` });
       }
     } catch (e) {
       setError(await handleApiError(e, router));
@@ -73,16 +74,7 @@ export function RecordingView() {
         {session.kind === "exam" && <ExamBadge title={session.title} />}
       </h1>
 
-      {playing && (
-        <video
-          key={playing.src}
-          src={playing.src}
-          controls
-          autoPlay
-          playsInline
-          className="aspect-video w-full rounded-lg bg-black"
-        />
-      )}
+      {playing && <HlsVideo key={playing.src} src={playing.src} onError={setError} />}
 
       {data.segments.length === 0 ? (
         <p className="text-gray-600">ไม่มีไฟล์อัดของคาบนี้</p>
