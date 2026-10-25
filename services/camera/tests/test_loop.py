@@ -256,3 +256,39 @@ def test_no_stream_info_never_starts(streaming):
     api.current = session()
     loop.tick()
     assert streamer.started == []
+
+
+def test_switching_to_next_session_logs_and_keeps_camera_open(setup, caplog):
+    api, cam, clock, loop = setup
+    api.current = session()
+    loop.tick()
+    clock.advance(POLL_SECONDS)
+    loop.tick()
+    caplog.clear()
+    with caplog.at_level("INFO", logger="camera"):
+        clock.advance(POLL_SECONDS)
+        api.current = Session(
+            id="s2",
+            course="EXAMPLE102 next",
+            ends_at=START + timedelta(minutes=240),
+            fps=1.0,
+            stream=None,
+        )
+        loop.tick()
+    assert [r.getMessage() for r in caplog.records] == [
+        "หยุดส่งภาพ EXAMPLE101 test (ส่งไป 2 ภาพ)",
+        f"เริ่มส่งภาพ EXAMPLE102 next (ถึง {api.current.ends_at.astimezone()})",
+    ]
+    assert cam.opened == 1
+    assert cam.closed == 0
+    assert loop.sent == 1
+
+
+def test_same_session_repolled_logs_nothing(setup, caplog):
+    api, _cam, clock, loop = setup
+    api.current = session()
+    loop.tick()
+    with caplog.at_level("INFO", logger="camera"):
+        clock.advance(POLL_SECONDS)
+        loop.tick()
+    assert caplog.records == []

@@ -4,7 +4,7 @@ import type { AppConfig } from '../config/config.js';
 import type { Course, CoursesRepo } from '../courses/courses.repo.js';
 import { CoursesService } from '../courses/courses.service.js';
 import type { RoomsRepo } from '../rooms/rooms.repo.js';
-import type { Override, Schedule, SchedulesRepo } from '../schedules/schedules.repo.js';
+import type { ExamSlot, Override, Schedule, SchedulesRepo } from '../schedules/schedules.repo.js';
 import type { AppUser } from '../users/users.service.js';
 import type { ExamRow, ExamsRepo, NewExam, Person } from './exams.repo.js';
 import { ExamsService } from './exams.service.js';
@@ -96,7 +96,10 @@ function setup(openBeforeMin = 20) {
 
   const schedules: Schedule[] = [];
   const overrides: Override[] = [];
+  // แถวคาบเรียนจริงใน sessions (ปกติตรงกับตาราง แต่อาจเหลือแถวที่ไม่มีตารางแล้ว)
+  const classRows: ExamSlot[] = [];
   const schedulesRepo = {
+    listClassSessionsOn: async (date: string) => classRows.filter((r) => r.onDate === date),
     listByWeekday: async (weekday: number) => schedules.filter((s) => s.weekday === weekday),
     listOverridesOnDate: async (date: string) => overrides.filter((o) => o.onDate === date),
     listExamsBetween: async (from: string, to: string) =>
@@ -180,9 +183,22 @@ function setup(openBeforeMin = 20) {
     failInsert,
     overrides,
     addSchedule,
+    classRows,
     body,
   };
 }
+
+// แถวคาบเรียนที่ตารางถูกลบไปแล้วแต่ยังอยู่ (กล้องเปิดไปแล้วเลยไม่ถูกลบ)
+const orphan = (courseId: string, courseCode: string, roomId: string): ExamSlot => ({
+  id: randomUUID(),
+  courseId,
+  courseCode,
+  roomId,
+  roomName: '',
+  onDate: NEXT_MONDAY,
+  startsAt: new Date(`${NEXT_MONDAY}T02:30:00Z`),
+  endsAt: new Date(`${NEXT_MONDAY}T03:30:00Z`),
+});
 
 describe('ExamsService สร้างและดูคาบสอบ', () => {
   it('สร้างแล้วได้ห้อง คนคุมสอบ และเวลาไทยกลับมา', async () => {
@@ -262,6 +278,38 @@ describe('ExamsService ห้องและเวลาชน', () => {
       endTime: null,
     });
     await expect(service.create(owner, cs101.id, body({ roomId: roomA }))).resolves.toBeTruthy();
+  });
+
+  it('ทับห้องของคาบเรียนที่ไม่มีตารางแล้วแต่ยังอยู่ ได้ ROOM_CONFLICT', async () => {
+    const { owner, cs101, cs102, roomA, service, classRows, body } = setup();
+    classRows.push(orphan(cs102.id, 'CS102', roomA));
+    expect(await rejection(service.create(owner, cs101.id, body({ roomId: roomA })))).toEqual({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+      message: 'ห้อง A มีวิชา CS102 เวลา 09:30-10:30 แล้ว',
+    });
+  });
+
+  it('คาบเรียนของวิชาตัวเองที่ไม่มีตารางแล้ว ก็ต้องยืนยันก่อนแทน', async () => {
+    const { owner, cs101, roomA, service, classRows, body } = setup();
+    classRows.push(orphan(cs101.id, 'CS101', roomA));
+    expect(await rejection(service.create(owner, cs101.id, body()))).toEqual({
+      status: 409,
+      code: 'REPLACES_CLASS',
+      message: 'คาบสอบนี้ทับคาบเรียน 09:30-10:30 ของวันนั้น คาบเรียนจะถูกแทนด้วยคาบสอบ',
+    });
+  });
+
+  it('แถวคาบเรียนที่ตรงกับตาราง ไม่บอกเวลาซ้ำ', async () => {
+    const { owner, cs101, roomA, service, addSchedule, classRows, body } = setup();
+    addSchedule({ courseId: cs101.id, courseCode: 'CS101', roomId: roomA, endTime: '10:30' });
+    classRows.push({
+      ...orphan(cs101.id, 'CS101', roomA),
+      startsAt: new Date(`${NEXT_MONDAY}T02:00:00Z`),
+    });
+    expect((await rejection(service.create(owner, cs101.id, body()))).message).toBe(
+      'คาบสอบนี้ทับคาบเรียน 09:00-10:30 ของวันนั้น คาบเรียนจะถูกแทนด้วยคาบสอบ',
+    );
   });
 
   it('ทับคาบเรียนของวิชาตัวเอง ต้องยืนยันก่อน (409 REPLACES_CLASS) ทั้งห้องเดิมและคนละห้อง', async () => {
