@@ -92,6 +92,14 @@ describe('FaceClient', () => {
     expect(calls[0].init.body).toBeInstanceOf(FormData);
   });
 
+  it('readLeaveDocument ส่งรูปไปที่ /leave/ocr แล้วคืนบรรทัด OCR', async () => {
+    const data = { lines: [{ text: 'ลาป่วย', score: 0.98 }] };
+    const calls = stubFetch(() => json(200, { data }));
+    expect(await new FaceClient(config).readLeaveDocument(image, 'application/pdf')).toEqual(data);
+    expect(calls[0].url).toBe('http://face.test/leave/ocr');
+    expect(calls[0].init.body).toBeInstanceOf(FormData);
+  });
+
   it('model อ่านจาก /health ครั้งเดียวแล้วจำไว้', async () => {
     const calls = stubFetch(() =>
       json(200, { data: { ok: true, model: 'buffalo_l', embeddingSize: 512 } }),

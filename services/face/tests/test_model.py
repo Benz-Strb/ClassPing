@@ -12,7 +12,7 @@ from insightface.data import get_image
 from app.config import load_settings
 from app.engine import InsightFaceEngine
 from app.main import create_app
-from app.ocr import RapidTextReader
+from app.ocr import PaddleTextReader
 from tests.conftest import TOKEN
 from tests.images import crop_with_margin, jpeg
 
@@ -43,7 +43,7 @@ def single_image(real_engine, group_image):
 
 @pytest.fixture(scope="session")
 def real_reader():
-    return RapidTextReader()
+    return PaddleTextReader()
 
 
 @pytest.fixture(scope="session")

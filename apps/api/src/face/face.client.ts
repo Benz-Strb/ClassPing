@@ -97,6 +97,10 @@ export class FaceClient {
     return this.post('/cards/read', imageForm(image, mime));
   }
 
+  readLeaveDocument(image: Buffer, mime: string): Promise<{ lines: { text: string; score: number }[] }> {
+    return this.post('/leave/ocr', imageForm(image, mime));
+  }
+
   // โมเดลที่ service ใช้อยู่ embedding ต่างโมเดลเอามาเทียบกันไม่ได้
   async model(): Promise<string> {
     this.modelName ??= (await this.request<{ model: string }>('GET', '/health')).model;

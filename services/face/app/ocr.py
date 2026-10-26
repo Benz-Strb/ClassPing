@@ -9,22 +9,23 @@ class TextReader(Protocol):
     def read(self, image: np.ndarray) -> list[tuple[str, float]]: ...
 
 
-class RapidTextReader:
-    """RapidOCR (โมเดล PP-OCR บน onnxruntime) อ่านตัวเลขและอังกฤษบนบัตรได้ ภาษาไทยอ่านไม่ได้
-
-    ครั้งแรกโหลดโมเดลราว 31 MB เก็บไว้ในโฟลเดอร์ของแพ็กเกจ ไม่อยู่ใน repo
-    """
+class PaddleTextReader:
+    """PaddleOCR สำหรับเอกสารภาษาไทยและภาษาอังกฤษ"""
 
     def __init__(self):
-        # import ตรงนี้ เทสต์ที่ใช้ตัวอ่านปลอมจะได้ไม่ต้องโหลดโมเดล
-        from rapidocr import RapidOCR
+        # import ตอนสร้างจริง เพื่อให้เทสต์ที่ใช้ reader ปลอมไม่ต้องโหลดโมเดล
+        from paddleocr import PaddleOCR
 
-        self._ocr = RapidOCR()
+        self._ocr = PaddleOCR(lang='th')
 
     def read(self, image: np.ndarray) -> list[tuple[str, float]]:
-        result = self._ocr(image)
-        if result.txts is None:
+        results = self._ocr.predict(image)
+        if not results:
             return []
+
+        result = results[0]
+        texts = getattr(result, 'rec_texts', None) or []
+        scores = getattr(result, 'rec_scores', None) or []
         return [
-            (text, float(score)) for text, score in zip(result.txts, result.scores, strict=True)
+            (text, float(score)) for text, score in zip(texts, scores, strict=True) if text.strip()
         ]
