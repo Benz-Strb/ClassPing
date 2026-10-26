@@ -10,6 +10,7 @@ import { ExamsModule } from './exams/exams.module.js';
 import { RolesGuard } from './auth/roles.guard.js';
 import { FaceModule } from './face/face.module.js';
 import { MediaModule } from './media/media.module.js';
+import { LeaveModule } from './leave/leave.module.js';
 import { RoomsModule } from './rooms/rooms.module.js';
 import { SchedulesModule } from './schedules/schedules.module.js';
 import { SupabaseModule } from './supabase/supabase.module.js';
@@ -27,6 +28,7 @@ import { UsersModule } from './users/users.module.js';
     EnrollmentModule,
     CameraModule,
     MediaModule,
+    LeaveModule,
     AttendanceModule,
     CleanupModule,
   ],
