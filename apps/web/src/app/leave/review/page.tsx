@@ -11,6 +11,8 @@ type LeaveRequest = {
   reason: string;
   status: "pending" | "approved" | "rejected";
   reviewNote: string | null;
+  ocrText: string;
+  ocrStatus: "pending" | "completed" | "failed";
   createdAt: string;
   attachments: { fileName: string; mime: string; size: number }[];
 };
@@ -73,6 +75,7 @@ export default function LeaveReviewPage() {
             <li key={request.id} className="space-y-2 rounded-lg border p-4">
               <p>คาบ: {request.sessionId}</p>
               <p>เหตุผล: {request.reason}</p>
+              <p>ข้อความจาก OCR: {request.ocrText || "อ่านไม่ได้"}</p>
               <p>สถานะ: {request.status}</p>
               <p className="text-sm text-gray-600">
                 หลักฐาน: {request.attachments.map((file) => file.fileName).join(", ") || "ไม่มี"}

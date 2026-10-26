@@ -46,6 +46,8 @@ export class LeaveService {
       studentId: user.id,
       sessionId,
       reason: cleanReason,
+      ocrText: ocr.lines.map((line) => line.text).join('\n'),
+      ocrStatus: 'completed',
     });
     const path = `${user.id}/${request.id}-${randomUUID()}.${EXTENSIONS[evidence.mimetype]}`;
     try {
