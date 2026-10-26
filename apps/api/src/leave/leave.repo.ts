@@ -45,6 +45,7 @@ export interface LeaveRepo {
     reviewNote: string | null,
   ): Promise<void>;
   listByStudent(studentId: string): Promise<LeaveRequestView[]>;
+  listForTeacher(teacherId: string): Promise<LeaveRequestView[]>;
 }
 
 export const LEAVE_REPO = Symbol('LEAVE_REPO');
@@ -182,6 +183,51 @@ export class SupabaseLeaveRepo implements LeaveRepo {
         'id, session_id, reason, status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size)',
       )
       .eq('student_id', studentId)
+      .order('created_at', { ascending: false });
+    if (error) throw dbError();
+
+    return (data as Array<Record<string, unknown>>).map((row) => ({
+      id: row.id as string,
+      sessionId: row.session_id as string,
+      reason: row.reason as string,
+      status: row.status as LeaveRequestView['status'],
+      reviewedBy: (row.reviewed_by as string | null) ?? null,
+      reviewedAt: (row.reviewed_at as string | null) ?? null,
+      reviewNote: (row.review_note as string | null) ?? null,
+      createdAt: row.created_at as string,
+      attachments: ((row.leave_attachments as Array<Record<string, unknown>> | null) ?? []).map(
+        (file) => ({
+          fileName: file.file_name as string,
+          mime: file.mime_type as string,
+          size: file.file_size as number,
+        }),
+      ),
+    }));
+  }
+
+  async listForTeacher(teacherId: string): Promise<LeaveRequestView[]> {
+    const { data: courses, error: coursesError } = await this.db
+      .from('courses')
+      .select('id')
+      .eq('teacher_id', teacherId);
+    if (coursesError) throw dbError();
+    const courseIds = (courses as { id: string }[]).map((course) => course.id);
+    if (!courseIds.length) return [];
+
+    const { data: sessions, error: sessionsError } = await this.db
+      .from('sessions')
+      .select('id')
+      .in('course_id', courseIds);
+    if (sessionsError) throw dbError();
+    const sessionIds = (sessions as { id: string }[]).map((session) => session.id);
+    if (!sessionIds.length) return [];
+
+    const { data, error } = await this.db
+      .from('leave_requests')
+      .select(
+        'id, session_id, reason, status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size)',
+      )
+      .in('session_id', sessionIds)
       .order('created_at', { ascending: false });
     if (error) throw dbError();
 
