@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../common/app-error.js';
 import { FaceClient } from '../face/face.client.js';
 import type { AppUser } from '../users/users.service.js';
-import { LEAVE_REPO, type LeaveRepo } from './leave.repo.js';
+import { LEAVE_REPO, type LeaveRepo, type LeaveRequestView } from './leave.repo.js';
 
 const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
 const EXTENSIONS: Record<string, string> = {
@@ -64,5 +64,36 @@ export class LeaveService {
     }
 
     return { id: request.id, status: 'pending', ocr };
+  }
+
+  async review(
+    user: AppUser,
+    requestId: string,
+    decision: 'approved' | 'rejected',
+    reviewNote?: string,
+  ) {
+    if (user.role !== 'teacher') {
+      throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ตรวจคำขอลา');
+    }
+    try {
+      await this.repo.reviewRequest(requestId, user.id, decision, reviewNote?.trim() || null);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'LEAVE_REQUEST_NOT_FOUND') {
+        throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
+      }
+      if (error instanceof Error && error.message === 'LEAVE_REQUEST_NOT_PENDING') {
+        throw new AppError(409, 'LEAVE_REQUEST_NOT_PENDING', 'คำขอลานี้ถูกตรวจไปแล้ว');
+      }
+      if (error instanceof Error && error.message === 'LEAVE_REQUEST_FORBIDDEN') {
+        throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ตรวจคำขอลาของวิชานี้');
+      }
+      throw error;
+    }
+    return { id: requestId, status: decision };
+  }
+
+  listMine(user: AppUser): Promise<LeaveRequestView[]> {
+    if (!user.studentId) throw new AppError(403, 'STUDENT_ONLY', 'ดูคำขอลาได้เฉพาะบัญชีนักศึกษา');
+    return this.repo.listByStudent(user.id);
   }
 }
