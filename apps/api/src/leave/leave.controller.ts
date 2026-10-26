@@ -15,6 +15,12 @@ export class LeaveController {
     return this.leave.listMine(user);
   }
 
+  @Get('review')
+  @Roles('teacher')
+  listForTeacher(@CurrentUser() user: AppUser) {
+    return this.leave.listForTeacher(user);
+  }
+
   @Post()
   @HttpCode(201)
   @UseInterceptors(FileInterceptor('evidence', { limits: { fileSize: 10 * 1024 * 1024 } }))

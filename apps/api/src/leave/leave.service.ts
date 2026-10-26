@@ -96,4 +96,11 @@ export class LeaveService {
     if (!user.studentId) throw new AppError(403, 'STUDENT_ONLY', 'ดูคำขอลาได้เฉพาะบัญชีนักศึกษา');
     return this.repo.listByStudent(user.id);
   }
+
+  listForTeacher(user: AppUser): Promise<LeaveRequestView[]> {
+    if (user.role !== 'teacher') {
+      throw new AppError(403, 'FORBIDDEN', 'ดูคิวตรวจคำขอลาได้เฉพาะอาจารย์');
+    }
+    return this.repo.listForTeacher(user.id);
+  }
 }
