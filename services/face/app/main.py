@@ -12,7 +12,7 @@ from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
 from app.matching import match
-from app.ocr import RapidTextReader, TextReader
+from app.ocr import PaddleTextReader, TextReader
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
 
 PUBLIC_PATHS = {"/health"}
@@ -140,6 +140,19 @@ def create_app(settings: Settings, engine: FaceEngine, reader: TextReader) -> Fa
             }
         }
 
+    @app.post("/leave/ocr")
+    def read_leave_document(image: UploadFile):
+        frame = decode_image(
+            read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
+        )
+        return {
+            "data": {
+                "lines": [
+                    {"text": text, "score": score} for text, score in reader.read(frame)
+                ]
+            }
+        }
+
     @app.post("/faces/match")
     def match_faces(body: MatchRequest):
         probes = parse_embeddings(body.probes, engine.embedding_size)
@@ -202,4 +215,4 @@ def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
 def build_app() -> FastAPI:
     """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
     settings = load_settings(os.environ)
-    return create_app(settings, InsightFaceEngine(settings), RapidTextReader())
+    return create_app(settings, InsightFaceEngine(settings), PaddleTextReader())
