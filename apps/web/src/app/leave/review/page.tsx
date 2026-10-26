@@ -49,6 +49,16 @@ export default function LeaveReviewPage() {
     }
   }
 
+  async function openEvidence(id: string) {
+    setError(null);
+    try {
+      const { url } = await apiFetch<{ url: string }>(`/leave-requests/${id}/evidence`);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(await handleApiError(e, router));
+    }
+  }
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <h1 className="text-xl font-semibold">ตรวจคำขอลา</h1>
@@ -67,6 +77,15 @@ export default function LeaveReviewPage() {
               <p className="text-sm text-gray-600">
                 หลักฐาน: {request.attachments.map((file) => file.fileName).join(", ") || "ไม่มี"}
               </p>
+              {request.attachments.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void openEvidence(request.id)}
+                  className="text-blue-600 underline"
+                >
+                  เปิดหลักฐาน
+                </button>
+              )}
               {request.status === "pending" && (
                 <div className="flex gap-2">
                   <button
