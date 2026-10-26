@@ -11,6 +11,8 @@ type LeaveRequest = {
   reason: string;
   status: "pending" | "approved" | "rejected";
   reviewNote: string | null;
+  ocrText: string;
+  ocrStatus: "pending" | "completed" | "failed";
   createdAt: string;
   attachments: { fileName: string; mime: string; size: number }[];
 };
@@ -123,6 +125,7 @@ export default function LeavePage() {
                   <strong>{STATUS_LABEL[request.status]}</strong> · คาบ {request.sessionId}
                 </p>
                 <p>{request.reason}</p>
+                {request.ocrText && <p className="text-gray-600">ข้อความจาก OCR: {request.ocrText}</p>}
                 {request.reviewNote && <p className="text-gray-600">หมายเหตุ: {request.reviewNote}</p>}
                 <p className="text-sm text-gray-500">
                   ส่งเมื่อ {new Date(request.createdAt).toLocaleString("th-TH")}

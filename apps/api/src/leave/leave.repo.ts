@@ -7,6 +7,8 @@ export interface LeaveRequestInput {
   studentId: string;
   sessionId: string;
   reason: string;
+  ocrText: string;
+  ocrStatus: 'completed' | 'failed';
 }
 
 export interface LeaveRequestRecord {
@@ -78,7 +80,13 @@ export class SupabaseLeaveRepo implements LeaveRepo {
   async createRequest(input: LeaveRequestInput): Promise<LeaveRequestRecord> {
     const { data, error } = await this.db
       .from('leave_requests')
-      .insert({ student_id: input.studentId, session_id: input.sessionId, reason: input.reason })
+      .insert({
+        student_id: input.studentId,
+        session_id: input.sessionId,
+        reason: input.reason,
+        ocr_text: input.ocrText,
+        ocr_status: input.ocrStatus,
+      })
       .select('id')
       .single();
     if (error) throw dbError();
@@ -181,7 +189,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('leave_requests')
       .select(
-        'id, session_id, reason, status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size)',
+        'id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size)',
       )
       .eq('student_id', studentId)
       .order('created_at', { ascending: false });
@@ -195,6 +203,8 @@ export class SupabaseLeaveRepo implements LeaveRepo {
       reviewedBy: (row.reviewed_by as string | null) ?? null,
       reviewedAt: (row.reviewed_at as string | null) ?? null,
       reviewNote: (row.review_note as string | null) ?? null,
+      ocrText: (row.ocr_text as string | null) ?? '',
+      ocrStatus: row.ocr_status as 'pending' | 'completed' | 'failed',
       createdAt: row.created_at as string,
       attachments: ((row.leave_attachments as Array<Record<string, unknown>> | null) ?? []).map(
         (file) => ({
@@ -226,7 +236,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('leave_requests')
       .select(
-        'id, session_id, reason, status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size)',
+        'id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size)',
       )
       .in('session_id', sessionIds)
       .order('created_at', { ascending: false });
@@ -240,6 +250,8 @@ export class SupabaseLeaveRepo implements LeaveRepo {
       reviewedBy: (row.reviewed_by as string | null) ?? null,
       reviewedAt: (row.reviewed_at as string | null) ?? null,
       reviewNote: (row.review_note as string | null) ?? null,
+      ocrText: (row.ocr_text as string | null) ?? '',
+      ocrStatus: row.ocr_status as 'pending' | 'completed' | 'failed',
       createdAt: row.created_at as string,
       attachments: ((row.leave_attachments as Array<Record<string, unknown>> | null) ?? []).map(
         (file) => ({
