@@ -46,6 +46,7 @@ export interface LeaveRepo {
   ): Promise<void>;
   listByStudent(studentId: string): Promise<LeaveRequestView[]>;
   listForTeacher(teacherId: string): Promise<LeaveRequestView[]>;
+  signedEvidenceUrl(requestId: string, userId: string, role: 'student' | 'teacher'): Promise<string>;
 }
 
 export const LEAVE_REPO = Symbol('LEAVE_REPO');
@@ -248,5 +249,53 @@ export class SupabaseLeaveRepo implements LeaveRepo {
         }),
       ),
     }));
+  }
+
+  async signedEvidenceUrl(
+    requestId: string,
+    userId: string,
+    role: 'student' | 'teacher',
+  ): Promise<string> {
+    const { data: request, error: requestError } = await this.db
+      .from('leave_requests')
+      .select('student_id, session_id')
+      .eq('id', requestId)
+      .maybeSingle();
+    if (requestError) throw dbError();
+    if (!request) throw new Error('LEAVE_REQUEST_NOT_FOUND');
+
+    if (role === 'student') {
+      if (request.student_id !== userId) throw new Error('LEAVE_REQUEST_FORBIDDEN');
+    } else {
+      const { data: session, error: sessionError } = await this.db
+        .from('sessions')
+        .select('course_id')
+        .eq('id', request.session_id)
+        .single();
+      if (sessionError) throw dbError();
+      const { data: course, error: courseError } = await this.db
+        .from('courses')
+        .select('teacher_id')
+        .eq('id', session.course_id)
+        .single();
+      if (courseError) throw dbError();
+      if (course.teacher_id !== userId) throw new Error('LEAVE_REQUEST_FORBIDDEN');
+    }
+
+    const { data: attachment, error: attachmentError } = await this.db
+      .from('leave_attachments')
+      .select('storage_path')
+      .eq('leave_request_id', requestId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (attachmentError) throw dbError();
+    if (!attachment) throw new Error('EVIDENCE_NOT_FOUND');
+
+    const { data, error } = await this.db.storage
+      .from(LEAVE_EVIDENCE_BUCKET)
+      .createSignedUrl(attachment.storage_path, 600);
+    if (error || !data?.signedUrl) throw dbError();
+    return data.signedUrl;
   }
 }

@@ -103,4 +103,24 @@ export class LeaveService {
     }
     return this.repo.listForTeacher(user.id);
   }
+
+  async evidenceUrl(user: AppUser, requestId: string): Promise<{ url: string }> {
+    if (user.role !== 'student' && user.role !== 'teacher') {
+      throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ดูหลักฐานการลา');
+    }
+    try {
+      return { url: await this.repo.signedEvidenceUrl(requestId, user.id, user.role) };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'LEAVE_REQUEST_NOT_FOUND') {
+        throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
+      }
+      if (error instanceof Error && error.message === 'LEAVE_REQUEST_FORBIDDEN') {
+        throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ดูหลักฐานคำขอลานี้');
+      }
+      if (error instanceof Error && error.message === 'EVIDENCE_NOT_FOUND') {
+        throw new AppError(404, 'EVIDENCE_NOT_FOUND', 'ไม่พบไฟล์หลักฐาน');
+      }
+      throw error;
+    }
+  }
 }
