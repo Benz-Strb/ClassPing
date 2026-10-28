@@ -1,6 +1,16 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
+import { AppError } from '../common/app-error.js';
 import type { AppUser } from '../users/users.service.js';
 import { LeaveService, type LeaveEvidence } from './leave.service.js';
 
@@ -13,6 +23,12 @@ export class LeaveController {
   @Roles('student')
   listMine(@CurrentUser() user: AppUser) {
     return this.leave.listMine(user);
+  }
+
+  @Get('sessions')
+  @Roles('student')
+  listSessions(@CurrentUser() user: AppUser) {
+    return this.leave.listSessions(user);
   }
 
   @Get('review')
@@ -29,7 +45,9 @@ export class LeaveController {
 
   @Post()
   @HttpCode(201)
-  @UseInterceptors(FileInterceptor('evidence', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('evidence', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
   submit(
     @CurrentUser() user: AppUser,
     @Body('sessionId') sessionId: string,
@@ -49,7 +67,11 @@ export class LeaveController {
     @Body('reviewNote') reviewNote?: string,
   ) {
     if (decision !== 'approved' && decision !== 'rejected') {
-      throw new Error('decision ต้องเป็น approved หรือ rejected');
+      throw new AppError(
+        400,
+        'BAD_REQUEST',
+        'decision ต้องเป็น approved หรือ rejected',
+      );
     }
     return this.leave.review(user, id, decision, reviewNote);
   }
