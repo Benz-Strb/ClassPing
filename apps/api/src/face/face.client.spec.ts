@@ -45,7 +45,9 @@ describe('FaceClient', () => {
   it('แนบ X-Face-Token ทุกครั้ง', async () => {
     const calls = stubFetch(() => json(200, { data: { results: [] } }));
     await new FaceClient(config).match([], []);
-    expect(new Headers(calls[0].init.headers).get('X-Face-Token')).toBe('f'.repeat(32));
+    expect(new Headers(calls[0].init.headers).get('X-Face-Token')).toBe(
+      'f'.repeat(32),
+    );
     expect(calls[0].url).toBe('http://face.test/faces/match');
   });
 
@@ -73,7 +75,9 @@ describe('FaceClient', () => {
   it('detect ส่งไปที่ /faces/detect', async () => {
     const data = { width: 10, height: 10, faces: [], skippedSmall: 0 };
     const calls = stubFetch(() => json(200, { data }));
-    expect(await new FaceClient(config).detect(image, 'image/jpeg')).toEqual(data);
+    expect(await new FaceClient(config).detect(image, 'image/jpeg')).toEqual(
+      data,
+    );
     expect(calls[0].url).toBe('http://face.test/faces/detect');
   });
 
@@ -87,7 +91,9 @@ describe('FaceClient', () => {
   it('readCard ส่งรูปไปที่ /cards/read แล้วคืนบรรทัดกับหน้า', async () => {
     const data = { lines: [{ text: '66112106', score: 1 }], faces: [] };
     const calls = stubFetch(() => json(200, { data }));
-    expect(await new FaceClient(config).readCard(image, 'image/png')).toEqual(data);
+    expect(await new FaceClient(config).readCard(image, 'image/png')).toEqual(
+      data,
+    );
     expect(calls[0].url).toBe('http://face.test/cards/read');
     expect(calls[0].init.body).toBeInstanceOf(FormData);
   });
@@ -95,7 +101,9 @@ describe('FaceClient', () => {
   it('readLeaveDocument ส่งรูปไปที่ /leave/ocr แล้วคืนบรรทัด OCR', async () => {
     const data = { lines: [{ text: 'ลาป่วย', score: 0.98 }] };
     const calls = stubFetch(() => json(200, { data }));
-    expect(await new FaceClient(config).readLeaveDocument(image, 'application/pdf')).toEqual(data);
+    expect(
+      await new FaceClient(config).readLeaveDocument(image, 'application/pdf'),
+    ).toEqual(data);
     expect(calls[0].url).toBe('http://face.test/leave/ocr');
     expect(calls[0].init.body).toBeInstanceOf(FormData);
   });
@@ -115,7 +123,9 @@ describe('FaceClient', () => {
   it('model เรียกไม่สำเร็จได้ 503 และครั้งถัดไปลองใหม่', async () => {
     let up = false;
     stubFetch(() =>
-      up ? json(200, { data: { model: 'buffalo_l' } }) : json(500, { error: {} }),
+      up
+        ? json(200, { data: { model: 'buffalo_l' } })
+        : json(500, { error: {} }),
     );
     const client = new FaceClient(config);
     expect((await rejection(client.model())).status).toBe(503);
@@ -124,9 +134,14 @@ describe('FaceClient', () => {
   });
 
   it('match ส่ง JSON และคืนรายการผล', async () => {
-    const results = [{ bestId: 'a', score: 0.8, secondId: null, secondScore: null }];
+    const results = [
+      { bestId: 'a', score: 0.8, secondId: null, secondScore: null },
+    ];
     const calls = stubFetch(() => json(200, { data: { results } }));
-    const out = await new FaceClient(config).match([[0.1]], [{ id: 'a', embeddings: [[0.1]] }]);
+    const out = await new FaceClient(config).match(
+      [[0.1]],
+      [{ id: 'a', embeddings: [[0.1]] }],
+    );
 
     expect(out).toEqual(results);
     expect(JSON.parse(calls[0].init.body as string)).toEqual({
@@ -137,9 +152,13 @@ describe('FaceClient', () => {
 
   it('422 MULTIPLE_FACES ส่งต่อ status, code และข้อความเดิม', async () => {
     stubFetch(() =>
-      json(422, { error: { code: 'MULTIPLE_FACES', message: 'พบหลายใบหน้าในรูป' } }),
+      json(422, {
+        error: { code: 'MULTIPLE_FACES', message: 'พบหลายใบหน้าในรูป' },
+      }),
     );
-    expect(await rejection(new FaceClient(config).enroll(image, 'image/jpeg'))).toEqual({
+    expect(
+      await rejection(new FaceClient(config).enroll(image, 'image/jpeg')),
+    ).toEqual({
       status: 422,
       code: 'MULTIPLE_FACES',
       message: 'พบหลายใบหน้าในรูป',
@@ -150,18 +169,24 @@ describe('FaceClient', () => {
     [422, 'BAD_EMBEDDING'],
     [413, 'REQUEST_TOO_LARGE'],
     [404, 'NOT_FOUND'],
-  ])('%i %s เป็นปัญหาฝั่งระบบ ไม่ส่งต่อให้ผู้ใช้ ได้ 503', async (status, code) => {
-    stubFetch(() => json(status, { error: { code, message: 'x' } }));
-    expect(await rejection(new FaceClient(config).detect(image, 'image/jpeg'))).toMatchObject({
-      status: 503,
-      code: 'FACE_SERVICE_UNAVAILABLE',
-    });
-  });
+  ])(
+    '%i %s เป็นปัญหาฝั่งระบบ ไม่ส่งต่อให้ผู้ใช้ ได้ 503',
+    async (status, code) => {
+      stubFetch(() => json(status, { error: { code, message: 'x' } }));
+      expect(
+        await rejection(new FaceClient(config).detect(image, 'image/jpeg')),
+      ).toMatchObject({
+        status: 503,
+        code: 'FACE_SERVICE_UNAVAILABLE',
+      });
+    },
+  );
 
   it('ต่อ face service ไม่ได้ได้ 503', async () => {
     stubFetch(() => Promise.reject(new TypeError('fetch failed')));
     expect(
-      (await rejection(new FaceClient(config).enroll(image, 'image/jpeg'))).code,
+      (await rejection(new FaceClient(config).enroll(image, 'image/jpeg')))
+        .code,
     ).toBe('FACE_SERVICE_UNAVAILABLE');
   });
 
@@ -169,7 +194,9 @@ describe('FaceClient', () => {
     const calls = stubFetch(() =>
       Promise.reject(new DOMException('timed out', 'TimeoutError')),
     );
-    const result = await rejection(new FaceClient(config).detect(image, 'image/jpeg'));
+    const result = await rejection(
+      new FaceClient(config).detect(image, 'image/jpeg'),
+    );
     expect(result.status).toBe(503);
     expect(result.code).toBe('FACE_SERVICE_UNAVAILABLE');
     expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
@@ -177,7 +204,9 @@ describe('FaceClient', () => {
 
   it('500 จาก face service ได้ 503', async () => {
     stubFetch(() => json(500, { error: { code: 'INTERNAL', message: 'x' } }));
-    expect(await rejection(new FaceClient(config).detect(image, 'image/jpeg'))).toMatchObject({
+    expect(
+      await rejection(new FaceClient(config).detect(image, 'image/jpeg')),
+    ).toMatchObject({
       status: 503,
       code: 'FACE_SERVICE_UNAVAILABLE',
     });
@@ -185,17 +214,34 @@ describe('FaceClient', () => {
 
   it('ตอบ 2xx แต่ไม่มี data ถือว่า service ผิดปกติ ได้ 503', async () => {
     stubFetch(() => json(200, { ok: true }));
-    expect(await rejection(new FaceClient(config).detect(image, 'image/jpeg'))).toMatchObject({
+    expect(
+      await rejection(new FaceClient(config).detect(image, 'image/jpeg')),
+    ).toMatchObject({
       status: 503,
       code: 'FACE_SERVICE_UNAVAILABLE',
     });
   });
 
   it('401 จาก face service (token ไม่ตรง) ได้ 503 ไม่ส่ง UNAUTHORIZED ไปให้ผู้ใช้', async () => {
-    stubFetch(() => json(401, { error: { code: 'UNAUTHORIZED', message: 'x' } }));
-    expect(await rejection(new FaceClient(config).detect(image, 'image/jpeg'))).toMatchObject({
+    stubFetch(() =>
+      json(401, { error: { code: 'UNAUTHORIZED', message: 'x' } }),
+    );
+    expect(
+      await rejection(new FaceClient(config).detect(image, 'image/jpeg')),
+    ).toMatchObject({
       status: 503,
       code: 'FACE_SERVICE_UNAVAILABLE',
     });
   });
+});
+
+it('ให้เวลา OCR เอกสารมากกว่าการตรวจใบหน้า', async () => {
+  stubFetch(() => json(200, { data: { lines: [] } }));
+  const timeout = vi.spyOn(AbortSignal, 'timeout');
+  try {
+    await new FaceClient(config).readLeaveDocument(image, 'application/pdf');
+    expect(timeout).toHaveBeenLastCalledWith(120_000);
+  } finally {
+    timeout.mockRestore();
+  }
 });

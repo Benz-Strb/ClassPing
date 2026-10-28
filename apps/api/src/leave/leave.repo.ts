@@ -67,11 +67,19 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     if (sessionError) throw dbError();
     if (!session) return false;
 
+    const { data: student, error: studentError } = await this.db
+      .from('users')
+      .select('student_id')
+      .eq('id', studentId)
+      .maybeSingle();
+    if (studentError) throw dbError();
+    if (!student?.student_id) return false;
+
     const { data: enrollment, error: enrollmentError } = await this.db
       .from('enrollments')
-      .select('student_id')
+      .select('student_code')
       .eq('course_id', session.course_id)
-      .eq('student_id', studentId)
+      .eq('student_code', student.student_id)
       .maybeSingle();
     if (enrollmentError) throw dbError();
     return enrollment !== null;

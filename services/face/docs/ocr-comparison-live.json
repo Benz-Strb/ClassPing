@@ -1,0 +1,71 @@
+{
+  "reference": "ใบลาป่วย นักศึกษา\n27/10/2569",
+  "font": "/System/Library/Fonts/Supplemental/SukhumvitSet.ttc",
+  "results": [
+    {
+      "format": "PNG",
+      "engine": "typhoon-ocr-1.5",
+      "status": "ok",
+      "text": "ใบลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.0,
+      "seconds": 1.321,
+      "date_exact": true
+    },
+    {
+      "format": "PNG",
+      "engine": "paddleocr",
+      "status": "ok",
+      "text": "ใบลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.0,
+      "seconds": 1.71,
+      "date_exact": true
+    },
+    {
+      "format": "JPEG",
+      "engine": "typhoon-ocr-1.5",
+      "status": "ok",
+      "text": "ใบลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.0,
+      "seconds": 0.666,
+      "date_exact": true
+    },
+    {
+      "format": "JPEG",
+      "engine": "paddleocr",
+      "status": "ok",
+      "text": "บลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.038461538461538464,
+      "seconds": 1.615,
+      "date_exact": true
+    },
+    {
+      "format": "PDF",
+      "engine": "typhoon-ocr-1.5",
+      "status": "ok",
+      "text": "ใบลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.0,
+      "seconds": 1.086,
+      "date_exact": true
+    },
+    {
+      "format": "PDF",
+      "engine": "paddleocr",
+      "status": "ok",
+      "text": "บลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.038461538461538464,
+      "seconds": 5.634,
+      "date_exact": true
+    }
+  ],
+  "blocked": {},
+  "initialization_seconds": {
+    "paddleocr": 5.557
+  },
+  "method": "CER: NFC + ลบ whitespace; ยิ่งต่ำยิ่งดี; ไม่แก้ลำดับบรรทัด/Markdown",
+  "limitations": [
+    "เอกสารสมมติเดียวใน 3 formats ไม่เพียงพอตัดสินว่าโมเดลใดดีที่สุด",
+    "Paddle รัน CPU ในเครื่อง; Typhoon ผ่าน cloud รวมเวลาเครือข่าย",
+    "เวลาไม่รวม initialization/rendering และ SDK Typhoon อาจแปลงภาพอีกครั้ง",
+    "Typhoon คืน Markdown ไม่มี confidence ที่ใช้เทียบกับ Paddle ได้โดยตรง"
+  ]
+}

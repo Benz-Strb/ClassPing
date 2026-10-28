@@ -8,12 +8,14 @@ from pydantic import BaseModel, model_validator
 
 from app.config import Settings, load_settings
 from app.crops import face_crop
+from app.documents import MAX_DOCUMENT_BYTES, document_frames
 from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
 from app.matching import match
 from app.ocr import PaddleTextReader, TextReader
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
+from app.typhoon_ocr import TyphoonTextReader
 
 PUBLIC_PATHS = {"/health"}
 
@@ -53,13 +55,17 @@ def check_body_size(request: Request, settings: Settings):
     if length is None or not length.isdigit():
         return error_response(411, "LENGTH_REQUIRED", "ต้องระบุขนาดข้อมูลที่ส่ง")
     is_upload = request.headers.get("content-type", "").startswith("multipart/")
-    limit = settings.max_image_bytes + MULTIPART_OVERHEAD if is_upload else settings.max_json_bytes
+    upload_limit = MAX_DOCUMENT_BYTES if request.url.path == "/leave/ocr" else settings.max_image_bytes
+    limit = upload_limit + MULTIPART_OVERHEAD if is_upload else settings.max_json_bytes
     if int(length) > limit:
         return error_response(413, "REQUEST_TOO_LARGE", "ข้อมูลที่ส่งมาใหญ่เกินไป")
     return None
 
 
-def create_app(settings: Settings, engine: FaceEngine, reader: TextReader) -> FastAPI:
+def create_app(
+    settings: Settings, engine: FaceEngine, reader: TextReader,
+    leave_reader: TyphoonTextReader | None = None,
+) -> FastAPI:
     app = FastAPI(title="ClassPing face service", docs_url=None, redoc_url=None)
     install_error_handlers(app)
 
@@ -142,16 +148,16 @@ def create_app(settings: Settings, engine: FaceEngine, reader: TextReader) -> Fa
 
     @app.post("/leave/ocr")
     def read_leave_document(image: UploadFile):
-        frame = decode_image(
-            read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
-        )
-        return {
-            "data": {
-                "lines": [
-                    {"text": text, "score": score} for text, score in reader.read(frame)
-                ]
-            }
-        }
+        data = read_upload(image.file, MAX_DOCUMENT_BYTES)
+        lines = []
+        for frame in document_frames(data):
+            if leave_reader is not None:
+                text = leave_reader.read(frame)
+                lines.extend({"text": line, "score": None}
+                             for line in text.splitlines() if line.strip())
+            else:
+                lines.extend({"text": text, "score": score} for text, score in reader.read(frame))
+        return {"data": {"lines": lines}}
 
     @app.post("/faces/match")
     def match_faces(body: MatchRequest):
@@ -215,4 +221,5 @@ def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
 def build_app() -> FastAPI:
     """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
     settings = load_settings(os.environ)
-    return create_app(settings, InsightFaceEngine(settings), PaddleTextReader())
+    return create_app(settings, InsightFaceEngine(settings), PaddleTextReader(),
+                      leave_reader=TyphoonTextReader())

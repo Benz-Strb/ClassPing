@@ -5,9 +5,11 @@ import numpy as np
 
 
 def test_paddle_text_reader_returns_text_and_confidence(monkeypatch):
-    class FakeResult:
-        rec_texts = ('ลาป่วย', '26/10/2569')
-        rec_scores = (0.98, 0.91)
+    # PaddleOCR 3 คืนผลแบบ mapping ไม่ใช่ attributes
+    result = {
+        'rec_texts': ['ลาป่วย', '26/10/2569', '  '],
+        'rec_scores': np.array([0.98, 0.91, 0.99]),
+    }
 
     class FakePaddleOCR:
         def __init__(self, **kwargs):
@@ -15,7 +17,7 @@ def test_paddle_text_reader_returns_text_and_confidence(monkeypatch):
 
         def predict(self, image):
             assert isinstance(image, np.ndarray)
-            return [FakeResult()]
+            return [result]
 
     monkeypatch.setitem(sys.modules, 'paddleocr', types.SimpleNamespace(PaddleOCR=FakePaddleOCR))
 

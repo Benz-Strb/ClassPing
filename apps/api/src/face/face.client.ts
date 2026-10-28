@@ -97,7 +97,7 @@ export class FaceClient {
     return this.post('/cards/read', imageForm(image, mime));
   }
 
-  readLeaveDocument(image: Buffer, mime: string): Promise<{ lines: { text: string; score: number }[] }> {
+  readLeaveDocument(image: Buffer, mime: string): Promise<{ lines: { text: string; score: number | null }[] }> {
     return this.post('/leave/ocr', imageForm(image, mime));
   }
 
@@ -139,7 +139,7 @@ export class FaceClient {
         method,
         ...(body === undefined ? {} : { body }),
         headers: { ...headers, 'X-Face-Token': this.config.faceServiceToken },
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(path === '/leave/ocr' ? 120_000 : TIMEOUT_MS),
       });
     } catch (error) {
       this.logger.warn(`เรียก face service ไม่ได้: ${String(error)}`);
