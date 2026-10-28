@@ -24,8 +24,8 @@ class PaddleTextReader:
             return []
 
         result = results[0]
-        texts = getattr(result, 'rec_texts', None) or []
-        scores = getattr(result, 'rec_scores', None) or []
+        texts = result.get('rec_texts', [])
+        scores = result.get('rec_scores', [])
         return [
             (text, float(score)) for text, score in zip(texts, scores, strict=True) if text.strip()
         ]

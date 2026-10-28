@@ -1,0 +1,46 @@
+{
+  "reference": "ใบลาป่วย นักศึกษา\n27/10/2569",
+  "font": "/System/Library/Fonts/Supplemental/SukhumvitSet.ttc",
+  "results": [
+    {
+      "format": "PNG",
+      "engine": "paddleocr",
+      "status": "ok",
+      "text": "ใบลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.0,
+      "seconds": 1.582,
+      "date_exact": true
+    },
+    {
+      "format": "JPEG",
+      "engine": "paddleocr",
+      "status": "ok",
+      "text": "บลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.038461538461538464,
+      "seconds": 1.171,
+      "date_exact": true
+    },
+    {
+      "format": "PDF",
+      "engine": "paddleocr",
+      "status": "ok",
+      "text": "บลาป่วย นักศึกษา\n27/10/2569",
+      "cer": 0.038461538461538464,
+      "seconds": 5.115,
+      "date_exact": true
+    }
+  ],
+  "blocked": {
+    "typhoon-ocr-1.5": "ยังไม่มี TYPHOON_OCR_API_KEY; ไม่ได้เรียก API"
+  },
+  "initialization_seconds": {
+    "paddleocr": 8.076
+  },
+  "method": "CER: NFC + ลบ whitespace; ยิ่งต่ำยิ่งดี; ไม่แก้ลำดับบรรทัด/Markdown",
+  "limitations": [
+    "เอกสารสมมติเดียวใน 3 formats ไม่เพียงพอตัดสินว่าโมเดลใดดีที่สุด",
+    "Paddle รัน CPU ในเครื่อง; Typhoon ผ่าน cloud รวมเวลาเครือข่าย",
+    "เวลาไม่รวม initialization/rendering และ SDK Typhoon อาจแปลงภาพอีกครั้ง",
+    "Typhoon คืน Markdown ไม่มี confidence ที่ใช้เทียบกับ Paddle ได้โดยตรง"
+  ]
+}
