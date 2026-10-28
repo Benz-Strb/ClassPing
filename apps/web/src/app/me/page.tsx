@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -31,7 +32,9 @@ export default function MePage() {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
           await supabase.auth.signOut();
           const message =
-            e.code === "DOMAIN_NOT_ALLOWED" ? "ใช้ได้เฉพาะเมล @dpu.ac.th" : e.message;
+            e.code === "DOMAIN_NOT_ALLOWED"
+              ? "ใช้ได้เฉพาะเมล @dpu.ac.th"
+              : e.message;
           router.replace(`/login?error=${encodeURIComponent(message)}`);
           return;
         }
@@ -53,6 +56,16 @@ export default function MePage() {
       <p>{me.email}</p>
       <p>บทบาท: {ROLE_LABEL[me.role]}</p>
       {me.studentId && <p>รหัสนักศึกษา: {me.studentId}</p>}
+      {me.role === "student" && (
+        <Link href="/leave" className="block text-blue-700 underline">
+          ยื่นคำขอลาและดูสถานะ
+        </Link>
+      )}
+      {me.role === "teacher" && (
+        <Link href="/leave/review" className="block text-blue-700 underline">
+          ตรวจคำขอลา
+        </Link>
+      )}
       <button onClick={signOut} className="rounded-lg border px-4 py-2">
         ออกจากระบบ
       </button>

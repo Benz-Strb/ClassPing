@@ -1,11 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../common/app-error.js';
+import { looksLike } from '../common/image-type.js';
 import { FaceClient } from '../face/face.client.js';
 import type { AppUser } from '../users/users.service.js';
-import { LEAVE_REPO, type LeaveRepo, type LeaveRequestView } from './leave.repo.js';
+import {
+  LEAVE_REPO,
+  type LeaveRepo,
+  type LeaveRequestView,
+  type LeaveSessionOption,
+} from './leave.repo.js';
 
 const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTENSIONS: Record<string, string> = {
   'application/pdf': 'pdf',
   'image/jpeg': 'jpg',
@@ -26,29 +33,88 @@ export class LeaveService {
     private readonly face: FaceClient,
   ) {}
 
-  async submit(user: AppUser, sessionId: string, reason: string, evidence?: LeaveEvidence) {
-    if (!user.studentId) throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
-    const cleanReason = reason.trim();
-    if (!cleanReason) throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
-    if (!evidence) throw new AppError(400, 'EVIDENCE_REQUIRED', 'กรุณาแนบหลักฐานการลา');
+  async submit(
+    user: AppUser,
+    sessionId: string,
+    reason: string,
+    evidence?: LeaveEvidence,
+  ) {
+    if (!user.studentId)
+      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
+    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
+      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
+    const cleanReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!cleanReason)
+      throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
+    if (cleanReason.length > 1000)
+      throw new AppError(
+        400,
+        'BAD_REQUEST',
+        'เหตุผลการลายาวเกิน 1000 ตัวอักษร',
+      );
+    if (!evidence)
+      throw new AppError(400, 'EVIDENCE_REQUIRED', 'กรุณาแนบหลักฐานการลา');
     if (!EXTENSIONS[evidence.mimetype]) {
-      throw new AppError(400, 'UNSUPPORTED_EVIDENCE', 'รองรับเฉพาะไฟล์ PDF, JPG หรือ PNG');
+      throw new AppError(
+        400,
+        'UNSUPPORTED_EVIDENCE',
+        'รองรับเฉพาะไฟล์ PDF, JPG หรือ PNG',
+      );
     }
     if (evidence.size <= 0 || evidence.size > MAX_EVIDENCE_BYTES) {
-      throw new AppError(413, 'EVIDENCE_TOO_LARGE', 'ไฟล์หลักฐานต้องมีขนาดไม่เกิน 10 MB');
+      throw new AppError(
+        413,
+        'EVIDENCE_TOO_LARGE',
+        'ไฟล์หลักฐานต้องมีขนาดไม่เกิน 10 MB',
+      );
     }
+    const validFile =
+      evidence.mimetype === 'application/pdf'
+        ? evidence.buffer.subarray(0, 5).toString() === '%PDF-'
+        : looksLike(evidence.mimetype, evidence.buffer);
+    if (!validFile)
+      throw new AppError(400, 'INVALID_EVIDENCE', 'ชนิดไฟล์หลักฐานไม่ถูกต้อง');
     if (!(await this.repo.studentCanRequest(user.id, sessionId))) {
-      throw new AppError(404, 'SESSION_NOT_FOUND', 'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้');
+      throw new AppError(
+        404,
+        'SESSION_NOT_FOUND',
+        'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้',
+      );
     }
 
-    const ocr = await this.face.readLeaveDocument(evidence.buffer, evidence.mimetype);
-    const request = await this.repo.createRequest({
-      studentId: user.id,
-      sessionId,
-      reason: cleanReason,
-      ocrText: ocr.lines.map((line) => line.text).join('\n'),
-      ocrStatus: 'completed',
-    });
+    let ocr: Awaited<ReturnType<FaceClient['readLeaveDocument']>> | null = null;
+    let ocrStatus: 'completed' | 'failed' = 'failed';
+    try {
+      ocr = await this.face.readLeaveDocument(
+        evidence.buffer,
+        evidence.mimetype,
+      );
+      ocrStatus = 'completed';
+    } catch {
+      // OCR เป็นข้อมูลช่วยตรวจ หลักฐานยังต้องส่งให้อาจารย์ตรวจเองได้เมื่อบริการภายนอกล่ม
+    }
+    let request;
+    try {
+      request = await this.repo.createRequest({
+        studentId: user.id,
+        sessionId,
+        reason: cleanReason,
+        ocrText: ocr?.lines.map((line) => line.text).join('\n') ?? '',
+        ocrStatus,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === 'LEAVE_REQUEST_DUPLICATE'
+      ) {
+        throw new AppError(
+          409,
+          'LEAVE_REQUEST_DUPLICATE',
+          'ส่งคำขอลาสำหรับคาบนี้แล้ว',
+        );
+      }
+      throw error;
+    }
     const path = `${user.id}/${request.id}-${randomUUID()}.${EXTENSIONS[evidence.mimetype]}`;
     try {
       await this.repo.uploadEvidence(path, evidence.buffer, evidence.mimetype);
@@ -65,7 +131,17 @@ export class LeaveService {
       throw error;
     }
 
-    return { id: request.id, status: 'pending', ocr };
+    return { id: request.id, status: 'pending', ocrStatus, ocr };
+  }
+
+  listSessions(user: AppUser): Promise<LeaveSessionOption[]> {
+    if (!user.studentId)
+      throw new AppError(
+        403,
+        'STUDENT_ONLY',
+        'ดูคาบเรียนได้เฉพาะบัญชีนักศึกษา',
+      );
+    return this.repo.listEligibleSessions(user.id);
   }
 
   async review(
@@ -77,16 +153,36 @@ export class LeaveService {
     if (user.role !== 'teacher') {
       throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ตรวจคำขอลา');
     }
+    if (!UUID.test(requestId))
+      throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
     try {
-      await this.repo.reviewRequest(requestId, user.id, decision, reviewNote?.trim() || null);
+      await this.repo.reviewRequest(
+        requestId,
+        user.id,
+        decision,
+        reviewNote?.trim() || null,
+      );
     } catch (error) {
-      if (error instanceof Error && error.message === 'LEAVE_REQUEST_NOT_FOUND') {
+      if (
+        error instanceof Error &&
+        error.message === 'LEAVE_REQUEST_NOT_FOUND'
+      ) {
         throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
       }
-      if (error instanceof Error && error.message === 'LEAVE_REQUEST_NOT_PENDING') {
-        throw new AppError(409, 'LEAVE_REQUEST_NOT_PENDING', 'คำขอลานี้ถูกตรวจไปแล้ว');
+      if (
+        error instanceof Error &&
+        error.message === 'LEAVE_REQUEST_NOT_PENDING'
+      ) {
+        throw new AppError(
+          409,
+          'LEAVE_REQUEST_NOT_PENDING',
+          'คำขอลานี้ถูกตรวจไปแล้ว',
+        );
       }
-      if (error instanceof Error && error.message === 'LEAVE_REQUEST_FORBIDDEN') {
+      if (
+        error instanceof Error &&
+        error.message === 'LEAVE_REQUEST_FORBIDDEN'
+      ) {
         throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ตรวจคำขอลาของวิชานี้');
       }
       throw error;
@@ -95,7 +191,8 @@ export class LeaveService {
   }
 
   listMine(user: AppUser): Promise<LeaveRequestView[]> {
-    if (!user.studentId) throw new AppError(403, 'STUDENT_ONLY', 'ดูคำขอลาได้เฉพาะบัญชีนักศึกษา');
+    if (!user.studentId)
+      throw new AppError(403, 'STUDENT_ONLY', 'ดูคำขอลาได้เฉพาะบัญชีนักศึกษา');
     return this.repo.listByStudent(user.id);
   }
 
@@ -106,17 +203,30 @@ export class LeaveService {
     return this.repo.listForTeacher(user.id);
   }
 
-  async evidenceUrl(user: AppUser, requestId: string): Promise<{ url: string }> {
+  async evidenceUrl(
+    user: AppUser,
+    requestId: string,
+  ): Promise<{ url: string }> {
     if (user.role !== 'student' && user.role !== 'teacher') {
       throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ดูหลักฐานการลา');
     }
+    if (!UUID.test(requestId))
+      throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
     try {
-      return { url: await this.repo.signedEvidenceUrl(requestId, user.id, user.role) };
+      return {
+        url: await this.repo.signedEvidenceUrl(requestId, user.id, user.role),
+      };
     } catch (error) {
-      if (error instanceof Error && error.message === 'LEAVE_REQUEST_NOT_FOUND') {
+      if (
+        error instanceof Error &&
+        error.message === 'LEAVE_REQUEST_NOT_FOUND'
+      ) {
         throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
       }
-      if (error instanceof Error && error.message === 'LEAVE_REQUEST_FORBIDDEN') {
+      if (
+        error instanceof Error &&
+        error.message === 'LEAVE_REQUEST_FORBIDDEN'
+      ) {
         throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ดูหลักฐานคำขอลานี้');
       }
       if (error instanceof Error && error.message === 'EVIDENCE_NOT_FOUND') {
