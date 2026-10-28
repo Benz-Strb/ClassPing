@@ -23,6 +23,7 @@
     "seed:camera": "node --env-file=.env scripts/seed-camera.ts"
   },
   "dependencies": {
+    "@expo-google-fonts/noto-sans-thai": "^0.4.2",
     "@nestjs/common": "^12.0.1",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
@@ -30,6 +31,7 @@
     "bullmq": "^6.3.15",
     "googleapis": "^185.0.0",
     "ioredis": "^6.0.0",
+    "pdfkit": "^0.20.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.6.7"
@@ -40,6 +42,7 @@
     "@nestjs/testing": "^12.0.1",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
+    "@types/pdfkit": "^0.17.7",
     "@types/supertest": "^7.0.0",
     "@vitest/coverage-v8": "^4.1.2",
     "oxlint": "^1.58.0",
