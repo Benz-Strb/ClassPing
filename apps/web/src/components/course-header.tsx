@@ -13,6 +13,7 @@ const TABS = [
   { path: "schedule", label: "ตารางเรียน" },
   { path: "exams", label: "สอบ" },
   { path: "rules", label: "เกณฑ์" },
+  { path: "reports", label: "รายงาน" },
 ];
 
 export function CourseHeader() {

@@ -2,11 +2,13 @@
   "name": "@classping/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:reports": "node --test src/lib/reports.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
