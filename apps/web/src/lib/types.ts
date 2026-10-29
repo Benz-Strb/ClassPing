@@ -8,6 +8,10 @@ export interface Me {
   studentId: string | null;
 }
 
+export interface AdminUser extends Me {
+  hasFace: boolean;
+}
+
 export interface Room {
   id: string;
   name: string;
