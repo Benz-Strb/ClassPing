@@ -4,8 +4,7 @@ import type { Course, CoursesRepo } from '../courses/courses.repo.js';
 import { CoursesService } from '../courses/courses.service.js';
 import type { Override, Schedule, SchedulesRepo } from '../schedules/schedules.repo.js';
 import type { AppUser } from '../users/users.service.js';
-import type { PlannedSession } from './plan-day.js';
-import type { SessionRow, SessionsRepo } from './sessions.repo.js';
+import type { NewSessionRow, SessionRow, SessionsRepo } from './sessions.repo.js';
 import { SessionsService } from './sessions.service.js';
 
 // อังคาร 20 ต.ค. 2569 10:00 เวลาไทย → ช่วงสร้างคาบคือ 20–26 ต.ค.
@@ -42,7 +41,7 @@ class InMemorySessionsRepo implements SessionsRepo {
           (row.scheduleId !== null && r.scheduleId === row.scheduleId && r.onDate === row.onDate)),
     );
   }
-  async insert(sessions: (PlannedSession | SessionRow)[]) {
+  async insert(sessions: NewSessionRow[]) {
     await new Promise((resolve) => setImmediate(resolve));
     this.writes++;
     if (sessions.some((s) => this.clash(s))) throw new Error('duplicate key 23505');

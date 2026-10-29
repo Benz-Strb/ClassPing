@@ -15,7 +15,11 @@ describe('ReportsService', () => {
   const teacherUser: AppUser = {
     id: 'teacher-1',
     email: 'teacher@test.ac.th',
+    fullName: 'อาจารย์ทดสอบ',
     role: 'teacher',
+    studentId: null,
+    pdpaConsentAt: null,
+    identityVerifiedAt: null,
   };
 
   const sampleReport: AttendanceReportResponse = {

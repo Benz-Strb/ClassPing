@@ -47,10 +47,25 @@ const dateTime = new Intl.DateTimeFormat("th-TH", {
   timeZone: "Asia/Bangkok",
 });
 
+const sessionDate = new Intl.DateTimeFormat("th-TH", {
+  dateStyle: "medium",
+  timeZone: "Asia/Bangkok",
+});
+
+const sessionTime = new Intl.DateTimeFormat("th-TH", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Asia/Bangkok",
+});
+
 export function formatSession(session: LeaveSession) {
   const section = session.section ? ` กลุ่ม ${session.section}` : "";
   const room = session.roomName ? ` · ห้อง ${session.roomName}` : "";
-  return `${session.courseCode}${section} · ${session.courseName} · ${dateTime.format(new Date(session.startsAt))}${room}`;
+  const startsAt = new Date(session.startsAt);
+  const endsAt = new Date(session.endsAt);
+  const schedule = `${sessionDate.format(startsAt)} ${sessionTime.format(startsAt)}–${sessionTime.format(endsAt)}`;
+  return `${session.courseCode}${section} · ${session.courseName} · ${schedule}${room}`;
 }
 
 export function formatSubmittedAt(value: string) {
