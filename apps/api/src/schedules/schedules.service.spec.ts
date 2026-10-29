@@ -123,7 +123,7 @@ function setup(openBeforeMin = 0) {
   const courseRows = new Map([cs101, cs102].map((c) => [c.id, c]));
   const roomA = randomUUID();
   const roomB = randomUUID();
-  const roomNames = new Map([
+  const roomNames = new Map<string, string>([
     [roomA, 'ห้อง A'],
     [roomB, 'ห้อง B'],
   ]);
