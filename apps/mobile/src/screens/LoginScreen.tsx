@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as AuthSession from 'expo-auth-session';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
+import { getMobileAuthRedirectUri } from '../lib/auth-redirect';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -18,8 +19,7 @@ export function LoginScreen({ error: initialError }: Props) {
     setLoading(true);
     setError(null);
     try {
-      // ใน Expo Go จะได้ exp://<ip>:8081/--/... ต้องอยู่ใน Redirect URLs ของ Supabase
-      const redirectTo = AuthSession.makeRedirectUri();
+      const redirectTo = getMobileAuthRedirectUri(Constants.appOwnership);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
