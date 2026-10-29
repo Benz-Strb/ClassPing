@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { hashToken, newToken } from '../src/camera/camera-token.ts';
+import { hashToken, newToken } from '../src/camera/camera-token.js';
 
 const roomName = process.argv[2]?.trim() || 'ห้องทดลอง 1';
 const envPath = resolve(import.meta.dirname, '../../../services/camera/.env');

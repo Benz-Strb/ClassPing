@@ -47,8 +47,8 @@ describe('API (e2e)', () => {
     '/teachers',
     '/live/sessions?date=2026-10-24',
     '/sessions/00000000-0000-0000-0000-000000000000/recording',
-  ])('GET %s ต้อง login ก่อน', (path) => {
-    return request(app.getHttpServer()).get(path).expect(401);
+  ])('GET %s ต้อง login ก่อน', async (path) => {
+    await request(app.getHttpServer()).get(path).expect(401);
   });
 
   it.each([
@@ -59,8 +59,8 @@ describe('API (e2e)', () => {
     ['delete', '/users/00000000-0000-0000-0000-000000000000/face'],
     ['post', '/sessions/00000000-0000-0000-0000-000000000000/live'],
     ['post', '/sessions/00000000-0000-0000-0000-000000000000/recording/link'],
-  ] as const)('%s %s ต้อง login ก่อน', (method, path) => {
-    return request(app.getHttpServer())[method](path).expect(401);
+  ] as const)('%s %s ต้อง login ก่อน', async (method, path) => {
+    await request(app.getHttpServer())[method](path).expect(401);
   });
 
   it('GET /clips/:token เปิดได้โดยไม่ต้อง login แต่ลิงก์ผิดได้ 401 แบบ error กลาง', () => {
