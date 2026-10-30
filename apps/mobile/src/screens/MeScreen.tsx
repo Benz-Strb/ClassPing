@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -11,6 +12,7 @@ import { discardCard } from "../lib/face";
 import { supabase } from "../lib/supabase";
 import type { FaceStatus, Me } from "../lib/types";
 import { ConsentScreen } from "./ConsentScreen";
+import { AttendanceSummarySection } from "./AttendanceSummarySection";
 import { EnrollScreen } from "./EnrollScreen";
 import { IdentityScreen } from "./IdentityScreen";
 import { LeaveScreen } from "./LeaveScreen";
@@ -122,7 +124,7 @@ export function MeScreen({ onRejected }: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>{me.fullName ?? me.email}</Text>
       <Text>{me.email}</Text>
       <Text>บทบาท: {ROLE_LABEL[me.role]}</Text>
@@ -134,6 +136,7 @@ export function MeScreen({ onRejected }: Props) {
       ) : (
         <Text style={styles.pending}>บัญชีนี้ใช้งานบนเว็บ</Text>
       )}
+      {me.studentId && <AttendanceSummarySection />}
       {me.studentId && (
         <Pressable style={styles.primary} onPress={() => setShowLeave(true)}>
           <Text style={styles.primaryText}>ระบบลา</Text>
@@ -142,11 +145,13 @@ export function MeScreen({ onRejected }: Props) {
       <Pressable style={styles.button} onPress={signOut}>
         <Text>ออกจากระบบ</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#fff" },
+  content: { flexGrow: 1, padding: 24, gap: 10 },
   container: {
     flex: 1,
     justifyContent: "center",
