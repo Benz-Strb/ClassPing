@@ -6,7 +6,11 @@ import type { AppUser } from '../users/users.service.js';
 import { generateAttendanceCsv } from './export-csv.js';
 import { generateAttendancePdf } from './export-pdf.js';
 import { REPORTS_REPO, type ReportsRepo } from './reports.repo.js';
-import type { AttendanceFilterDto, AttendanceReportResponse } from './reports.types.js';
+import type {
+  AttendanceFilterDto,
+  AttendanceReportResponse,
+  StudentAttendanceSummaryResponse,
+} from './reports.types.js';
 
 @Injectable()
 export class ReportsService {
@@ -15,6 +19,13 @@ export class ReportsService {
     @Inject(REPORTS_REPO) private readonly repo: ReportsRepo,
     @Inject(CLOCK) private readonly now: Clock,
   ) {}
+
+  async getStudentAttendanceSummary(user: AppUser): Promise<StudentAttendanceSummaryResponse> {
+    if (!user.studentId) {
+      throw new AppError(403, 'STUDENT_ONLY', 'ข้อมูลนี้ใช้ได้เฉพาะนักศึกษา');
+    }
+    return this.repo.getStudentAttendanceSummary(user.studentId, this.now());
+  }
 
   async getAttendanceReport(
     user: AppUser,

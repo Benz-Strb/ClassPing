@@ -22,6 +22,28 @@ describe('ReportsService', () => {
     identityVerifiedAt: null,
   };
 
+  const studentUser: AppUser = {
+    ...teacherUser,
+    id: 'student-1',
+    email: '66123456@dpu.ac.th',
+    role: 'student',
+    studentId: '66123456',
+  };
+
+  const studentSummary = {
+    summary: {
+      counts: { present: 2, late: 1, absent: 1, leave: 0, pending: 0, total: 4 },
+      attendanceRate: 75,
+    },
+    courses: [
+      {
+        course: { id: 'course-1', code: 'CS101', name: 'Intro to CS', section: null },
+        counts: { present: 2, late: 1, absent: 1, leave: 0, pending: 0, total: 4 },
+        attendanceRate: 75,
+      },
+    ],
+  };
+
   const sampleReport: AttendanceReportResponse = {
     course: {
       id: 'course-1',
@@ -58,6 +80,7 @@ describe('ReportsService', () => {
 
     mockRepo = {
       getAttendanceReport: vi.fn().mockResolvedValue(sampleReport),
+      getStudentAttendanceSummary: vi.fn().mockResolvedValue(studentSummary),
     };
 
     service = new ReportsService(
@@ -65,6 +88,19 @@ describe('ReportsService', () => {
       mockRepo as ReportsRepo,
       () => mockNow,
     );
+  });
+
+  it('ดึงสรุปการเข้าเรียนเฉพาะรหัสนักศึกษาของผู้ใช้', async () => {
+    const result = await service.getStudentAttendanceSummary(studentUser);
+
+    expect(mockRepo.getStudentAttendanceSummary).toHaveBeenCalledWith('66123456', mockNow);
+    expect(result).toEqual(studentSummary);
+  });
+
+  it('ไม่ดึงสรุปเมื่อผู้ใช้ไม่มีรหัสนักศึกษา', async () => {
+    await expect(
+      service.getStudentAttendanceSummary({ ...studentUser, studentId: null }),
+    ).rejects.toMatchObject({ status: 403, code: 'STUDENT_ONLY' });
   });
 
   it('ดึงรายงานสำเร็จเมื่อเป็นอาจารย์ผู้สอน', async () => {
