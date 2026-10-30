@@ -52,3 +52,14 @@ export class ReportsController {
     res.end(buffer);
   }
 }
+
+@Controller('me/reports')
+@Roles('student')
+export class StudentReportsController {
+  constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('attendance')
+  getAttendanceSummary(@CurrentUser() user: AppUser) {
+    return this.reportsService.getStudentAttendanceSummary(user);
+  }
+}
