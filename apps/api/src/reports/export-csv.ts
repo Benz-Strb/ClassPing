@@ -18,7 +18,16 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   const BOM = '\uFEFF';
 
   // หัวรายงาน
-  lines.push(`${escapeCsv('รายงานการเข้าเรียน')} - ${escapeCsv(report.course.code)} ${escapeCsv(report.course.name)}${report.course.section ? ` กลุ่ม ${escapeCsv(report.course.section)}` : ''}`);
+  lines.push(
+    [
+      escapeCsv('รายงานการเข้าเรียน'),
+      escapeCsv(report.course.code),
+      escapeCsv(report.course.name),
+      escapeCsv(
+        report.course.section ? `กลุ่ม ${report.course.section}` : null,
+      ),
+    ].join(','),
+  );
   lines.push(...formatReportFilters(report).map(escapeCsv));
   lines.push('');
 
@@ -32,6 +41,44 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   lines.push(`ลา (Leave),${report.summary.counts.leave}`);
   lines.push(`รอตรวจ (Pending),${report.summary.counts.pending}`);
   lines.push(`อัตราการเข้าเรียนเฉลี่ย,${report.summary.attendanceRate}%`);
+  lines.push('');
+
+  // สรุปรายคาบ โดยแสดง kind ชัดเจนเพื่อแยกคาบเรียนกับคาบสอบ
+  lines.push('--- สรุปรายคาบ ---');
+  lines.push(
+    [
+      'วันที่',
+      'kind',
+      'ชื่อคาบ',
+      'ห้อง',
+      'มาเรียน',
+      'สาย',
+      'ขาด',
+      'ลา',
+      'รอตรวจ',
+      'รวม',
+    ]
+      .map(escapeCsv)
+      .join(','),
+  );
+  for (const session of report.sessions) {
+    lines.push(
+      [
+        session.onDate,
+        session.kind,
+        session.title ?? '-',
+        session.roomName,
+        session.counts.present,
+        session.counts.late,
+        session.counts.absent,
+        session.counts.leave,
+        session.counts.pending,
+        session.counts.total,
+      ]
+        .map(escapeCsv)
+        .join(','),
+    );
+  }
   lines.push('');
 
   // ตารางนักศึกษา
@@ -64,7 +111,9 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   };
 
   for (const student of report.students) {
-    const sessionCols = student.sessions.map((s) => escapeCsv(statusLabelMap[s.status] ?? s.status));
+    const sessionCols = student.sessions.map((s) =>
+      escapeCsv(statusLabelMap[s.status] ?? s.status),
+    );
     const row = [
       escapeCsv(student.studentCode),
       escapeCsv(student.fullName ?? '-'),

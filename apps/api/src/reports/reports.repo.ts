@@ -3,6 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 import type { AttendanceStatus } from '../attendance/decide.js';
+import type { Rules } from '../courses/courses.repo.js';
+import { DEFAULT_RULES } from '../courses/courses.service.js';
+import { statusForReport } from './report-status.js';
 import type {
   AttendanceCounts,
   AttendanceFilterDto,
@@ -39,6 +42,8 @@ interface RawSession {
   ends_at: string;
   kind: 'class' | 'exam';
   title: string | null;
+  late_after_min: number | null;
+  absent_after_min: number | null;
   rooms: { name: string } | null;
 }
 
@@ -57,6 +62,7 @@ interface RawAttendance {
   student_id: string; // user id
   status: AttendanceStatus;
   first_seen_at: string | null;
+  updated_by: string | null;
 }
 
 async function allRows<T>(query: {
@@ -91,10 +97,26 @@ export class SupabaseReportsRepo implements ReportsRepo {
     if (!courseData) return null;
     const course = courseData as unknown as RawCourse;
 
+    const { data: rulesData, error: rulesError } = await this.db
+      .from('attendance_rules')
+      .select('late_after_min, absent_after_min, out_of_room_limit_min')
+      .eq('course_id', courseId)
+      .maybeSingle();
+    if (rulesError) throw dbError();
+    const courseRules: Rules = rulesData
+      ? {
+          lateAfterMin: rulesData.late_after_min as number,
+          absentAfterMin: rulesData.absent_after_min as number | null,
+          outOfRoomLimitMin: rulesData.out_of_room_limit_min as number,
+        }
+      : DEFAULT_RULES;
+
     // 2. ดึง sessions ตาม filter
     let sessionQuery = this.db
       .from('sessions')
-      .select('id, course_id, on_date, starts_at, ends_at, kind, title, rooms(name)')
+      .select(
+        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, rooms(name)',
+      )
       .eq('course_id', courseId)
       .order('starts_at', { ascending: true })
       .order('id', { ascending: true });
@@ -153,7 +175,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
         const attendances = await allRows<RawAttendance>(
           this.db
             .from('attendance')
-            .select('session_id, student_id, status, first_seen_at')
+            .select('session_id, student_id, status, first_seen_at, updated_by')
             .in('session_id', sessionIds.slice(start, start + 200))
             .order('session_id', { ascending: true })
             .order('student_id', { ascending: true }),
@@ -203,23 +225,29 @@ export class SupabaseReportsRepo implements ReportsRepo {
       const studentSessions: StudentSessionStatus[] = [];
 
       for (const s of sessions) {
+        const startsAt = new Date(s.starts_at);
         const sessionEndsAt = new Date(s.ends_at);
-        const isSessionEnded = sessionEndsAt <= now;
-        let finalStatus: AttendanceStatus | 'unrecorded' = 'unrecorded';
-
-        if (user) {
-          const key = `${s.id}:${user.id}`;
-          const att = attendanceMap.get(key);
-          if (att) {
-            finalStatus = att.status;
-          } else if (isSessionEnded) {
-            // หมดคาบแล้ว แต่ไม่มีบันทึกเช็คชื่อหรือการลา = ขาดเรียน
-            finalStatus = 'absent';
-          }
-        } else if (isSessionEnded) {
-          // นักศึกษายังไม่เคย login แต่หมดคาบแล้ว = ขาดเรียน
-          finalStatus = 'absent';
-        }
+        const att = user ? attendanceMap.get(`${s.id}:${user.id}`) : undefined;
+        const finalStatus = statusForReport(
+          {
+            kind: s.kind,
+            lateAfterMin: s.late_after_min,
+            absentAfterMin: s.absent_after_min,
+            startsAt,
+            endsAt: sessionEndsAt,
+          },
+          courseRules,
+          att
+            ? {
+                status: att.status,
+                firstSeenAt: att.first_seen_at
+                  ? new Date(att.first_seen_at)
+                  : null,
+                updatedBy: att.updated_by,
+              }
+            : null,
+          now,
+        );
 
         if (finalStatus !== 'unrecorded') {
           studentCounts[finalStatus]++;
