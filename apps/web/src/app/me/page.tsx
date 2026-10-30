@@ -56,6 +56,14 @@ export default function MePage() {
       <p>{me.email}</p>
       <p>บทบาท: {ROLE_LABEL[me.role]}</p>
       {me.studentId && <p>รหัสนักศึกษา: {me.studentId}</p>}
+      {me.role === "admin" && (
+        <Link
+          href="/admin"
+          className="block w-fit rounded-lg bg-blue-700 px-4 py-2 text-white hover:bg-blue-800"
+        >
+          ระบบผู้ดูแล
+        </Link>
+      )}
       {me.role === "student" && (
         <Link href="/leave" className="block text-blue-700 underline">
           ยื่นคำขอลาและดูสถานะ
