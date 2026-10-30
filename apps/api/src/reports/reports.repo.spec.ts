@@ -11,7 +11,8 @@ describe('SupabaseReportsRepo', () => {
       sessions: [{
         id: 'session-1', course_id: 'course-1', on_date: '2026-10-20',
         starts_at: '2026-10-20T09:00:00Z', ends_at: '2026-10-20T12:00:00Z',
-        kind: 'class', title: null, rooms: { name: 'LAB 1' },
+        kind: 'class', title: null, late_after_min: null, absent_after_min: null,
+        rooms: { name: 'LAB 1' },
       }],
       enrollments,
       users: enrollments.map((row) => ({
@@ -32,6 +33,15 @@ describe('SupabaseReportsRepo', () => {
                   data: { id: 'course-1', code: 'CPE101', name: 'Programming', section: null },
                   error: null,
                 }),
+              }),
+            }),
+          };
+        }
+        if (table === 'attendance_rules') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
               }),
             }),
           };
@@ -96,6 +106,8 @@ describe('SupabaseReportsRepo', () => {
                       ends_at: '2026-10-20T12:00:00Z', // หมดคาบแล้ว (< now)
                       kind: 'class',
                       title: null,
+                      late_after_min: null,
+                      absent_after_min: null,
                       rooms: { name: 'LAB 1' },
                     },
                     {
@@ -106,6 +118,8 @@ describe('SupabaseReportsRepo', () => {
                       ends_at: '2026-10-25T12:00:00Z', // หมดคาบแล้ว (< now)
                       kind: 'exam',
                       title: 'Midterm',
+                      late_after_min: 10,
+                      absent_after_min: null,
                       rooms: { name: 'HALL' },
                     },
                     {
@@ -116,6 +130,8 @@ describe('SupabaseReportsRepo', () => {
                       ends_at: '2026-10-30T12:00:00Z', // ยังไม่ถึงคาบ (> now)
                       kind: 'class',
                       title: null,
+                      late_after_min: null,
+                      absent_after_min: null,
                       rooms: { name: 'LAB 1' },
                     },
                   ].slice(from, to + 1),
@@ -137,6 +153,16 @@ describe('SupabaseReportsRepo', () => {
                   ].slice(from, to + 1),
                   error: null,
                 }) }),
+              }),
+            }),
+          };
+        }
+
+        if (table === 'attendance_rules') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: null, error: null }),
               }),
             }),
           };

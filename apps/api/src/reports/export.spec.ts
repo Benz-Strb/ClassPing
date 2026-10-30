@@ -160,6 +160,9 @@ describe('export-csv', () => {
     expect(csv).toContain('66000001');
     expect(csv).toContain('66000002');
     expect(csv).toContain('[สอบ] Midterm Exam');
+    expect(csv).toContain('"kind"');
+    expect(csv).toContain('"class"');
+    expect(csv).toContain('"exam"');
   });
 
   it('ป้องกัน Excel ตีความข้อมูลผู้ใช้เป็นสูตร', () => {
