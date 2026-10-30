@@ -2,6 +2,8 @@ from typing import Protocol
 
 import numpy as np
 
+DASHES_TO_HYPHEN = str.maketrans('‐‑‒–—−', '------')
+
 
 class TextReader(Protocol):
     """อ่านตัวหนังสือในภาพ คืน (ข้อความ, ความมั่นใจ 0-1) ทีละบรรทัด"""
@@ -27,5 +29,7 @@ class PaddleTextReader:
         texts = result.get('rec_texts', [])
         scores = result.get('rec_scores', [])
         return [
-            (text, float(score)) for text, score in zip(texts, scores, strict=True) if text.strip()
+            (text.translate(DASHES_TO_HYPHEN), float(score))
+            for text, score in zip(texts, scores, strict=True)
+            if text.strip()
         ]
