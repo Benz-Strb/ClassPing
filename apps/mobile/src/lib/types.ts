@@ -46,3 +46,29 @@ export interface LeaveRequest {
   createdAt: string;
   attachments: { fileName: string; mime: string; size: number }[];
 }
+
+export interface AttendanceCounts {
+  present: number;
+  late: number;
+  absent: number;
+  leave: number;
+  pending: number;
+  total: number;
+}
+
+export interface StudentAttendanceSummary {
+  summary: {
+    counts: AttendanceCounts;
+    attendanceRate: number;
+  };
+  courses: {
+    course: {
+      id: string;
+      code: string;
+      name: string;
+      section: string | null;
+    };
+    counts: AttendanceCounts;
+    attendanceRate: number;
+  }[];
+}
