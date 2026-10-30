@@ -77,3 +77,17 @@ export interface AttendanceReportResponse {
   sessions: SessionSummaryReport[];
   students: StudentAttendanceReport[];
 }
+
+export interface StudentCourseAttendanceSummary {
+  course: CourseInfo;
+  counts: AttendanceCounts;
+  attendanceRate: number;
+}
+
+export interface StudentAttendanceSummaryResponse {
+  summary: {
+    counts: AttendanceCounts;
+    attendanceRate: number;
+  };
+  courses: StudentCourseAttendanceSummary[];
+}

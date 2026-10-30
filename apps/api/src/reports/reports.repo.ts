@@ -13,6 +13,8 @@ import type {
   CourseInfo,
   SessionSummaryReport,
   StudentAttendanceReport,
+  StudentAttendanceSummaryResponse,
+  StudentCourseAttendanceSummary,
   StudentSessionStatus,
 } from './reports.types.js';
 
@@ -22,6 +24,10 @@ export interface ReportsRepo {
     filter: AttendanceFilterDto,
     now: Date,
   ): Promise<AttendanceReportResponse | null>;
+  getStudentAttendanceSummary(
+    studentCode: string,
+    now: Date,
+  ): Promise<StudentAttendanceSummaryResponse>;
 }
 
 export const REPORTS_REPO = Symbol('REPORTS_REPO');
@@ -80,6 +86,58 @@ async function allRows<T>(query: {
 @Injectable()
 export class SupabaseReportsRepo implements ReportsRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
+
+  async getStudentAttendanceSummary(
+    studentCode: string,
+    now: Date,
+  ): Promise<StudentAttendanceSummaryResponse> {
+    const enrollments = await allRows<{ course_id: string }>(
+      this.db
+        .from('enrollments')
+        .select('course_id')
+        .eq('student_code', studentCode)
+        .order('course_id', { ascending: true }),
+    );
+
+    const reports = await Promise.all(
+      enrollments.map((enrollment) =>
+        this.getAttendanceReport(
+          enrollment.course_id,
+          { kind: 'all', studentCode },
+          now,
+        ),
+      ),
+    );
+
+    const courses = reports
+      .flatMap<StudentCourseAttendanceSummary>((report) => {
+        const student = report?.students[0];
+        return report && student
+          ? [{ course: report.course, counts: student.counts, attendanceRate: student.attendanceRate }]
+          : [];
+      })
+      .sort((a, b) => a.course.code.localeCompare(b.course.code, 'th'));
+
+    const counts = courses.reduce<AttendanceCounts>(
+      (total, course) => {
+        for (const status of ['present', 'late', 'absent', 'leave', 'pending'] as const) {
+          total[status] += course.counts[status];
+        }
+        total.total += course.counts.total;
+        return total;
+      },
+      { present: 0, late: 0, absent: 0, leave: 0, pending: 0, total: 0 },
+    );
+    const positive = counts.present + counts.late + counts.leave;
+
+    return {
+      summary: {
+        counts,
+        attendanceRate: counts.total > 0 ? Math.round((positive / counts.total) * 1000) / 10 : 0,
+      },
+      courses,
+    };
+  }
 
   async getAttendanceReport(
     courseId: string,
