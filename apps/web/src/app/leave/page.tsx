@@ -24,6 +24,8 @@ export default function LeavePage() {
   const [evidence, setEvidence] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [ocrText, setOcrText] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,8 +61,39 @@ export default function LeavePage() {
     return sessions?.filter((session) => !requested.has(session.id)) ?? [];
   }, [requests, sessions]);
 
+  async function readEvidence() {
+    if (!sessionId || !evidence) {
+      setError("กรุณาเลือกคาบและแนบหลักฐานก่อนอ่านร่าง");
+      return;
+    }
+    if (evidence.size > MAX_EVIDENCE_BYTES) {
+      setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 10 MB");
+      return;
+    }
+    setReading(true);
+    setError(null);
+    const body = new FormData();
+    body.set("sessionId", sessionId);
+    body.set("evidence", evidence);
+    try {
+      const draft = await apiFetch<{ text: string; reason: string }>(
+        "/leave-requests/preview",
+        { method: "POST", body },
+      );
+      setOcrText(draft.text);
+      if (!reason.trim()) setReason(draft.reason);
+    } catch (e) {
+      setError(
+        `${await handleApiError(e, router)} — สามารถกรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
+      );
+    } finally {
+      setReading(false);
+    }
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (saving || reading) return;
     if (!sessionId) {
       setError("กรุณาเลือกคาบที่ต้องการลา");
       return;
@@ -84,6 +117,7 @@ export default function LeavePage() {
       setSessionId("");
       setReason("");
       setEvidence(null);
+      setOcrText(null);
       setFileKey((value) => value + 1);
       await load();
     } catch (e) {
@@ -133,63 +167,90 @@ export default function LeavePage() {
         onSubmit={submit}
         className="space-y-4 rounded-lg border bg-white p-4"
       >
-        <label htmlFor="leave-session" className="block">
-          <span className="mb-1 block font-medium">คาบที่ต้องการลา</span>
-          <select
-            id="leave-session"
-            required
-            disabled={sessions === null || availableSessions.length === 0}
-            value={sessionId}
-            onChange={(event) => setSessionId(event.target.value)}
-            className="w-full rounded-lg border px-3 py-2 disabled:bg-gray-100"
-          >
-            <option value="">
-              {sessions === null
-                ? "กำลังโหลดคาบเรียน..."
-                : availableSessions.length === 0
-                  ? "ไม่มีคาบที่ยื่นลาได้"
-                  : "เลือกคาบเรียน"}
-            </option>
-            {availableSessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {formatSession(session)}
+        <fieldset disabled={saving || reading} className="space-y-4">
+          <label htmlFor="leave-session" className="block">
+            <span className="mb-1 block font-medium">คาบที่ต้องการลา</span>
+            <select
+              id="leave-session"
+              required
+              disabled={sessions === null || availableSessions.length === 0}
+              value={sessionId}
+              onChange={(event) => setSessionId(event.target.value)}
+              className="w-full rounded-lg border px-3 py-2 disabled:bg-gray-100"
+            >
+              <option value="">
+                {sessions === null
+                  ? "กำลังโหลดคาบเรียน..."
+                  : availableSessions.length === 0
+                    ? "ไม่มีคาบที่ยื่นลาได้"
+                    : "เลือกคาบเรียน"}
               </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor="leave-reason" className="block">
-          <span className="mb-1 block font-medium">เหตุผลการลา</span>
-          <textarea
-            id="leave-reason"
-            required
-            maxLength={1000}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            className="min-h-24 w-full rounded-lg border px-3 py-2"
-          />
-        </label>
-        <label htmlFor="leave-evidence" className="block">
-          <span className="mb-1 block font-medium">หลักฐานการลา</span>
-          <input
-            key={fileKey}
-            id="leave-evidence"
-            required
-            type="file"
-            accept="application/pdf,image/jpeg,image/png"
-            onChange={(event) => setEvidence(event.target.files?.[0] ?? null)}
-            className="block w-full text-sm"
-          />
-          <span className="mt-1 block text-sm text-gray-500">
-            PDF, JPG หรือ PNG ขนาดไม่เกิน 10 MB
-          </span>
-        </label>
-        <button
-          type="submit"
-          disabled={saving || availableSessions.length === 0}
-          className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
-        >
-          {saving ? "กำลังส่ง..." : "ส่งคำขอลา"}
-        </button>
+              {availableSessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {formatSession(session)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor="leave-reason" className="block">
+            <span className="mb-1 block font-medium">เหตุผลการลา</span>
+            <textarea
+              id="leave-reason"
+              required
+              maxLength={1000}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              className="min-h-24 w-full rounded-lg border px-3 py-2"
+            />
+          </label>
+          <label htmlFor="leave-evidence" className="block">
+            <span className="mb-1 block font-medium">หลักฐานการลา</span>
+            <input
+              key={fileKey}
+              id="leave-evidence"
+              required
+              type="file"
+              accept="application/pdf,image/jpeg,image/png"
+              onChange={(event) => {
+                setEvidence(event.target.files?.[0] ?? null);
+                setOcrText(null);
+              }}
+              className="block w-full text-sm"
+            />
+            <span className="mt-1 block text-sm text-gray-500">
+              PDF, JPG หรือ PNG ขนาดไม่เกิน 10 MB
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() => void readEvidence()}
+            disabled={!evidence || !sessionId}
+            className="rounded-lg border px-4 py-2 disabled:opacity-50"
+          >
+            {reading ? "กำลังอ่านหลักฐาน..." : "อ่านหลักฐานช่วยกรอกเหตุผล"}
+          </button>
+          {ocrText !== null && (
+            <div role="status" className="space-y-2 rounded-lg bg-blue-50 p-3">
+              <p className="whitespace-pre-wrap">
+                {ocrText || "ไม่พบข้อความ กรุณากรอกเหตุผลเอง"}
+              </p>
+              <p>
+                ตรวจและแก้เหตุผลด้านบนก่อนส่ง หากกรอกไว้แล้วระบบจะไม่เขียนทับ
+              </p>
+            </div>
+          )}
+          <p className="text-sm text-gray-600">
+            OCR เป็นข้อมูลร่าง ไม่รับรองความแท้ของหลักฐาน
+            การอ่านร่างยังไม่ส่งคำขอลา
+          </p>
+          <button
+            type="submit"
+            disabled={saving || availableSessions.length === 0}
+            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+          >
+            {saving ? "กำลังส่ง..." : "ส่งคำขอลา"}
+          </button>
+        </fieldset>
       </form>
 
       <section className="space-y-3" aria-labelledby="my-leave-requests">
