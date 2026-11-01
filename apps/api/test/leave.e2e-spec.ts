@@ -235,6 +235,18 @@ describe('ระบบลา (e2e)', () => {
       attachments: [{ fileName: 'leave.png', mime: 'image/png' }],
     });
 
+    const pending = await request(server)
+      .get('/leave-requests/pending')
+      .set('x-role', 'teacher')
+      .expect(200);
+    expect(pending.body.data).toHaveLength(1);
+    expect(pending.body.data[0]).toMatchObject({
+      id: '22222222-2222-4222-8222-222222222222',
+      status: 'pending',
+      reason: 'ไข้สูง',
+      student: { studentId: '66000001' },
+    });
+
     await request(server)
       .get('/leave-requests/22222222-2222-4222-8222-222222222222/evidence')
       .set('x-role', 'student')
@@ -253,6 +265,43 @@ describe('ระบบลา (e2e)', () => {
         },
       });
     expect(repo.attendance.get(`${SESSION.id}:student-user`)).toBe('leave');
+
+    await request(server)
+      .get('/leave-requests/pending')
+      .set('x-role', 'teacher')
+      .expect(200)
+      .expect({ data: [] });
+  });
+
+  it('อาจารย์ปฏิเสธคำขอโดยไม่เปลี่ยน attendance', async () => {
+    const server = app.getHttpServer();
+    await request(server)
+      .post('/leave-requests')
+      .set('x-role', 'student')
+      .field('sessionId', SESSION.id)
+      .field('reason', 'หลักฐานไม่ครบ')
+      .attach('evidence', PNG, {
+        filename: 'leave.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+
+    const attendanceKey = `${SESSION.id}:student-user`;
+    repo.attendance.set(attendanceKey, 'absent');
+
+    await request(server)
+      .post('/leave-requests/22222222-2222-4222-8222-222222222222/review')
+      .set('x-role', 'teacher')
+      .send({ decision: 'rejected', reviewNote: 'หลักฐานไม่เพียงพอ' })
+      .expect(200)
+      .expect({
+        data: {
+          id: '22222222-2222-4222-8222-222222222222',
+          status: 'rejected',
+        },
+      });
+
+    expect(repo.attendance.get(attendanceKey)).toBe('absent');
   });
 
   it('ป้องกัน role ผิด, session ที่ไม่ได้ลงทะเบียน และ decision ที่ไม่รองรับ', async () => {

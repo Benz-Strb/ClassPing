@@ -203,6 +203,11 @@ export class LeaveService {
     return this.repo.listForTeacher(user.id);
   }
 
+  async listPending(user: AppUser): Promise<LeaveRequestView[]> {
+    const requests = await this.listForTeacher(user);
+    return requests.filter((request) => request.status === 'pending');
+  }
+
   async evidenceUrl(
     user: AppUser,
     requestId: string,
