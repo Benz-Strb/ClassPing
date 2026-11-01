@@ -37,6 +37,12 @@ export class LeaveController {
     return this.leave.listForTeacher(user);
   }
 
+  @Get('pending')
+  @Roles('teacher')
+  listPending(@CurrentUser() user: AppUser) {
+    return this.leave.listPending(user);
+  }
+
   @Get(':id/evidence')
   @Roles('student', 'teacher')
   evidence(@CurrentUser() user: AppUser, @Param('id') id: string) {
