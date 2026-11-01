@@ -28,10 +28,9 @@ interface Props {
   onRejected: (message: string) => void;
 }
 
-const signOut = () => supabase.auth.signOut();
-
 // นักศึกษาต้องยินยอมก่อน ยืนยันบัตร แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
 export function MeScreen({ onRejected }: Props) {
+  const signOut = () => supabase.auth.signOut();
   const [me, setMe] = useState<Me | null>(null);
   const [face, setFace] = useState<FaceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);

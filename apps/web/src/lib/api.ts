@@ -32,7 +32,12 @@ export async function apiFetch<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(0, "NETWORK", "ต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง");
+  }
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
@@ -41,6 +46,9 @@ export async function apiFetch<T>(
       body?.error?.code ?? "HTTP_ERROR",
       body?.error?.message ?? "เรียกระบบไม่สำเร็จ",
     );
+  }
+  if (!body || typeof body !== "object" || !("data" in body)) {
+    throw new ApiError(res.status, "INVALID_RESPONSE", "เซิร์ฟเวอร์ตอบข้อมูลไม่ถูกต้อง ลองใหม่อีกครั้ง");
   }
   return body.data as T;
 }

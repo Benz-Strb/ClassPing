@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ChatModule } from './chat/chat.module.js';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module.js';
 import { AttendanceModule } from './attendance/attendance.module.js';
@@ -21,6 +22,7 @@ import { TransfersModule } from './transfers/transfers.module.js';
 
 @Module({
   imports: [
+    ChatModule,
     AdminModule,
     SupabaseModule,
     FaceModule,
