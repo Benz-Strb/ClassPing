@@ -68,5 +68,8 @@ export async function apiFetch<T>(
       body?.error?.message ?? "เรียกระบบไม่สำเร็จ",
     );
   }
+  if (!body || typeof body !== "object" || !("data" in body)) {
+    throw new ApiError(res.status, "INVALID_RESPONSE", "เซิร์ฟเวอร์ตอบข้อมูลไม่ถูกต้อง ลองใหม่อีกครั้ง");
+  }
   return body.data as T;
 }
