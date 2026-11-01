@@ -4,7 +4,10 @@ import type { CoursesService } from '../courses/courses.service.js';
 import type { AppUser } from '../users/users.service.js';
 import type { ReportsRepo } from './reports.repo.js';
 import { ReportsService } from './reports.service.js';
-import type { AttendanceFilterDto, AttendanceReportResponse } from './reports.types.js';
+import type {
+  AttendanceFilterDto,
+  AttendanceReportResponse,
+} from './reports.types.js';
 
 describe('ReportsService', () => {
   let service: ReportsService;
@@ -32,13 +35,32 @@ describe('ReportsService', () => {
 
   const studentSummary = {
     summary: {
-      counts: { present: 2, late: 1, absent: 1, leave: 0, pending: 0, total: 4 },
+      counts: {
+        present: 2,
+        late: 1,
+        absent: 1,
+        leave: 0,
+        pending: 0,
+        total: 4,
+      },
       attendanceRate: 75,
     },
     courses: [
       {
-        course: { id: 'course-1', code: 'CS101', name: 'Intro to CS', section: null },
-        counts: { present: 2, late: 1, absent: 1, leave: 0, pending: 0, total: 4 },
+        course: {
+          id: 'course-1',
+          code: 'CS101',
+          name: 'Intro to CS',
+          section: null,
+        },
+        counts: {
+          present: 2,
+          late: 1,
+          absent: 1,
+          leave: 0,
+          pending: 0,
+          total: 4,
+        },
         attendanceRate: 75,
       },
     ],
@@ -93,7 +115,10 @@ describe('ReportsService', () => {
   it('ดึงสรุปการเข้าเรียนเฉพาะรหัสนักศึกษาของผู้ใช้', async () => {
     const result = await service.getStudentAttendanceSummary(studentUser);
 
-    expect(mockRepo.getStudentAttendanceSummary).toHaveBeenCalledWith('66123456', mockNow);
+    expect(mockRepo.getStudentAttendanceSummary).toHaveBeenCalledWith(
+      '66123456',
+      mockNow,
+    );
     expect(result).toEqual(studentSummary);
   });
 
@@ -103,21 +128,82 @@ describe('ReportsService', () => {
     ).rejects.toMatchObject({ status: 403, code: 'STUDENT_ONLY' });
   });
 
+  it('รายละเอียดรายวิชาคืนเฉพาะนักศึกษาปัจจุบัน แม้ส่งรหัสคนอื่นมา', async () => {
+    const own = {
+      studentCode: studentUser.studentId,
+      sessions: [],
+      counts: studentSummary.summary.counts,
+    };
+    vi.mocked(mockRepo.getAttendanceReport!).mockResolvedValue({
+      ...sampleReport,
+      students: [own, { ...own, studentCode: 'other' }],
+    } as AttendanceReportResponse);
+    const filter: AttendanceFilterDto = {
+      kind: 'exam',
+      startDate: '2026-10-01',
+      studentCode: 'other',
+    };
+    const result = await service.getStudentCourseAttendance(
+      studentUser,
+      'course-1',
+      filter,
+    );
+    expect(mockRepo.getAttendanceReport).toHaveBeenCalledWith(
+      'course-1',
+      {
+        ...filter,
+        studentCode: studentUser.studentId,
+      },
+      mockNow,
+      true,
+    );
+    expect(result).toEqual({ course: sampleReport.course, student: own });
+  });
+
+  it('ปฏิเสธรายละเอียดของวิชาที่ไม่ได้ลงทะเบียน', async () => {
+    await expect(
+      service.getStudentCourseAttendance(studentUser, 'course-1', {
+        kind: 'all',
+      }),
+    ).rejects.toMatchObject({ status: 404, code: 'COURSE_NOT_FOUND' });
+  });
+
+  it('ปฏิเสธรายละเอียดเมื่อผู้ใช้ไม่มีรหัสนักศึกษา', async () => {
+    await expect(
+      service.getStudentCourseAttendance(teacherUser, 'course-1', {
+        kind: 'all',
+      }),
+    ).rejects.toMatchObject({ status: 403, code: 'STUDENT_ONLY' });
+    expect(mockRepo.getAttendanceReport).not.toHaveBeenCalled();
+  });
+
   it('ดึงรายงานสำเร็จเมื่อเป็นอาจารย์ผู้สอน', async () => {
     const filter: AttendanceFilterDto = { kind: 'all' };
-    const res = await service.getAttendanceReport(teacherUser, 'course-1', filter);
+    const res = await service.getAttendanceReport(
+      teacherUser,
+      'course-1',
+      filter,
+    );
 
     expect(mockCourses.getOwned).toHaveBeenCalledWith(teacherUser, 'course-1');
-    expect(mockRepo.getAttendanceReport).toHaveBeenCalledWith('course-1', filter, mockNow);
+    expect(mockRepo.getAttendanceReport).toHaveBeenCalledWith(
+      'course-1',
+      filter,
+      mockNow,
+    );
     expect(res.course.code).toBe('CS101');
     expect(res.summary.attendanceRate).toBe(100.0);
   });
 
   it('โยน 404 เมื่อไม่พบวิชาหรือไม่มีสิทธิ์', async () => {
-    vi.mocked(mockCourses.getOwned!).mockRejectedValue(new AppError(404, 'COURSE_NOT_FOUND', 'ไม่พบรายวิชา'));
+    vi.mocked(mockCourses.getOwned!).mockRejectedValue(
+      new AppError(404, 'COURSE_NOT_FOUND', 'ไม่พบรายวิชา'),
+    );
 
     await expect(
-      service.getAttendanceReport(teacherUser, 'invalid-course', { kind: 'all' }),
+      service.getAttendanceReport(teacherUser, 'invalid-course', {
+        kind: 'all',
+      }),
     ).rejects.toMatchObject({
       status: 404,
       code: 'COURSE_NOT_FOUND',
@@ -125,14 +211,22 @@ describe('ReportsService', () => {
   });
 
   it('ส่งออก CSV พร้อมตั้งชื่อไฟล์ตามรหัสวิชาและวันที่', async () => {
-    const { filename, content } = await service.exportCsv(teacherUser, 'course-1', { kind: 'all' });
+    const { filename, content } = await service.exportCsv(
+      teacherUser,
+      'course-1',
+      { kind: 'all' },
+    );
 
     expect(filename).toContain('attendance-report-CS101-2026-10-28.csv');
     expect(content.startsWith('\uFEFF')).toBe(true);
   });
 
   it('ส่งออก PDF พร้อมคืน Buffer และชื่อไฟล์', async () => {
-    const { filename, buffer } = await service.exportPdf(teacherUser, 'course-1', { kind: 'all' });
+    const { filename, buffer } = await service.exportPdf(
+      teacherUser,
+      'course-1',
+      { kind: 'all' },
+    );
 
     expect(filename).toContain('attendance-report-CS101-2026-10-28.pdf');
     expect(Buffer.isBuffer(buffer)).toBe(true);

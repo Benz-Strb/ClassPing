@@ -8,15 +8,20 @@ import {
 } from "react-native";
 import { apiFetch } from "../lib/api";
 import type { AttendanceCounts, StudentAttendanceSummary } from "../lib/types";
+import { AttendanceCourseSection } from "./AttendanceCourseSection";
 
 const STATUSES: {
-  key: keyof Pick<AttendanceCounts, "present" | "late" | "absent" | "leave">;
+  key: keyof Pick<
+    AttendanceCounts,
+    "present" | "late" | "absent" | "leave" | "pending"
+  >;
   label: string;
 }[] = [
   { key: "present", label: "มาเรียน" },
   { key: "late", label: "มาสาย" },
   { key: "absent", label: "ขาด" },
   { key: "leave", label: "ลา" },
+  { key: "pending", label: "รอตรวจ" },
 ];
 
 function StatusCounts({ counts }: { counts: AttendanceCounts }) {
@@ -38,6 +43,7 @@ export function AttendanceSummarySection() {
   const [data, setData] = useState<StudentAttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -89,6 +95,9 @@ export function AttendanceSummarySection() {
             <Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text>
             <Text style={styles.rate}>{data.summary.attendanceRate}%</Text>
             <StatusCounts counts={data.summary.counts} />
+            <Text style={styles.muted}>
+              รอตรวจยังไม่ใช่ผลยืนยันการเข้าเรียน
+            </Text>
           </View>
 
           {data.courses.map(({ course, counts }) => (
@@ -99,6 +108,24 @@ export function AttendanceSummarySection() {
               </Text>
               <Text style={styles.courseName}>{course.name}</Text>
               <StatusCounts counts={counts} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: selectedCourse === course.id }}
+                onPress={() =>
+                  setSelectedCourse(
+                    selectedCourse === course.id ? null : course.id,
+                  )
+                }
+              >
+                <Text style={styles.retryText}>
+                  {selectedCourse === course.id
+                    ? "ซ่อนรายละเอียด"
+                    : "ดูรายละเอียดรายคาบ"}
+                </Text>
+              </Pressable>
+              {selectedCourse === course.id && (
+                <AttendanceCourseSection courseId={course.id} />
+              )}
             </View>
           ))}
         </>
@@ -144,6 +171,7 @@ const styles = StyleSheet.create({
   late: { color: "#b45309" },
   absent: { color: "#dc2626" },
   leave: { color: "#2563eb" },
+  pending: { color: "#6b7280" },
   statLabel: { color: "#4b5563", fontSize: 12 },
   courseCode: { color: "#111827", fontSize: 16, fontWeight: "600" },
   courseName: { color: "#4b5563" },

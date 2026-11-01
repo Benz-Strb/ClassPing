@@ -20,7 +20,9 @@ export class ReportsService {
     @Inject(CLOCK) private readonly now: Clock,
   ) {}
 
-  async getStudentAttendanceSummary(user: AppUser): Promise<StudentAttendanceSummaryResponse> {
+  async getStudentAttendanceSummary(
+    user: AppUser,
+  ): Promise<StudentAttendanceSummaryResponse> {
     if (!user.studentId) {
       throw new AppError(403, 'STUDENT_ONLY', 'ข้อมูลนี้ใช้ได้เฉพาะนักศึกษา');
     }
@@ -33,11 +35,38 @@ export class ReportsService {
     filter: AttendanceFilterDto,
   ): Promise<AttendanceReportResponse> {
     await this.verifyAccess(user, courseId);
-    const report = await this.repo.getAttendanceReport(courseId, filter, this.now());
+    const report = await this.repo.getAttendanceReport(
+      courseId,
+      filter,
+      this.now(),
+    );
     if (!report) {
       throw new AppError(404, 'COURSE_NOT_FOUND', 'ไม่พบรายวิชานี้');
     }
     return report;
+  }
+
+  async getStudentCourseAttendance(
+    user: AppUser,
+    courseId: string,
+    filter: AttendanceFilterDto,
+  ) {
+    if (user.role !== 'student' || !user.studentId) {
+      throw new AppError(403, 'STUDENT_ONLY', 'ข้อมูลนี้ใช้ได้เฉพาะนักศึกษา');
+    }
+    const report = await this.repo.getAttendanceReport(
+      courseId,
+      { ...filter, studentCode: user.studentId },
+      this.now(),
+      true,
+    );
+    const student = report?.students.find(
+      (row) => row.studentCode === user.studentId,
+    );
+    if (!report || !student) {
+      throw new AppError(404, 'COURSE_NOT_FOUND', 'ไม่พบรายวิชานี้');
+    }
+    return { course: report.course, student };
   }
 
   async exportCsv(
