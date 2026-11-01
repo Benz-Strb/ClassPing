@@ -33,25 +33,9 @@ export class LeaveService {
     private readonly face: FaceClient,
   ) {}
 
-  async submit(
-    user: AppUser,
-    sessionId: string,
-    reason: string,
+  private validateEvidence(
     evidence?: LeaveEvidence,
-  ) {
-    if (!user.studentId)
-      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
-    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
-      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
-    const cleanReason = typeof reason === 'string' ? reason.trim() : '';
-    if (!cleanReason)
-      throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
-    if (cleanReason.length > 1000)
-      throw new AppError(
-        400,
-        'BAD_REQUEST',
-        'เหตุผลการลายาวเกิน 1000 ตัวอักษร',
-      );
+  ): asserts evidence is LeaveEvidence {
     if (!evidence)
       throw new AppError(400, 'EVIDENCE_REQUIRED', 'กรุณาแนบหลักฐานการลา');
     if (!EXTENSIONS[evidence.mimetype]) {
@@ -74,6 +58,51 @@ export class LeaveService {
         : looksLike(evidence.mimetype, evidence.buffer);
     if (!validFile)
       throw new AppError(400, 'INVALID_EVIDENCE', 'ชนิดไฟล์หลักฐานไม่ถูกต้อง');
+  }
+
+  async preview(user: AppUser, sessionId: string, evidence?: LeaveEvidence) {
+    if (!user.studentId)
+      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
+    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
+      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
+    this.validateEvidence(evidence);
+    if (!(await this.repo.studentCanRequest(user.id, sessionId)))
+      throw new AppError(
+        404,
+        'SESSION_NOT_FOUND',
+        'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้',
+      );
+    const ocr = await this.face.readLeaveDocument(
+      evidence.buffer,
+      evidence.mimetype,
+    );
+    const text = ocr.lines
+      .map((line) => line.text)
+      .join('\n')
+      .trim();
+    return { text, reason: text.slice(0, 1000) };
+  }
+
+  async submit(
+    user: AppUser,
+    sessionId: string,
+    reason: string,
+    evidence?: LeaveEvidence,
+  ) {
+    if (!user.studentId)
+      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
+    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
+      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
+    const cleanReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!cleanReason)
+      throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
+    if (cleanReason.length > 1000)
+      throw new AppError(
+        400,
+        'BAD_REQUEST',
+        'เหตุผลการลายาวเกิน 1000 ตัวอักษร',
+      );
+    this.validateEvidence(evidence);
     if (!(await this.repo.studentCanRequest(user.id, sessionId))) {
       throw new AppError(
         404,
