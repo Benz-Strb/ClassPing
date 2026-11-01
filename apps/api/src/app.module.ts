@@ -17,6 +17,7 @@ import { RoomsModule } from './rooms/rooms.module.js';
 import { SchedulesModule } from './schedules/schedules.module.js';
 import { SupabaseModule } from './supabase/supabase.module.js';
 import { UsersModule } from './users/users.module.js';
+import { TransfersModule } from './transfers/transfers.module.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module.js';
     MediaModule,
     LeaveModule,
     ReportsModule,
+    TransfersModule,
     AttendanceModule,
     CleanupModule,
   ],
