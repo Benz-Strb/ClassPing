@@ -5,6 +5,7 @@ import { CoursesService, DEFAULT_RULES } from './courses.service.js';
 
 // ตาราง courses + attendance_rules ปลอมในหน่วยความจำ
 class InMemoryCoursesRepo implements CoursesRepo {
+  async isTeacher(id: string) { return id === teacherA.id || id === teacherB.id; }
   courses = new Map<string, Course>();
   rules = new Map<string, Rules>();
   findCalls = 0;
@@ -51,6 +52,26 @@ const user = (id: string, role: AppUser['role'] = 'teacher'): AppUser => ({
 const teacherA = user(randomUUID());
 const teacherB = user(randomUUID());
 const admin = user(randomUUID(), 'admin');
+
+describe('admin teacher assignment', () => {
+  it('creates and reassigns a course to an actual teacher', async () => {
+    const repo = new InMemoryCoursesRepo();
+    const service = new CoursesService(repo);
+    const course = await service.create(admin, { code: 'CS101', name: 'CS', teacherId: teacherA.id });
+    expect(course.teacherId).toBe(teacherA.id);
+    expect((await service.update(admin, course.id, { teacherId: teacherB.id })).teacherId).toBe(teacherB.id);
+  });
+  it('rejects missing/non-teacher assignees and teacher-side reassignment', async () => {
+    const repo = new InMemoryCoursesRepo();
+    const service = new CoursesService(repo);
+    await expect(service.create(admin, { code: 'CS', name: 'CS' })).rejects.toMatchObject({ status: 400 });
+    await expect(service.create(admin, { code: 'CS', name: 'CS', teacherId: admin.id })).rejects.toMatchObject({ status: 400 });
+    await expect(service.create(teacherA, { code: 'CS', name: 'CS', teacherId: teacherB.id })).rejects.toMatchObject({ status: 403 });
+    const course = await service.create(teacherA, { code: 'CS', name: 'CS' });
+    await expect(service.update(teacherA, course.id, { teacherId: teacherB.id })).rejects.toMatchObject({ status: 403 });
+    expect(repo.courses.get(course.id)?.teacherId).toBe(teacherA.id);
+  });
+});
 
 async function rejection(promise: Promise<unknown>) {
   try {
@@ -149,10 +170,11 @@ describe('CoursesService', () => {
   it('แก้ชื่อวิชาได้ และแก้ teacherId ผ่าน body ไม่ได้', async () => {
     const { service } = setup();
     const course = await service.create(teacherA, { code: 'CS101', name: 'x' });
-    const updated = await service.update(teacherA, course.id, {
+    await expect(service.update(teacherA, course.id, {
       name: 'ใหม่',
       teacherId: teacherB.id,
-    });
+    })).rejects.toMatchObject({ status: 403 });
+    const updated = await service.update(teacherA, course.id, { name: 'ใหม่' });
     expect(updated).toMatchObject({ name: 'ใหม่', teacherId: teacherA.id });
   });
 
