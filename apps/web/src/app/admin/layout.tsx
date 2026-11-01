@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/admin/cameras", label: "กล้องประจำห้อง" },
   { href: "/admin/courses", label: "รายวิชาและตารางเรียน" },
   { href: "/admin/curricula", label: "หลักสูตร" },
+  { href: "/admin/transfers", label: "เทียบโอน" },
   { href: "/admin/reference", label: "ข้อมูลกลาง" },
   { href: "/admin/knowledge", label: "แหล่งความรู้" },
 ];

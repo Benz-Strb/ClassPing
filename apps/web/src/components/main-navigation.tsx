@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/courses", label: "รายวิชา" },
   { href: "/live", label: "กล้อง" },
   { href: "/leave", label: "ยื่นลา" },
+  { href: "/transfers", label: "เทียบโอน" },
   { href: "/leave/review", label: "ตรวจใบลา" },
   { href: "/me", label: "บัญชี" },
 ];
