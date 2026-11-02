@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 MIN_TOKEN_LENGTH = 32
 
@@ -14,6 +15,8 @@ class Settings:
     enroll_min_det_score: float = 0.6
     enroll_min_sharpness: float = 40.0
     detect_min_face_px: int = 40
+    liveness_model: str = ""
+    liveness_min_face_px: int = 40
     max_image_bytes: int = 5 * 1024 * 1024
     max_json_bytes: int = 8 * 1024 * 1024
 
@@ -27,6 +30,10 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         raw = env.get(name, "").strip()
         return cast(raw) if raw else default
 
+    liveness_model = env.get("LIVENESS_MODEL", "").strip()
+    if liveness_model and not Path(liveness_model).expanduser().is_file():
+        raise ValueError(f"ไม่เจอไฟล์โมเดล liveness ที่ LIVENESS_MODEL: {liveness_model}")
+
     defaults = Settings(token=token)
     return Settings(
         token=token,
@@ -37,6 +44,8 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         enroll_min_det_score=get("ENROLL_MIN_DET_SCORE", defaults.enroll_min_det_score, float),
         enroll_min_sharpness=get("ENROLL_MIN_SHARPNESS", defaults.enroll_min_sharpness, float),
         detect_min_face_px=get("DETECT_MIN_FACE_PX", defaults.detect_min_face_px, int),
+        liveness_model=liveness_model,
+        liveness_min_face_px=get("LIVENESS_MIN_FACE_PX", defaults.liveness_min_face_px, int),
         max_image_bytes=get("MAX_IMAGE_BYTES", defaults.max_image_bytes, int),
         max_json_bytes=get("MAX_JSON_BYTES", defaults.max_json_bytes, int),
     )

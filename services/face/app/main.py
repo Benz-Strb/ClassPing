@@ -12,6 +12,7 @@ from app.documents import MAX_DOCUMENT_BYTES, document_frames
 from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
+from app.liveness import InsightFaceLiveness, LivenessModel
 from app.matching import match
 from app.ocr import PaddleTextReader, TextReader
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
@@ -65,6 +66,7 @@ def check_body_size(request: Request, settings: Settings):
 def create_app(
     settings: Settings, engine: FaceEngine, reader: TextReader,
     leave_reader: TyphoonTextReader | None = None,
+    liveness: LivenessModel | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ClassPing face service", docs_url=None, redoc_url=None)
     install_error_handlers(app)
@@ -88,6 +90,7 @@ def create_app(
                 "ok": True,
                 "model": engine.model_name,
                 "embeddingSize": engine.embedding_size,
+                "liveness": None if liveness is None else liveness.name,
             }
         }
 
@@ -121,11 +124,19 @@ def create_app(
         faces = sorted(real_faces(engine.analyze(frame)), key=lambda f: -face_size(f.bbox))
         usable = [f for f in faces if face_size(f.bbox) >= settings.detect_min_face_px]
         height, width = frame.shape[:2]
+
+        def liveness_json(face: DetectedFace, frame: np.ndarray, with_crop: bool) -> dict:
+            data = detected_json(face, frame if with_crop else None)
+            big_enough = face_size(face.bbox) >= settings.liveness_min_face_px
+            # ให้โมเดลดูภาพเต็ม ไม่ใช่ครอป เพราะต้องเห็นขอบจอ/กระดาษรอบหน้า
+            data["liveness"] = liveness.score(frame, face) if liveness and big_enough else None
+            return data
+
         return {
             "data": {
                 "width": width,
                 "height": height,
-                "faces": [detected_json(face, frame if crops else None) for face in usable],
+                "faces": [liveness_json(face, frame, crops) for face in usable],
                 # หน้าเล็กเกินไปเทียบแล้วไม่แม่น นับไว้ให้รู้ว่ากล้องอาจอยู่ไกลไป
                 "skippedSmall": len(faces) - len(usable),
             }
@@ -221,5 +232,6 @@ def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
 def build_app() -> FastAPI:
     """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
     settings = load_settings(os.environ)
+    liveness = InsightFaceLiveness(settings) if settings.liveness_model else None
     return create_app(settings, InsightFaceEngine(settings), PaddleTextReader(),
-                      leave_reader=TyphoonTextReader())
+                      leave_reader=TyphoonTextReader(), liveness=liveness)
