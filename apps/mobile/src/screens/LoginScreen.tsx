@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
 import { getMobileAuthRedirectUri } from '../lib/auth-redirect';
@@ -19,7 +20,7 @@ export function LoginScreen({ error: initialError }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const redirectTo = getMobileAuthRedirectUri(Constants.appOwnership);
+      const redirectTo = getMobileAuthRedirectUri(Constants.appOwnership, (path) => Linking.createURL(path));
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
