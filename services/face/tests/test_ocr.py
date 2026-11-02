@@ -14,6 +14,10 @@ def test_paddle_text_reader_returns_text_and_confidence(monkeypatch):
     class FakePaddleOCR:
         def __init__(self, **kwargs):
             assert kwargs['lang'] == 'th'
+            # ภาพหน้าจอแบนอยู่แล้ว ตัวดัดภาพทำให้ OFFICIAL STUDENT VIRTUAL ID แตกเป็นสองบรรทัด
+            assert kwargs['use_doc_orientation_classify'] is False
+            assert kwargs['use_doc_unwarping'] is False
+            assert kwargs['use_textline_orientation'] is False
 
         def predict(self, image):
             assert isinstance(image, np.ndarray)
