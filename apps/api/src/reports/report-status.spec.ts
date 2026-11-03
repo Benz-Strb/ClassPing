@@ -13,6 +13,20 @@ const times = {
 };
 
 describe('statusForReport', () => {
+  it('คงผลรอตรวจไว้แม้หมดคาบและมีเวลาพบใบหน้า', () => {
+    expect(
+      statusForReport(
+        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30 },
+        courseRules,
+        {
+          status: 'pending',
+          firstSeenAt: new Date('2026-10-30T09:01:00Z'),
+          updatedBy: null,
+        },
+        new Date('2026-10-31T00:00:00Z'),
+      ),
+    ).toBe('pending');
+  });
   it('ใช้เกณฑ์วิชากับคาบเรียน และเกณฑ์ในแถวคาบกับคาบสอบ', () => {
     const attendance = {
       status: 'present' as const,
