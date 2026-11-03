@@ -7,7 +7,9 @@ from app.config import load_settings
 def test_health_public(client):
     res = client.get("/health")
     assert res.status_code == 200
-    assert res.json() == {"data": {"ok": True, "model": "buffalo_l", "embeddingSize": 512}}
+    assert res.json() == {
+        "data": {"ok": True, "model": "buffalo_l", "embeddingSize": 512, "liveness": None}
+    }
 
 
 def test_missing_token_401(client):

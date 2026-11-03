@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../config/config.js';
 import type { DetectedFace } from '../face/face.client.js';
 import type {
@@ -10,6 +11,7 @@ import type {
 import type { FrameJob } from './frame-queue.js';
 import { FrameProcessor, type FrameDeps } from './frame.processor.js';
 import { LiveFaces } from './live-faces.js';
+import { LiveStreaks } from './live-streaks.js';
 import { RejectedGuesses } from './rejected-guesses.js';
 
 const POSES = ['front', 'left', 'right', 'up', 'down'];
@@ -47,7 +49,14 @@ const job = (minute: number): FrameJob => ({
   image: Buffer.from('frame').toString('base64'),
 });
 
-function setup(opts: { context?: SessionContext | null; complete?: string[] } = {}) {
+function setup(
+  opts: {
+    context?: SessionContext | null;
+    complete?: string[];
+    liveness?: boolean;
+    matchLog?: boolean;
+  } = {},
+) {
   const rows = new Map<string, AttendanceRow & { record: CameraRecord }>();
   const uploads: string[] = [];
   const removed: string[] = [];
@@ -74,7 +83,13 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
       beforeWrite();
       if (failWrite) throw new Error('db down');
       if (rows.has(record.userId)) return false;
-      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, record });
+      rows.set(record.userId, {
+        status: record.status,
+        updatedBy: null,
+        imagePath: record.imagePath,
+        reviewReason: record.reviewReason,
+        record,
+      });
       return true;
     },
     replacePending: async (record) => {
@@ -82,7 +97,13 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
       if (failWrite) throw new Error('db down');
       const row = rows.get(record.userId);
       if (!row || row.status !== 'pending' || row.updatedBy !== null) return false;
-      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, record });
+      rows.set(record.userId, {
+        status: record.status,
+        updatedBy: null,
+        imagePath: record.imagePath,
+        reviewReason: record.reviewReason,
+        record,
+      });
       return true;
     },
     insertUnknown: async (_s, path) => void unknowns.push(path),
@@ -99,7 +120,13 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
     model: async () => 'buffalo_l',
     enrolledUserIds: async () => ['a', 'b'],
   };
-  const config = { matchAcceptMin: 0.5, matchReviewMin: 0.36, matchLog: false } as AppConfig;
+  const config = {
+    matchAcceptMin: 0.5,
+    matchReviewMin: 0.36,
+    matchLog: opts.matchLog ?? false,
+    livenessMin: opts.liveness ? 0.15 : null,
+    livenessStreak: 3,
+  } as AppConfig;
   const rejected = new RejectedGuesses(() => new Date(START.getTime() + 3_600_000));
   const liveFaces = new LiveFaces();
   const processor = new FrameProcessor(
@@ -109,6 +136,7 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
     () => new Date(START.getTime() + 3_600_000),
     rejected,
     liveFaces,
+    new LiveStreaks(),
   );
 
   return {
@@ -256,6 +284,7 @@ describe('FrameProcessor', () => {
         status: 'absent',
         updatedBy: 'teacher1',
         imagePath: null,
+        reviewReason: null,
         record: {} as CameraRecord,
       });
     });
@@ -308,5 +337,108 @@ describe('FrameProcessor กรอบหน้าสำหรับกล้อ�
     show([]);
     await processor.process(job(1));
     expect(liveFaces.get('s1', new Date(job(1).receivedAt))?.faces).toEqual([]);
+  });
+});
+
+describe('FrameProcessor liveness', () => {
+  const withLiveness = (embedding: number[], liveness: number | null) => ({
+    ...face(embedding),
+    liveness,
+  });
+
+  it('match + spoof: รอตรวจพร้อมเหตุผล spoof และกรอบเป็น review', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(1));
+    expect(t.rows.get('a')?.record).toMatchObject({ status: 'pending', reviewReason: 'spoof' });
+    expect(t.liveFaces.get('s1', new Date(job(1).receivedAt))?.faces[0]).toMatchObject({
+      userId: 'a',
+      kind: 'review',
+    });
+  });
+
+  it('review + spoof: รอตรวจพร้อมเหตุผล spoof', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(between, 0.05)]);
+    await t.processor.process(job(1));
+    expect(t.rows.get('a')?.record).toMatchObject({ status: 'pending', reviewReason: 'spoof' });
+  });
+
+  it('match + live หรือไม่มีคะแนน บันทึกตามเวลาเหมือนเดิม', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(A, 0.9), withLiveness(B, null)]);
+    await t.processor.process(job(1));
+    expect(t.rows.get('a')?.record).toMatchObject({ status: 'present', reviewReason: null });
+    expect(t.rows.get('b')?.record).toMatchObject({ status: 'present', reviewReason: null });
+  });
+
+  it('ปิดฟีเจอร์ คะแนน liveness ต่ำก็ไม่มีผล', async () => {
+    const t = setup();
+    t.show([withLiveness(A, 0.01)]);
+    await t.processor.process(job(1));
+    expect(t.rows.get('a')?.record).toMatchObject({ status: 'present', reviewReason: null });
+  });
+
+  it('แถว spoof อยู่แล้ว เจอคนจริงไม่ถึงรอบ ไม่แตะแถว', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(0));
+    const before = t.rows.get('a');
+    t.show([withLiveness(A, 0.9)]);
+    await t.processor.process(job(1));
+    await t.processor.process(job(2));
+    expect(t.rows.get('a')).toBe(before);
+  });
+
+  it('คนจริงติดกันครบรอบ แทนแถว spoof โดยคิดสถานะและเวลาจากภาพแรกของรอบ', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(0));
+    t.show([withLiveness(A, 0.9)]);
+    await t.processor.process(job(14));
+    await t.processor.process(job(15));
+    await t.processor.process(job(17));
+    expect(t.rows.get('a')?.record).toMatchObject({
+      status: 'present',
+      reviewReason: null,
+      firstSeenAt: new Date(START.getTime() + 14 * 60_000),
+    });
+  });
+
+  it('ภาพ spoof คั่นกลาง นับรอบใหม่', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(0));
+    for (const [minute, score] of [
+      [1, 0.9],
+      [2, 0.9],
+      [3, 0.05],
+      [4, 0.9],
+      [5, 0.9],
+    ] as const) {
+      t.show([withLiveness(A, score)]);
+      await t.processor.process(job(minute));
+    }
+    expect(t.rows.get('a')?.record).toMatchObject({ status: 'pending', reviewReason: 'spoof' });
+  });
+
+  it('แถว present อยู่แล้ว เจอ spoof ไม่ลดสถานะ', async () => {
+    const t = setup({ liveness: true });
+    t.show([withLiveness(A, 0.9)]);
+    await t.processor.process(job(1));
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(2));
+    expect(t.rows.get('a')?.record).toMatchObject({ status: 'present', reviewReason: null });
+  });
+
+  it('matchLog พิมพ์คะแนน liveness', async () => {
+    const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const t = setup({ liveness: true, matchLog: true });
+    t.show([withLiveness(A, 0.823), withLiveness(B, null)]);
+    await t.processor.process(job(1));
+    const lines = log.mock.calls.map((c) => String(c[0]));
+    log.mockRestore();
+    expect(lines[0]).toContain('live 0.823');
+    expect(lines[1]).toMatch(/\| -$/);
   });
 });
