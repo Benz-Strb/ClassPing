@@ -131,8 +131,12 @@ export class FrameProcessor {
         : 'pending';
     const current = await this.repo.find(sessionId, verdict.userId);
     const action = nextWrite(
-      current && { status: current.status, byTeacher: current.updatedBy !== null },
-      { status },
+      current && {
+        status: current.status,
+        byTeacher: current.updatedBy !== null,
+        reviewReason: current.reviewReason,
+      },
+      { status, clearsSpoof: false },
     );
     if (action === 'skip') return;
 
