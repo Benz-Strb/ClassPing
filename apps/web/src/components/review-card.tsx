@@ -6,9 +6,7 @@ import type { AttendanceRow } from "@/lib/types";
 import { Photo } from "./photo";
 
 export type ReviewAction =
-  | { action: "confirm" }
-  | { action: "reject" }
-  | { action: "reassign"; toCode: string };
+  { action: "confirm" } | { action: "reject" } | { action: "reassign"; toCode: string };
 
 // รายการที่ระบบไม่แน่ใจ อาจารย์ดูรูปแล้วเลือกว่าใช่คนที่ระบบเดาไหม
 export function ReviewCard({
@@ -26,9 +24,11 @@ export function ReviewCard({
   const [toCode, setToCode] = useState("");
 
   function reject() {
-    if (!window.confirm(`ไม่ใช่นักศึกษาวิชานี้ใช่ไหม รูปนี้จะไม่ถูกนับเป็นของ ${row.studentCode}`)) {
-      return;
-    }
+    const message =
+      row.reviewReason === "spoof"
+        ? "ไม่นับรูปนี้ใช่ไหม ถ้าตัวจริงเข้ามา กล้องจะเช็คให้ใหม่"
+        : `ไม่ใช่นักศึกษาวิชานี้ใช่ไหม รูปนี้จะไม่ถูกนับเป็นของ ${row.studentCode}`;
+    if (!window.confirm(message)) return;
     onReview({ action: "reject" });
   }
 
@@ -37,9 +37,11 @@ export function ReviewCard({
       {row.imageUrl ? <Photo src={row.imageUrl} size="h-32 w-32" /> : <div className="h-32 w-32" />}
       <div className="flex-1 space-y-2">
         <p>
-          ระบบคิดว่าเป็น <span className="font-mono">{row.studentCode}</span>{" "}
-          {row.fullName ?? ""}
+          ระบบคิดว่าเป็น <span className="font-mono">{row.studentCode}</span> {row.fullName ?? ""}
         </p>
+        {row.reviewReason === "spoof" && (
+          <p className="text-sm font-medium text-yellow-700">สงสัยว่าเป็นรูปหรือจอ</p>
+        )}
         <p className="text-sm text-gray-600">
           เห็นตอน {row.firstSeenAt ? formatTime(row.firstSeenAt) : "-"}
           {row.confidence !== null && ` · ความเหมือน ${Math.round(row.confidence * 100)}%`}
