@@ -144,6 +144,7 @@ export class FrameProcessor {
       firstSeenAt: seenAt,
       confidence: verdict.score,
       imagePath,
+      reviewReason: null,
     };
     let written: boolean;
     try {
