@@ -49,6 +49,19 @@ export class LeaveController {
     return this.leave.evidenceUrl(user, id);
   }
 
+  @Post('preview')
+  @HttpCode(200)
+  @UseInterceptors(
+    FileInterceptor('evidence', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
+  preview(
+    @CurrentUser() user: AppUser,
+    @Body('sessionId') sessionId: string,
+    @UploadedFile() evidence?: LeaveEvidence,
+  ) {
+    return this.leave.preview(user, sessionId, evidence);
+  }
+
   @Post()
   @HttpCode(201)
   @UseInterceptors(

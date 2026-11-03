@@ -23,6 +23,7 @@ export interface ReportsRepo {
     courseId: string,
     filter: AttendanceFilterDto,
     now: Date,
+    includeImages?: boolean,
   ): Promise<AttendanceReportResponse | null>;
   getStudentAttendanceSummary(
     studentCode: string,
@@ -69,10 +70,14 @@ interface RawAttendance {
   status: AttendanceStatus;
   first_seen_at: string | null;
   updated_by: string | null;
+  image_path: string | null;
 }
 
 async function allRows<T>(query: {
-  range(from: number, to: number): PromiseLike<{ data: unknown[] | null; error: unknown }>;
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: unknown[] | null; error: unknown }>;
 }): Promise<T[]> {
   const rows: T[] = [];
   while (true) {
@@ -113,14 +118,26 @@ export class SupabaseReportsRepo implements ReportsRepo {
       .flatMap<StudentCourseAttendanceSummary>((report) => {
         const student = report?.students[0];
         return report && student
-          ? [{ course: report.course, counts: student.counts, attendanceRate: student.attendanceRate }]
+          ? [
+              {
+                course: report.course,
+                counts: student.counts,
+                attendanceRate: student.attendanceRate,
+              },
+            ]
           : [];
       })
       .sort((a, b) => a.course.code.localeCompare(b.course.code, 'th'));
 
     const counts = courses.reduce<AttendanceCounts>(
       (total, course) => {
-        for (const status of ['present', 'late', 'absent', 'leave', 'pending'] as const) {
+        for (const status of [
+          'present',
+          'late',
+          'absent',
+          'leave',
+          'pending',
+        ] as const) {
           total[status] += course.counts[status];
         }
         total.total += course.counts.total;
@@ -133,7 +150,10 @@ export class SupabaseReportsRepo implements ReportsRepo {
     return {
       summary: {
         counts,
-        attendanceRate: counts.total > 0 ? Math.round((positive / counts.total) * 1000) / 10 : 0,
+        attendanceRate:
+          counts.total > 0
+            ? Math.round((positive / counts.total) * 1000) / 10
+            : 0,
       },
       courses,
     };
@@ -143,6 +163,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
     courseId: string,
     filter: AttendanceFilterDto,
     now: Date,
+    includeImages = false,
   ): Promise<AttendanceReportResponse | null> {
     // 1. ดึงข้อมูลคอร์ส
     const { data: courseData, error: courseError } = await this.db
@@ -233,13 +254,44 @@ export class SupabaseReportsRepo implements ReportsRepo {
         const attendances = await allRows<RawAttendance>(
           this.db
             .from('attendance')
-            .select('session_id, student_id, status, first_seen_at, updated_by')
+            .select(
+              'session_id, student_id, status, first_seen_at, updated_by, image_path',
+            )
             .in('session_id', sessionIds.slice(start, start + 200))
             .order('session_id', { ascending: true })
             .order('student_id', { ascending: true }),
         );
         for (const attendance of attendances) {
-          attendanceMap.set(`${attendance.session_id}:${attendance.student_id}`, attendance);
+          attendanceMap.set(
+            `${attendance.session_id}:${attendance.student_id}`,
+            attendance,
+          );
+        }
+      }
+    }
+
+    const imageUrls = new Map<string, string>();
+    const selectedUser = filter.studentCode
+      ? usersByCode.get(filter.studentCode)
+      : undefined;
+    if (includeImages && selectedUser) {
+      const paths = [
+        ...new Set(
+          [...attendanceMap.values()].flatMap((row) =>
+            row.student_id === selectedUser.id && row.image_path
+              ? [row.image_path]
+              : [],
+          ),
+        ),
+      ];
+      for (let start = 0; start < paths.length; start += 200) {
+        const { data, error } = await this.db.storage
+          .from('captures')
+          .createSignedUrls(paths.slice(start, start + 200), 300);
+        if (error) throw dbError();
+        for (const item of data ?? []) {
+          if (item.path && item.signedUrl)
+            imageUrls.set(item.path, item.signedUrl);
         }
       }
     }
@@ -329,12 +381,25 @@ export class SupabaseReportsRepo implements ReportsRepo {
           kind: s.kind,
           title: s.title,
           status: finalStatus,
+          firstSeenAt: att?.first_seen_at ?? null,
+          roomName: s.rooms?.name ?? '-',
+          ...(includeImages
+            ? {
+                imageUrl: att?.image_path
+                  ? (imageUrls.get(att.image_path) ?? null)
+                  : null,
+              }
+            : {}),
         });
       }
 
       const eligibleTotal = studentCounts.total;
-      const positiveCount = studentCounts.present + studentCounts.late + studentCounts.leave;
-      const rate = eligibleTotal > 0 ? Math.round((positiveCount / eligibleTotal) * 1000) / 10 : 0;
+      const positiveCount =
+        studentCounts.present + studentCounts.late + studentCounts.leave;
+      const rate =
+        eligibleTotal > 0
+          ? Math.round((positiveCount / eligibleTotal) * 1000) / 10
+          : 0;
 
       studentReports.push({
         studentCode: code,
@@ -369,8 +434,12 @@ export class SupabaseReportsRepo implements ReportsRepo {
     }
 
     const overallTotal = overallCounts.total;
-    const overallPositive = overallCounts.present + overallCounts.late + overallCounts.leave;
-    const overallRate = overallTotal > 0 ? Math.round((overallPositive / overallTotal) * 1000) / 10 : 0;
+    const overallPositive =
+      overallCounts.present + overallCounts.late + overallCounts.leave;
+    const overallRate =
+      overallTotal > 0
+        ? Math.round((overallPositive / overallTotal) * 1000) / 10
+        : 0;
 
     const courseInfo: CourseInfo = {
       id: course.id,

@@ -203,6 +203,28 @@ describe('ระบบลา (e2e)', () => {
   it('นักศึกษาเลือกคาบ ยื่นหลักฐาน และอาจารย์อนุมัติจน attendance เป็น leave', async () => {
     const server = app.getHttpServer();
     await request(server)
+      .post('/leave-requests/preview')
+      .set('x-role', 'student')
+      .field('sessionId', SESSION.id)
+      .attach('evidence', PNG, {
+        filename: 'leave.png',
+        contentType: 'image/png',
+      })
+      .expect(200)
+      .expect({ data: { text: 'ใบลาป่วย', reason: 'ใบลาป่วย' } });
+    expect(repo.requests).toEqual([]);
+
+    await request(server)
+      .post('/leave-requests/preview')
+      .set('x-role', 'teacher')
+      .field('sessionId', SESSION.id)
+      .attach('evidence', PNG, {
+        filename: 'leave.png',
+        contentType: 'image/png',
+      })
+      .expect(403);
+
+    await request(server)
       .get('/leave-requests/sessions')
       .set('x-role', 'student')
       .expect(200)

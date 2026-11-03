@@ -29,11 +29,13 @@ const section = z
   .nullish()
   .transform((v) => v || null);
 
-const createSchema = z.object({ code, name, section });
+const teacherId = z.uuid({ error: 'กรุณาเลือกอาจารย์ผู้สอน' }).optional();
+const createSchema = z.object({ code, name, section, teacherId });
 const updateSchema = z.object({
   code: code.optional(),
   name: name.optional(),
   section: section.optional(),
+  teacherId,
 });
 
 const minutes = (label: string, min: number) =>
@@ -67,7 +69,11 @@ export class CoursesService {
 
   async create(user: AppUser, body: unknown): Promise<Course> {
     const input = parseBody(createSchema, body);
-    const course = await this.repo.insert({ ...input, teacherId: user.id });
+    if (user.role === 'admin' && !input.teacherId) {
+      throw new AppError(400, 'TEACHER_REQUIRED', 'กรุณาเลือกอาจารย์ผู้สอน');
+    }
+    await this.checkTeacher(user, input.teacherId);
+    const course = await this.repo.insert({ ...input, teacherId: input.teacherId ?? user.id });
     await this.repo.saveRules(course.id, DEFAULT_RULES);
     return course;
   }
@@ -82,7 +88,17 @@ export class CoursesService {
 
   async update(user: AppUser, courseId: string, body: unknown): Promise<Course> {
     await this.getOwned(user, courseId);
-    return this.repo.update(courseId, parseBody(updateSchema, body));
+    const input = parseBody(updateSchema, body);
+    await this.checkTeacher(user, input.teacherId);
+    return this.repo.update(courseId, input);
+  }
+
+  private async checkTeacher(user: AppUser, teacherId: string | undefined): Promise<void> {
+    if (teacherId === undefined) return;
+    if (user.role !== 'admin') throw new AppError(403, 'FORBIDDEN', 'เฉพาะแอดมินที่มอบหมายผู้สอนได้');
+    if (!(await this.repo.isTeacher(teacherId))) {
+      throw new AppError(400, 'INVALID_TEACHER', 'บัญชีผู้สอนต้องเป็นอาจารย์');
+    }
   }
 
   async getRules(user: AppUser, courseId: string): Promise<Rules> {

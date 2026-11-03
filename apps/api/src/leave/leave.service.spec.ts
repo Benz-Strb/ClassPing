@@ -73,6 +73,74 @@ const evidence = {
 };
 
 describe('LeaveService', () => {
+  it('จำกัดเหตุผลร่างไว้ 1000 ตัวอักษรแต่เก็บข้อความอ่านเต็มให้ตรวจ', async () => {
+    const { service, face } = setup();
+    const text = 'ก'.repeat(1200);
+    face.readLeaveDocument.mockResolvedValue({
+      lines: [{ text, score: null }],
+    });
+    await expect(
+      service.preview(student, SESSION_ID, evidence),
+    ).resolves.toEqual({
+      text,
+      reason: text.slice(0, 1000),
+    });
+  });
+
+  it('ปฏิเสธร่างเมื่อไม่มีหลักฐาน ไฟล์ใหญ่ หรือไม่ใช่นักศึกษา', async () => {
+    const { service } = setup();
+    await expect(service.preview(student, SESSION_ID)).rejects.toMatchObject({
+      code: 'EVIDENCE_REQUIRED',
+    });
+    await expect(
+      service.preview(student, SESSION_ID, {
+        ...evidence,
+        size: 11 * 1024 * 1024,
+      }),
+    ).rejects.toMatchObject({ status: 413 });
+    await expect(
+      service.preview(teacher, SESSION_ID, evidence),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('อ่านหลักฐานเป็นร่างโดยไม่สร้างคำขอหรือเก็บไฟล์', async () => {
+    const { service, repo } = setup();
+    await expect(
+      service.preview(student, SESSION_ID, evidence),
+    ).resolves.toEqual({
+      text: 'ใบลาป่วย',
+      reason: 'ใบลาป่วย',
+    });
+    expect(repo.createRequest).not.toHaveBeenCalled();
+    expect(repo.uploadEvidence).not.toHaveBeenCalled();
+  });
+
+  it('ไม่อ่านร่างของคาบที่นักศึกษาไม่มีสิทธิ์', async () => {
+    const { service, repo, face } = setup();
+    repo.studentCanRequest.mockResolvedValue(false);
+    await expect(
+      service.preview(student, SESSION_ID, evidence),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: 'SESSION_NOT_FOUND',
+    });
+    expect(face.readLeaveDocument).not.toHaveBeenCalled();
+  });
+
+  it('ไม่อ่านไฟล์ปลอมและไม่กลืนข้อผิดพลาด OCR ในขั้นร่าง', async () => {
+    const { service, face } = setup();
+    await expect(
+      service.preview(student, SESSION_ID, {
+        ...evidence,
+        buffer: Buffer.from('fake'),
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_EVIDENCE' });
+    face.readLeaveDocument.mockRejectedValue(new Error('OCR unavailable'));
+    await expect(
+      service.preview(student, SESSION_ID, evidence),
+    ).rejects.toThrow('OCR unavailable');
+  });
+
   it('คืนเฉพาะคาบที่นักศึกษามีสิทธิ์ยื่นลา', async () => {
     const { service, repo } = setup();
 

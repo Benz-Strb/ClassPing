@@ -1,10 +1,20 @@
-import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
 import { parseBody } from '../common/validate.js';
 import { ReportsService } from './reports.service.js';
-import { attendanceFilterSchema, type AttendanceReportResponse } from './reports.types.js';
+import {
+  attendanceFilterSchema,
+  type AttendanceReportResponse,
+} from './reports.types.js';
 
 @Controller('courses/:courseId/reports')
 @Roles('teacher', 'admin')
@@ -29,10 +39,17 @@ export class ReportsController {
     @Res() res: Response,
   ): Promise<void> {
     const filter = parseBody(attendanceFilterSchema, query);
-    const { filename, content } = await this.reportsService.exportCsv(user, courseId, filter);
+    const { filename, content } = await this.reportsService.exportCsv(
+      user,
+      courseId,
+      filter,
+    );
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
     res.send(content);
   }
 
@@ -44,10 +61,17 @@ export class ReportsController {
     @Res() res: Response,
   ): Promise<void> {
     const filter = parseBody(attendanceFilterSchema, query);
-    const { filename, buffer } = await this.reportsService.exportPdf(user, courseId, filter);
+    const { filename, buffer } = await this.reportsService.exportPdf(
+      user,
+      courseId,
+      filter,
+    );
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
     res.setHeader('Content-Length', buffer.length);
     res.end(buffer);
   }
@@ -61,5 +85,18 @@ export class StudentReportsController {
   @Get('attendance')
   getAttendanceSummary(@CurrentUser() user: AppUser) {
     return this.reportsService.getStudentAttendanceSummary(user);
+  }
+
+  @Get('attendance/:courseId')
+  getCourseAttendance(
+    @CurrentUser() user: AppUser,
+    @Param('courseId', new ParseUUIDPipe()) courseId: string,
+    @Query() query: Record<string, unknown>,
+  ) {
+    return this.reportsService.getStudentCourseAttendance(
+      user,
+      courseId,
+      parseBody(attendanceFilterSchema, query),
+    );
   }
 }
