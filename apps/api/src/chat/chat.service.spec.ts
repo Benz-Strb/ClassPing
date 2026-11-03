@@ -54,3 +54,13 @@ describe('ChatService', () => {
     await expect(service.ingest({ key: 'bad', title: 'x', content: 'x', visibility: 'private' })).rejects.toThrow();
   });
 });
+
+describe('Catalog source ownership', () => {
+  it('rejects direct ingestion and deletion of catalog managed keys', async () => {
+    const { service, repo } = setup();
+    await expect(service.ingest({ key: 'catalog:entry', title: 'FAQ', content: 'Text', visibility: 'public' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(() => service.remove('catalog:entry')).toThrow();
+    expect(repo.replace).not.toHaveBeenCalled();
+    expect(repo.remove).not.toHaveBeenCalled();
+  });
+});

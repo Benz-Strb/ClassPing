@@ -37,3 +37,11 @@ Known visual-reference adjustments: use readable secondary text `#5E6168` instea
 - P26–P29: ปรับชื่อและหน้าแชทเป็น DPU Chat แล้ว แต่ LLM, Classroom และงาน/กำหนดส่งยังไม่เชื่อม
 - Navigation 5 หมวดและหน้าล็อกอินปรับในโค้ดแล้ว; การเปลี่ยนแปลงเหล่านี้ยังไม่ได้อัปเดต/ตรวจเทียบใน Figma
 - TypeScript, API build, tests 36 ข้อ และ export ทุกแพลตฟอร์มผ่าน ยังไม่ได้ตรวจหน้าจอใหม่บนมือถือจริงหรือยืนยัน deployment
+
+## Web source follow-up — 2026-11-03
+
+- `MainNavigation` ใช้บทบาทจาก `/me` และ session เพื่อแสดงเมนูเฉพาะงานนักศึกษา/อาจารย์/แอดมิน; ไม่เปลี่ยนกฎสิทธิ์ backend
+- ช่องว่าง catalog/RAG ใน P09–P10 เชื่อมในโค้ดแล้ว: แอดมินบันทึกเนื้อหาและดัชนีใน transaction เดียว ปิดใช้งานถอน source/chunks; รายการเก่าต้องแก้ไข/บันทึกเพื่อนำเข้า และ UI แสดงสถานะรอนำเข้า/พร้อมใช้/ปิดใช้งาน
+- แหล่งที่เปิดใช้เป็นสาธารณะสำหรับ DPU Chat บนมือถือ; mock provider เดิม ไม่เพิ่มหน้าแชทบนเว็บหรืออ้างว่าเชื่อม LLM จริงแล้ว
+- รัน migration `20261103100000_catalog_chat_knowledge.sql` บนฐานร่วมสำเร็จแล้ว ไม่มี seed/ข้อมูลตัวอย่าง; ตรวจ rollback และสิทธิ์ service role บนฐานจำลองก่อนรันจริง
+- API/web build และ tests ผ่าน; Figma ยังไม่ได้อัปเดตตาม source รอบนี้ และยังไม่ตรวจ browser/ฐานจริงครบวงจร

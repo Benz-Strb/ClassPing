@@ -1,3 +1,4 @@
+import { ChatModule } from '../chat/chat.module.js';
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller.js';
 import { ADMIN_REPO, SupabaseAdminRepo } from './admin.repo.js';
@@ -7,6 +8,7 @@ import { CatalogService } from './catalog.service.js';
 import { CATALOG_REPO, SupabaseCatalogRepo } from './catalog.repo.js';
 
 @Module({
+  imports: [ChatModule],
   controllers: [AdminController, CatalogController],
   providers: [
     AdminService,
