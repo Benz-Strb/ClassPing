@@ -41,10 +41,28 @@ const session: SessionInfo = {
 };
 
 const roster = [
-  { studentCode: '66000001', userId: 'u1', fullName: 'หนึ่ง', hasLoggedIn: true, faceEnrolled: true },
+  {
+    studentCode: '66000001',
+    userId: 'u1',
+    fullName: 'หนึ่ง',
+    hasLoggedIn: true,
+    faceEnrolled: true,
+  },
   { studentCode: '66000002', userId: 'u2', fullName: 'สอง', hasLoggedIn: true, faceEnrolled: true },
-  { studentCode: '66000003', userId: 'u3', fullName: 'สาม', hasLoggedIn: true, faceEnrolled: false },
-  { studentCode: '66000004', userId: null, fullName: null, hasLoggedIn: false, faceEnrolled: false },
+  {
+    studentCode: '66000003',
+    userId: 'u3',
+    fullName: 'สาม',
+    hasLoggedIn: true,
+    faceEnrolled: false,
+  },
+  {
+    studentCode: '66000004',
+    userId: null,
+    fullName: null,
+    hasLoggedIn: false,
+    faceEnrolled: false,
+  },
 ];
 
 const at = (minute: number) => new Date(START.getTime() + minute * 60_000);
@@ -70,7 +88,12 @@ class FakeRepo implements AttendanceAdminRepo {
     this.signed.push(paths);
     return new Map(paths.map((p) => [p, `https://signed/${p}`]));
   }
-  async setStatus(_s: string, userId: string, status: StoredAttendance['status'], teacherId: string) {
+  async setStatus(
+    _s: string,
+    userId: string,
+    status: StoredAttendance['status'],
+    teacherId: string,
+  ) {
     const row = this.rows.get(userId);
     this.rows.set(userId, {
       userId,
@@ -92,7 +115,14 @@ class FakeRepo implements AttendanceAdminRepo {
   ) {
     const row = this.rows.get(from)!;
     this.rows.delete(from);
-    this.rows.set(to, { ...row, userId: to, status, updatedBy: teacherId, updatedByName: 'สมศักดิ์' });
+    this.rows.set(to, {
+      ...row,
+      userId: to,
+      status,
+      updatedBy: teacherId,
+      updatedByName: 'สมศักดิ์',
+      reviewReason: null,
+    });
   }
   async deleteRow(_s: string, userId: string) {
     this.rows.delete(userId);
@@ -115,7 +145,7 @@ function setup() {
   const rosterService = { entries: async () => roster } as unknown as RosterService;
   const rejected = new RejectedGuesses(() => at(30));
   const service = new AttendanceService(courses, rosterService, repo, () => at(30), rejected);
-  const pending = (userId: string, minute = 5) =>
+  const pending = (userId: string, minute = 5, reviewReason: 'spoof' | null = null) =>
     repo.rows.set(userId, {
       userId,
       status: 'pending',
@@ -124,7 +154,7 @@ function setup() {
       imagePath: `${SESSION_ID}/${userId}-x.jpg`,
       updatedBy: null,
       updatedByName: null,
-      reviewReason: null,
+      reviewReason,
     });
   return { repo, service, pending, rejected };
 }
@@ -158,6 +188,16 @@ describe('AttendanceService.view', () => {
     expect(repo.signed).toHaveLength(1);
   });
 
+  it('คืน reviewReason ของแถวรอตรวจ', async () => {
+    const { service, pending } = setup();
+    pending('u1', 5, 'spoof');
+    pending('u2');
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.rows.find((r) => r.studentCode === '66000001')?.reviewReason).toBe('spoof');
+    expect(view.rows.find((r) => r.studentCode === '66000002')?.reviewReason).toBeNull();
+    expect(view.rows.find((r) => r.studentCode === '66000003')?.reviewReason).toBeNull();
+  });
+
   it('อาจารย์วิชาอื่น หรือ id คาบไม่มีอยู่ ได้ 404 SESSION_NOT_FOUND', async () => {
     const { service } = setup();
     const other = { ...teacher, id: 't2' };
@@ -172,7 +212,9 @@ describe('AttendanceService.view', () => {
 
   it('แอดมินดูได้ทุกวิชา', async () => {
     const { service } = setup();
-    await expect(service.view({ ...teacher, id: 'a1', role: 'admin' }, SESSION_ID)).resolves.toBeDefined();
+    await expect(
+      service.view({ ...teacher, id: 'a1', role: 'admin' }, SESSION_ID),
+    ).resolves.toBeDefined();
   });
 });
 
@@ -217,7 +259,10 @@ describe('AttendanceService.review', () => {
   it('เปลี่ยนคน: ย้ายรูปและเวลาไปคนใหม่', async () => {
     const { service, repo, pending } = setup();
     pending('u1', 20);
-    await service.review(teacher, SESSION_ID, '66000001', { action: 'reassign', toCode: '66000003' });
+    await service.review(teacher, SESSION_ID, '66000001', {
+      action: 'reassign',
+      toCode: '66000003',
+    });
     expect(repo.rows.has('u1')).toBe(false);
     expect(repo.rows.get('u3')).toMatchObject({
       status: 'late',
@@ -254,6 +299,31 @@ describe('AttendanceService.review', () => {
     expect(repo.rows.has('u1')).toBe(false);
     expect(repo.unknown).toEqual([{ imagePath: `${SESSION_ID}/u1-x.jpg`, seenAt: at(5) }]);
     expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(true);
+  });
+
+  it('ไม่ใช่แถว spoof: ลบแถว เก็บรูป แต่ไม่จำว่าปฏิเสธ กล้องเห็นตัวจริงทีหลังบันทึกได้', async () => {
+    const { service, repo, pending, rejected } = setup();
+    pending('u1', 5, 'spoof');
+    await service.review(teacher, SESSION_ID, '66000001', { action: 'reject' });
+    expect(repo.rows.has('u1')).toBe(false);
+    expect(repo.unknown).toEqual([{ imagePath: `${SESSION_ID}/u1-x.jpg`, seenAt: at(5) }]);
+    expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(false);
+  });
+
+  it('ยืนยัน / เปลี่ยนคน / ตั้งสถานะ แถว spoof: แถวใหม่ reviewReason เป็น null', async () => {
+    const { service, repo, pending } = setup();
+    pending('u1', 5, 'spoof');
+    pending('u2', 5, 'spoof');
+    await service.review(teacher, SESSION_ID, '66000001', { action: 'confirm' });
+    expect(repo.rows.get('u1')?.reviewReason).toBeNull();
+    await service.review(teacher, SESSION_ID, '66000002', {
+      action: 'reassign',
+      toCode: '66000003',
+    });
+    expect(repo.rows.get('u3')).toMatchObject({ status: 'present', reviewReason: null });
+    pending('u2', 5, 'spoof');
+    await service.setStatus(teacher, SESSION_ID, '66000002', { status: 'present' });
+    expect(repo.rows.get('u2')?.reviewReason).toBeNull();
   });
 
   it('แถวที่ไม่ได้รอตรวจได้ 409 NOT_PENDING', async () => {
