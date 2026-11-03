@@ -10,10 +10,18 @@ import {
   type CameraRecord,
   type SessionContext,
 } from './attendance.repo.js';
-import { classify, nextWrite, statusAt, type Verdict } from './decide.js';
+import {
+  classify,
+  livenessOf,
+  nextWrite,
+  statusAt,
+  type Liveness,
+  type Verdict,
+} from './decide.js';
 import type { FrameJob } from './frame-queue.js';
 import { bestTwo, type GalleryEntry } from './gallery.js';
 import { LiveFaces, type LiveFace } from './live-faces.js';
+import { LiveStreaks } from './live-streaks.js';
 import { RejectedGuesses } from './rejected-guesses.js';
 
 // ของที่ต้องใช้จาก module อื่น แยกออกมาให้เทสต์ใส่ของปลอมได้ง่าย
@@ -54,6 +62,7 @@ export class FrameProcessor {
     @Inject(CLOCK) private readonly now: Clock,
     private readonly rejected: RejectedGuesses,
     private readonly liveFaces: LiveFaces,
+    private readonly streaks: LiveStreaks,
   ) {}
 
   async process(job: FrameJob): Promise<FrameOutcome> {
@@ -91,11 +100,13 @@ export class FrameProcessor {
       if (verdict.kind === 'review' && this.rejected.isRejected(job.sessionId, verdict.userId)) {
         verdict = { kind: 'unknown' };
       }
+      const liveness = livenessOf(face.liveness, this.config.livenessMin);
       if (this.config.matchLog) {
         const size = Math.round(Math.min(face.bbox[2] - face.bbox[0], face.bbox[3] - face.bbox[1]));
         this.logger.log(
           `${best.bestId ?? '-'} ${best.score?.toFixed(3) ?? '-'} | ` +
-            `${best.secondId ?? '-'} ${best.secondScore?.toFixed(3) ?? '-'} | ${size}px | ${verdict.kind}`,
+            `${best.secondId ?? '-'} ${best.secondScore?.toFixed(3) ?? '-'} | ${size}px | ${verdict.kind} | ` +
+            (face.liveness == null ? '-' : `${liveness} ${face.liveness.toFixed(3)}`),
         );
       }
 
@@ -103,14 +114,14 @@ export class FrameProcessor {
       live.push({
         box: [x1 / width, y1 / height, x2 / width, y2 / height],
         userId: verdict.kind === 'unknown' ? null : verdict.userId,
-        kind: verdict.kind,
+        kind: verdict.kind !== 'unknown' && liveness === 'spoof' ? 'review' : verdict.kind,
       });
 
       if (verdict.kind === 'unknown') {
         await this.saveUnknown(job.sessionId, context.endsAt, face, seenAt);
         outcome.unknown++;
       } else {
-        await this.record(job.sessionId, context, verdict, face, seenAt);
+        await this.record(job.sessionId, context, verdict, face, seenAt, liveness);
         outcome[verdict.kind === 'match' ? 'matched' : 'review']++;
       }
     }
@@ -124,19 +135,31 @@ export class FrameProcessor {
     verdict: Exclude<Verdict, { kind: 'unknown' }>,
     face: DetectedFace,
     seenAt: Date,
+    liveness: Liveness,
   ) {
-    const status =
-      verdict.kind === 'match'
-        ? statusAt(seenAt, context.startsAt, context.endsAt, context.rules)
-        : 'pending';
+    // ภาพ match นับทุกภาพ ส่วนภาพ review นับเฉพาะที่เป็น spoof เพื่อตัดรอบ
+    const streak =
+      verdict.kind === 'match' || liveness === 'spoof'
+        ? this.streaks.see(sessionId, verdict.userId, liveness, seenAt, context.endsAt)
+        : { count: 0, since: null };
+    const spoof = liveness === 'spoof';
     const current = await this.repo.find(sessionId, verdict.userId);
+    const clearsSpoof =
+      verdict.kind === 'match' && !spoof && streak.count >= this.config.livenessStreak;
+    // แทนแถว spoof ด้วยคนจริง ให้นับเวลาจากภาพแรกของรอบ
+    const countedAt =
+      clearsSpoof && current?.reviewReason === 'spoof' ? (streak.since ?? seenAt) : seenAt;
+    const status =
+      verdict.kind === 'match' && !spoof
+        ? statusAt(countedAt, context.startsAt, context.endsAt, context.rules)
+        : 'pending';
     const action = nextWrite(
       current && {
         status: current.status,
         byTeacher: current.updatedBy !== null,
         reviewReason: current.reviewReason,
       },
-      { status, clearsSpoof: false },
+      { status, clearsSpoof },
     );
     if (action === 'skip') return;
 
@@ -145,10 +168,10 @@ export class FrameProcessor {
       sessionId,
       userId: verdict.userId,
       status,
-      firstSeenAt: seenAt,
+      firstSeenAt: countedAt,
       confidence: verdict.score,
       imagePath,
-      reviewReason: null,
+      reviewReason: spoof ? 'spoof' : null,
     };
     let written: boolean;
     try {
@@ -234,6 +257,7 @@ export class FrameProcessor {
 
   private forgetEndedSessions() {
     const now = this.now();
+    this.streaks.forgetEnded(now);
     for (const [sessionId, seen] of this.unknowns) {
       if (seen.endsAt <= now) this.unknowns.delete(sessionId);
     }

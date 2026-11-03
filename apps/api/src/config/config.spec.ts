@@ -9,9 +9,7 @@ const base = (extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
 
 describe('loadConfig', () => {
   it('ขาด SUPABASE_URL ต้อง throw และบอกชื่อตัวแปร', () => {
-    expect(() => loadConfig({ SUPABASE_SERVICE_ROLE_KEY: 'k' })).toThrow(
-      'SUPABASE_URL',
-    );
+    expect(() => loadConfig({ SUPABASE_SERVICE_ROLE_KEY: 'k' })).toThrow('SUPABASE_URL');
   });
 
   it('ขาด SUPABASE_SERVICE_ROLE_KEY ต้อง throw และบอกชื่อตัวแปร', () => {
@@ -21,9 +19,10 @@ describe('loadConfig', () => {
   });
 
   it('แยก ADMIN_EMAILS ด้วยคอมมา ตัดช่องว่าง และแปลงเป็นตัวเล็ก', () => {
-    expect(
-      loadConfig(base({ ADMIN_EMAILS: 'A@dpu.ac.th, b@dpu.ac.th,' })).adminEmails,
-    ).toEqual(['a@dpu.ac.th', 'b@dpu.ac.th']);
+    expect(loadConfig(base({ ADMIN_EMAILS: 'A@dpu.ac.th, b@dpu.ac.th,' })).adminEmails).toEqual([
+      'a@dpu.ac.th',
+      'b@dpu.ac.th',
+    ]);
   });
 
   it('ค่าเริ่มต้น PORT 3001 และไม่มีแอดมิน', () => {
@@ -34,19 +33,13 @@ describe('loadConfig', () => {
 
   it('อ่าน ALLOWED_ORIGINS เป็นรายการ', () => {
     expect(
-      loadConfig(
-        base({ ALLOWED_ORIGINS: 'http://localhost:3000, http://a.test' }),
-      ).allowedOrigins,
+      loadConfig(base({ ALLOWED_ORIGINS: 'http://localhost:3000, http://a.test' })).allowedOrigins,
     ).toEqual(['http://localhost:3000', 'http://a.test']);
   });
 
   it('ขาด FACE_SERVICE_TOKEN หรือสั้นกว่า 32 ตัวต้อง throw และบอกชื่อตัวแปร', () => {
-    expect(() => loadConfig(base({ FACE_SERVICE_TOKEN: '' }))).toThrow(
-      'FACE_SERVICE_TOKEN',
-    );
-    expect(() => loadConfig(base({ FACE_SERVICE_TOKEN: 'short' }))).toThrow(
-      'FACE_SERVICE_TOKEN',
-    );
+    expect(() => loadConfig(base({ FACE_SERVICE_TOKEN: '' }))).toThrow('FACE_SERVICE_TOKEN');
+    expect(() => loadConfig(base({ FACE_SERVICE_TOKEN: 'short' }))).toThrow('FACE_SERVICE_TOKEN');
   });
 
   it('FACE_SERVICE_URL ค่าเริ่มต้นเป็น face service ในเครื่อง', () => {
@@ -56,9 +49,9 @@ describe('loadConfig', () => {
   });
 
   it('FACE_SERVICE_URL ตัด / ท้ายออก', () => {
-    expect(
-      loadConfig(base({ FACE_SERVICE_URL: 'http://face.test:8001/' })).faceServiceUrl,
-    ).toBe('http://face.test:8001');
+    expect(loadConfig(base({ FACE_SERVICE_URL: 'http://face.test:8001/' })).faceServiceUrl).toBe(
+      'http://face.test:8001',
+    );
   });
 
   it('ค่าเริ่มต้นของ Redis เกณฑ์คะแนน และกล้อง', () => {
@@ -83,9 +76,31 @@ describe('loadConfig', () => {
   it('เกณฑ์คะแนนไม่ใช่ตัวเลข นอกช่วง 0-1 หรือเกณฑ์รอตรวจไม่ต่ำกว่าเกณฑ์บันทึก ต้อง throw', () => {
     expect(() => loadConfig(base({ MATCH_ACCEPT_MIN: 'abc' }))).toThrow('MATCH_ACCEPT_MIN');
     expect(() => loadConfig(base({ MATCH_ACCEPT_MIN: '1.2' }))).toThrow('MATCH_ACCEPT_MIN');
-    expect(() =>
-      loadConfig(base({ MATCH_ACCEPT_MIN: '0.5', MATCH_REVIEW_MIN: '0.6' })),
-    ).toThrow('MATCH_REVIEW_MIN');
+    expect(() => loadConfig(base({ MATCH_ACCEPT_MIN: '0.5', MATCH_REVIEW_MIN: '0.6' }))).toThrow(
+      'MATCH_REVIEW_MIN',
+    );
+  });
+
+  it('liveness: ไม่ตั้ง = ปิด และรอบนับค่าเริ่มต้น 3', () => {
+    const config = loadConfig(base({}));
+    expect(config.livenessMin).toBeNull();
+    expect(config.livenessStreak).toBe(3);
+    expect(loadConfig(base({ LIVENESS_MIN: '' })).livenessMin).toBeNull();
+  });
+
+  it('อ่าน LIVENESS_MIN และ LIVENESS_STREAK จาก env', () => {
+    const config = loadConfig(base({ LIVENESS_MIN: '0.15', LIVENESS_STREAK: '5' }));
+    expect(config.livenessMin).toBe(0.15);
+    expect(config.livenessStreak).toBe(5);
+  });
+
+  it('LIVENESS_MIN ต้องอยู่ระหว่าง 0 ถึง 1 และ LIVENESS_STREAK ต้องเป็นจำนวนเต็มตั้งแต่ 1', () => {
+    for (const bad of ['1.5', 'abc', '0', '1', '-0.1']) {
+      expect(() => loadConfig(base({ LIVENESS_MIN: bad }))).toThrow('LIVENESS_MIN');
+    }
+    for (const bad of ['0', '-1', '2.5', 'x']) {
+      expect(() => loadConfig(base({ LIVENESS_STREAK: bad }))).toThrow('LIVENESS_STREAK');
+    }
   });
 
   it('CAMERA_OPEN_BEFORE_MIN และ REDIS_PORT ต้องเป็นจำนวนเต็มไม่ติดลบ', () => {
@@ -118,8 +133,6 @@ describe('loadConfig', () => {
     expect(config.mediaServerSecret).toBe('p'.repeat(32));
     expect(config.mediaWebrtcUrl).toBe('http://BMac.local:8889');
     expect(() => loadConfig(base({ MEDIA_TOKEN_SECRET: 'short' }))).toThrow('MEDIA_TOKEN_SECRET');
-    expect(() => loadConfig(base({ MEDIA_SERVER_SECRET: 'short' }))).toThrow(
-      'MEDIA_SERVER_SECRET',
-    );
+    expect(() => loadConfig(base({ MEDIA_SERVER_SECRET: 'short' }))).toThrow('MEDIA_SERVER_SECRET');
   });
 });
