@@ -54,3 +54,11 @@ Figma click links demonstrate navigation and outcomes. Google sign-in, camera pr
 | `CoursesScreen`, `GET /me/studies` | ค้นหาวิชา/กลุ่ม รายละเอียด ตาราง 7 วัน คาบเรียน/สอบ เวลาไทย ห้อง และเปิดผลเข้าเรียน; จำกัดตาม enrollment |
 
 ตารางนี้อ้างอิงโค้ดใน working tree ไม่ยืนยันว่า Figma frames เดิมตรงกับหน้าจอใหม่. TypeScript/API build/tests 36 ข้อ/Expo export ผ่าน ยังไม่ได้ตรวจภาพใหม่บนมือถือจริง
+
+## Web source follow-up — 2026-11-03
+
+- `MainNavigation` ใช้บทบาทจาก `/me` และ session เพื่อแสดงเมนูเฉพาะงานนักศึกษา/อาจารย์/แอดมิน; ไม่เปลี่ยนกฎสิทธิ์ backend
+- ช่องว่าง catalog/RAG ใน P09–P10 เชื่อมในโค้ดแล้ว: แอดมินบันทึกเนื้อหาและดัชนีใน transaction เดียว ปิดใช้งานถอน source/chunks; รายการเก่าต้องแก้ไข/บันทึกเพื่อนำเข้า และ UI แสดงสถานะรอนำเข้า/พร้อมใช้/ปิดใช้งาน
+- แหล่งที่เปิดใช้เป็นสาธารณะสำหรับ DPU Chat บนมือถือ; mock provider เดิม ไม่เพิ่มหน้าแชทบนเว็บหรืออ้างว่าเชื่อม LLM จริงแล้ว
+- รัน migration `20261103100000_catalog_chat_knowledge.sql` บนฐานร่วมสำเร็จแล้ว ไม่มี seed/ข้อมูลตัวอย่าง; ตรวจ rollback และสิทธิ์ service role บนฐานจำลองก่อนรันจริง
+- API/web build และ tests ผ่าน; Figma ยังไม่ได้อัปเดตตาม source รอบนี้ และยังไม่ตรวจ browser/ฐานจริงครบวงจร

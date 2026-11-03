@@ -5,6 +5,7 @@ import { ChatService } from './chat.service.js';
 import { CHAT_PROVIDER, MockChatProvider } from './chat.provider.js';
 
 @Module({
+  exports: [CHAT_PROVIDER],
   controllers: [ChatController],
   providers: [ChatRepository, ChatService, { provide: CHAT_PROVIDER, useClass: MockChatProvider }],
 })

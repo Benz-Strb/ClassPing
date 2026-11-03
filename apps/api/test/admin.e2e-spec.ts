@@ -7,6 +7,7 @@ import { RolesGuard } from '../src/auth/roles.guard.js';
 import { AdminController } from '../src/admin/admin.controller.js';
 import { AdminService } from '../src/admin/admin.service.js';
 import { CatalogController } from '../src/admin/catalog.controller.js';
+import { CHAT_PROVIDER, MockChatProvider } from '../src/chat/chat.provider.js';
 import { CatalogService } from '../src/admin/catalog.service.js';
 import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
 import { EnvelopeInterceptor } from '../src/common/envelope.interceptor.js';
@@ -73,11 +74,11 @@ describe('Admin HTTP RBAC', () => {
 
 describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
   let app: INestApplication<App>;
-  const repo = { insert: vi.fn(async (_kind: string, rows: object[]) => rows.map((row) => ({ id: 'entry', ...row }))), list: vi.fn(async () => []), update: vi.fn() };
+  const repo = { saveKnowledge: vi.fn(async (_id: string | null, row: object) => ({ id: 'entry', ...row })), insert: vi.fn(async (_kind: string, rows: object[]) => rows.map((row) => ({ id: 'entry', ...row }))), list: vi.fn(async () => []), update: vi.fn() };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [CatalogController],
-      providers: [CatalogService, { provide: CATALOG_REPO, useValue: repo },
+      providers: [CatalogService, { provide: CHAT_PROVIDER, useClass: MockChatProvider }, { provide: CATALOG_REPO, useValue: repo },
         { provide: APP_CONFIG, useValue: { allowedOrigins: [], port: 3001 } },
         { provide: APP_GUARD, useClass: FakeAuth }, { provide: APP_GUARD, useClass: RolesGuard }],
     }).compile();
@@ -92,7 +93,7 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
       .send({ name: 'FAQ', content: 'ก'.repeat(50000), url: '', active: true });
     expect(response.status).toBe(201);
     expect(response.body.data.content).toHaveLength(50000);
-    expect(repo.insert).toHaveBeenCalledTimes(1);
+    expect(repo.saveKnowledge).toHaveBeenCalledTimes(1);
   });
   it('reports invalid CSV row without writing any records', async () => {
     const response = await request(app.getHttpServer()).post('/admin/catalog/curricula/import').set('x-role', 'admin')
