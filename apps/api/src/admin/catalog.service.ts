@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { CHAT_PROVIDER, type ChatProvider } from '../chat/chat.provider.js';
+import { knowledgeChunks } from '../chat/knowledge-chunks.js';
 import { AppError } from '../common/app-error.js';
 import { parseBody } from '../common/validate.js';
 import { parseCsv, MAX_CSV_BYTES } from './catalog.csv.js';
@@ -22,7 +24,10 @@ const HEADERS = {
 
 @Injectable()
 export class CatalogService {
-  constructor(@Inject(CATALOG_REPO) private readonly repo: CatalogRepo) {}
+  constructor(
+    @Inject(CATALOG_REPO) private readonly repo: CatalogRepo,
+    @Inject(CHAT_PROVIDER) private readonly provider: ChatProvider,
+  ) {}
 
   async list(kind: string) { return this.repo.list(parseBody(kindSchema, kind)); }
 
@@ -33,13 +38,18 @@ export class CatalogService {
 
   async create(kindValue: string, body: unknown) {
     const kind = parseBody(kindSchema, kindValue);
-    return (await this.repo.insert(kind, [this.input(kind, body)]))[0];
+    const input = this.input(kind, body);
+    if (kind === 'knowledge') return this.repo.saveKnowledge(null, input, input.active ? await knowledgeChunks(input.content, this.provider) : []);
+    return (await this.repo.insert(kind, [input]))[0];
   }
 
   async update(kindValue: string, idValue: string, body: unknown) {
     const kind = parseBody(kindSchema, kindValue);
     const id = parseBody(z.uuid(), idValue);
-    const entry = await this.repo.update(kind, id, this.input(kind, body));
+    const input = this.input(kind, body);
+    const entry = kind === 'knowledge'
+      ? await this.repo.saveKnowledge(id, input, input.active ? await knowledgeChunks(input.content, this.provider) : [])
+      : await this.repo.update(kind, id, input);
     if (!entry) throw new AppError(404, 'CATALOG_NOT_FOUND', 'ไม่พบรายการนี้');
     return entry;
   }

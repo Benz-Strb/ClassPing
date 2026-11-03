@@ -80,3 +80,11 @@ Update 2026-11-03: ตามคำสั่งเพิ่มฟีเจอร�
 - Contrast คู่ข้อความหลัก: 5.56–12.75:1; `node --check design/figma-plugin/code.js` ผ่าน
 - หน้ามือถืออ้างอิง screens/types และข้อกำหนดใน README ตามที่ผู้ใช้อนุญาตเมื่อเปิด runtime ไม่ได้. แยก feature ที่เป็นแผนไว้ใน PLANNED-FEATURES.md
 - โค้ดแอป/API และข้อมูลจริงไม่ถูกแก้. ยังต้องทดสอบ authenticated flows, กล้องจริง, mobile device, font scaling และ dark theme ก่อนนำไป production
+
+## Web source follow-up — 2026-11-03
+
+- `MainNavigation` ใช้บทบาทจาก `/me` และ session เพื่อแสดงเมนูเฉพาะงานนักศึกษา/อาจารย์/แอดมิน; ไม่เปลี่ยนกฎสิทธิ์ backend
+- ช่องว่าง catalog/RAG ใน P09–P10 เชื่อมในโค้ดแล้ว: แอดมินบันทึกเนื้อหาและดัชนีใน transaction เดียว ปิดใช้งานถอน source/chunks; รายการเก่าต้องแก้ไข/บันทึกเพื่อนำเข้า และ UI แสดงสถานะรอนำเข้า/พร้อมใช้/ปิดใช้งาน
+- แหล่งที่เปิดใช้เป็นสาธารณะสำหรับ DPU Chat บนมือถือ; mock provider เดิม ไม่เพิ่มหน้าแชทบนเว็บหรืออ้างว่าเชื่อม LLM จริงแล้ว
+- รัน migration `20261103100000_catalog_chat_knowledge.sql` บนฐานร่วมสำเร็จแล้ว ไม่มี seed/ข้อมูลตัวอย่าง; ตรวจ rollback และสิทธิ์ service role บนฐานจำลองก่อนรันจริง
+- API/web build และ tests ผ่าน; Figma ยังไม่ได้อัปเดตตาม source รอบนี้ และยังไม่ตรวจ browser/ฐานจริงครบวงจร
