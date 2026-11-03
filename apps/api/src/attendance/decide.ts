@@ -52,17 +52,29 @@ export function rulesFor(session: SessionRules, course: Rules): Rules {
   };
 }
 
+export type Liveness = 'live' | 'spoof' | 'unchecked';
+
+// ปิดระบบหรือไม่มีคะแนน = ไม่ตรวจ · คะแนนเท่าเกณฑ์ถือว่าเป็นคนจริง
+export function livenessOf(score: number | null | undefined, min: number | null): Liveness {
+  if (min === null || score === null || score === undefined) return 'unchecked';
+  return score < min ? 'spoof' : 'live';
+}
+
 export interface Current {
   status: AttendanceStatus;
   byTeacher: boolean;
+  reviewReason: 'spoof' | null;
 }
 
 // ผลที่กล้องบันทึกไว้แล้วจะถูกแทนได้กรณีเดียว คือรอตรวจแล้วมาเจอแบบมั่นใจ
+// แถวที่สงสัยว่าเป็นรูปหรือจอ ต้องผ่านคนจริงติดกันครบรอบ (clearsSpoof) ถึงจะแทน
 export function nextWrite(
   current: Current | null,
-  incoming: { status: AttendanceStatus },
+  incoming: { status: AttendanceStatus; clearsSpoof: boolean },
 ): 'insert' | 'replace' | 'skip' {
   if (!current) return 'insert';
   if (current.byTeacher) return 'skip';
-  return current.status === 'pending' && incoming.status !== 'pending' ? 'replace' : 'skip';
+  if (current.status !== 'pending' || incoming.status === 'pending') return 'skip';
+  if (current.reviewReason === 'spoof' && !incoming.clearsSpoof) return 'skip';
+  return 'replace';
 }
