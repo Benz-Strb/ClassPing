@@ -74,7 +74,7 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
       beforeWrite();
       if (failWrite) throw new Error('db down');
       if (rows.has(record.userId)) return false;
-      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, record });
+      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, reviewReason: record.reviewReason, record });
       return true;
     },
     replacePending: async (record) => {
@@ -82,7 +82,7 @@ function setup(opts: { context?: SessionContext | null; complete?: string[] } = 
       if (failWrite) throw new Error('db down');
       const row = rows.get(record.userId);
       if (!row || row.status !== 'pending' || row.updatedBy !== null) return false;
-      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, record });
+      rows.set(record.userId, { status: record.status, updatedBy: null, imagePath: record.imagePath, reviewReason: record.reviewReason, record });
       return true;
     },
     insertUnknown: async (_s, path) => void unknowns.push(path),
@@ -256,6 +256,7 @@ describe('FrameProcessor', () => {
         status: 'absent',
         updatedBy: 'teacher1',
         imagePath: null,
+        reviewReason: null,
         record: {} as CameraRecord,
       });
     });
