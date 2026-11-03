@@ -10,6 +10,7 @@ import { AttendanceService } from './attendance.service.js';
 import { FRAME_DEPS, FrameProcessor, type FrameDeps } from './frame.processor.js';
 import { FrameWorker } from './frame.worker.js';
 import { LiveFaces } from './live-faces.js';
+import { LiveStreaks } from './live-streaks.js';
 import { RejectedGuesses } from './rejected-guesses.js';
 import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
 
@@ -22,6 +23,7 @@ import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
     FrameWorker,
     RejectedGuesses,
     LiveFaces,
+    LiveStreaks,
     UnknownCleanupRunner,
     { provide: ATTENDANCE_REPO, useClass: SupabaseAttendanceRepo },
     { provide: ATTENDANCE_ADMIN_REPO, useClass: SupabaseAttendanceAdminRepo },

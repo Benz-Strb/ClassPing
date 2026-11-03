@@ -18,7 +18,14 @@ class PaddleTextReader:
         # import ตอนสร้างจริง เพื่อให้เทสต์ที่ใช้ reader ปลอมไม่ต้องโหลดโมเดล
         from paddleocr import PaddleOCR
 
-        self._ocr = PaddleOCR(lang='th')
+        # ใช้กับภาพหน้าจอบัตรที่แบนและตั้งตรงอยู่แล้ว ตัวหมุน/ดัดภาพเอกสารทำให้บรรทัดแตก
+        # (บัตรจริงอ่าน OFFICIAL STUDENT VIRTUAL กับ ID แยกกัน) และคะแนนบรรทัดไทยต่ำลง
+        self._ocr = PaddleOCR(
+            lang='th',
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+        )
 
     def read(self, image: np.ndarray) -> list[tuple[str, float]]:
         results = self._ocr.predict(image)

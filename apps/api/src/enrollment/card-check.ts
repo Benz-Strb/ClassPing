@@ -39,7 +39,8 @@ export function checkCard(
   expected: { studentCode: string; today: Date },
 ): CardCheck {
   const sure = lines.filter((l) => l.score >= MIN_LINE_SCORE).map((l) => l.text.trim());
-  if (!sure.some((t) => t.toUpperCase().replace(/\s+/g, ' ').includes(MARKER))) return unreadable;
+  // OCR อาจตัดบรรทัดนี้ตรงช่องว่าง (เช่น "... VIRTUAL" กับ "ID") ต่อบรรทัดที่ติดกันก่อนค้น
+  if (!sure.join(' ').toUpperCase().replace(/\s+/g, ' ').includes(MARKER)) return unreadable;
 
   // บัตรมีวันที่สองที่ (วันสร้างภาพ วันออกบัตร) ถ้า OCR อ่านขีดหายจะกลายเป็นเลข 8 หลัก
   const codes = new Set(

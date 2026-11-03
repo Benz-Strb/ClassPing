@@ -24,6 +24,8 @@ export interface DetectedFace {
   detScore: number;
   embedding: number[];
   pose: FacePose | null;
+  // คะแนนคนจริง 0-1 null = หน้าเล็กเกินไปหรือปิดระบบ
+  liveness?: number | null;
   // JPEG base64 มีเฉพาะตอนขอ crops (null ถ้ากรอบอยู่นอกภาพ)
   crop?: string | null;
 }
