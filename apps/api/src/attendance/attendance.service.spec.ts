@@ -80,6 +80,7 @@ class FakeRepo implements AttendanceAdminRepo {
       imagePath: row?.imagePath ?? null,
       updatedBy: teacherId,
       updatedByName: 'สมศักดิ์',
+      reviewReason: null,
     });
   }
   async moveRow(
@@ -123,6 +124,7 @@ function setup() {
       imagePath: `${SESSION_ID}/${userId}-x.jpg`,
       updatedBy: null,
       updatedByName: null,
+      reviewReason: null,
     });
   return { repo, service, pending, rejected };
 }
