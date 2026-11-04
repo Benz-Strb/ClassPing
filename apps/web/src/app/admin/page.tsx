@@ -60,6 +60,7 @@ export default function AdminDashboardPage() {
           ["/admin/transfers", "เทียบโอน", "เอกสารหลักสูตร ชุดจับคู่ และพิจารณาคำขอ"],
           ["/admin/reference", "ข้อมูลกลาง", "จัดหมวดและปรับปรุงข้อมูลมหาวิทยาลัย"],
           ["/admin/knowledge", "แหล่งความรู้", "จัดการเนื้อหาและแหล่งอ้างอิงแชทบอท"],
+          ["/admin/leave-statuses", "สถานะการลา", "ติดตามสถานะการพิจารณาคำขอ"],
         ].map(([href, title, description]) => (
           <Link key={href} href={href} className="space-y-1 rounded-lg border bg-white p-4 hover:border-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2">
             <h3 className="font-medium text-blue-800">{title}</h3>
