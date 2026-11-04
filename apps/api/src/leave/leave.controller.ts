@@ -12,7 +12,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import { AppError } from '../common/app-error.js';
 import type { AppUser } from '../users/users.service.js';
-import { LeaveService, type LeaveEvidence } from './leave.service.js';
+import { LeaveService, MAX_EVIDENCE_BYTES, type LeaveEvidence } from './leave.service.js';
 
 @Controller('leave-requests')
 @Roles('student')
@@ -23,6 +23,12 @@ export class LeaveController {
   @Roles('student')
   listMine(@CurrentUser() user: AppUser) {
     return this.leave.listMine(user);
+  }
+
+  @Get('statuses')
+  @Roles('admin')
+  listStatuses(@CurrentUser() user: AppUser) {
+    return this.leave.listStatuses(user);
   }
 
   @Get('sessions')
@@ -49,10 +55,23 @@ export class LeaveController {
     return this.leave.evidenceUrl(user, id);
   }
 
+  @Post('preview')
+  @HttpCode(200)
+  @UseInterceptors(
+    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
+  )
+  preview(
+    @CurrentUser() user: AppUser,
+    @Body('sessionId') sessionId: string,
+    @UploadedFile() evidence?: LeaveEvidence,
+  ) {
+    return this.leave.preview(user, sessionId, evidence);
+  }
+
   @Post()
   @HttpCode(201)
   @UseInterceptors(
-    FileInterceptor('evidence', { limits: { fileSize: 10 * 1024 * 1024 } }),
+    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
   )
   submit(
     @CurrentUser() user: AppUser,

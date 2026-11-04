@@ -3,6 +3,8 @@
 ใช้รูปตัวอย่างที่ติดมากับแพ็กเกจ insightface เท่านั้น
 """
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 import pytest
@@ -11,9 +13,10 @@ from insightface.data import get_image
 
 from app.config import load_settings
 from app.engine import InsightFaceEngine
+from app.liveness import InsightFaceLiveness
 from app.main import create_app
 from app.ocr import PaddleTextReader
-from tests.conftest import TOKEN
+from tests.conftest import TOKEN, FakeReader
 from tests.images import crop_with_margin, jpeg
 
 pytestmark = pytest.mark.model
@@ -138,3 +141,26 @@ def test_rapid_reader_reads_card_text(real_reader):
     texts = " | ".join(text for text, _ in real_reader.read(image))
     assert "66112106" in texts
     assert "23-10-2569" in texts
+
+
+LIVENESS_FILE = Path.home() / ".insightface/models/liveness/liveness.onnx"
+
+
+@pytest.mark.skipif(not LIVENESS_FILE.is_file(), reason="ไม่มีไฟล์ liveness.onnx")
+def test_model_liveness_scores_in_range(real_engine, group_image):
+    settings = load_settings({"FACE_SERVICE_TOKEN": TOKEN, "LIVENESS_MODEL": str(LIVENESS_FILE)})
+    client = TestClient(
+        create_app(settings, real_engine, FakeReader(), liveness=InsightFaceLiveness(settings)),
+        raise_server_exceptions=False,
+    )
+    res = client.post(
+        "/faces/detect", headers=AUTH, files={"image": ("g.jpg", jpeg(group_image), "image/jpeg")}
+    )
+    assert res.status_code == 200, res.text
+    faces = res.json()["data"]["faces"]
+    big = [f for f in faces if min(f["bbox"][2] - f["bbox"][0], f["bbox"][3] - f["bbox"][1]) >= 40]
+    assert big
+    for face in big:
+        if face["liveness"] is not None:
+            assert 0.0 <= face["liveness"] <= 1.0
+    assert any(face["liveness"] is not None for face in big)

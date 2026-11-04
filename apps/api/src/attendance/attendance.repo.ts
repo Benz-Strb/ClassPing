@@ -25,6 +25,8 @@ export interface AttendanceRow {
   // มีค่าเมื่ออาจารย์แก้เอง
   updatedBy: string | null;
   imagePath: string | null;
+  // spoof = สงสัยว่าเป็นรูปหรือจอ · null = รอตรวจแบบเดิม
+  reviewReason: 'spoof' | null;
 }
 
 export interface CameraRecord {
@@ -34,6 +36,7 @@ export interface CameraRecord {
   firstSeenAt: Date;
   confidence: number;
   imagePath: string | null;
+  reviewReason: 'spoof' | null;
 }
 
 export interface AttendanceRepo {
@@ -64,6 +67,7 @@ const cameraRow = (record: CameraRecord) => ({
   first_seen_at: record.firstSeenAt.toISOString(),
   confidence: record.confidence,
   image_path: record.imagePath,
+  review_reason: record.reviewReason,
   updated_by: null,
   updated_at: new Date().toISOString(),
 });
@@ -148,14 +152,24 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
   async find(sessionId: string, userId: string): Promise<AttendanceRow | null> {
     const { data, error } = await this.db
       .from('attendance')
-      .select('status, updated_by, image_path')
+      .select('status, updated_by, image_path, review_reason')
       .eq('session_id', sessionId)
       .eq('student_id', userId)
       .maybeSingle();
     if (error) throw dbError();
     if (!data) return null;
-    const row = data as { status: AttendanceStatus; updated_by: string | null; image_path: string | null };
-    return { status: row.status, updatedBy: row.updated_by, imagePath: row.image_path };
+    const row = data as {
+      status: AttendanceStatus;
+      updated_by: string | null;
+      image_path: string | null;
+      review_reason: 'spoof' | null;
+    };
+    return {
+      status: row.status,
+      updatedBy: row.updated_by,
+      imagePath: row.image_path,
+      reviewReason: row.review_reason,
+    };
   }
 
   async insertIfAbsent(record: CameraRecord): Promise<boolean> {

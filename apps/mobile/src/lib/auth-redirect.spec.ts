@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { getMobileAuthRedirectUri } from './auth-redirect';
 
+const createExpoUrl = (path: string) => `exp://192.168.1.10:8081/--/${path}`;
+
 describe('getMobileAuthRedirectUri', () => {
   it('ใช้ deep link ของ ClassPing ใน Development Build', () => {
-    expect(getMobileAuthRedirectUri(null)).toBe('classping://auth/callback');
+    expect(getMobileAuthRedirectUri(null, createExpoUrl)).toBe('classping://auth/callback');
   });
 
-  it('ปฏิเสธ Expo Go แทนการส่งผู้ใช้กลับไปหน้าเว็บ', () => {
-    expect(() => getMobileAuthRedirectUri('expo')).toThrow(
-      'Google Login ใช้ผ่าน Expo Go ไม่ได้ กรุณาเปิด ClassPing Development Build',
+  it('ใช้ลิงก์ exp:// เมื่อเปิดใน Expo Go', () => {
+    expect(getMobileAuthRedirectUri('expo', createExpoUrl)).toBe(
+      'exp://192.168.1.10:8081/--/auth/callback',
     );
   });
 });

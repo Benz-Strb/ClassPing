@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -11,10 +11,18 @@ const LINKS = [
   { href: "/admin", label: "ภาพรวม" },
   { href: "/admin/users", label: "ผู้ใช้" },
   { href: "/admin/rooms", label: "ห้องเรียน" },
+  { href: "/admin/cameras", label: "กล้องประจำห้อง" },
+  { href: "/admin/courses", label: "รายวิชาและตารางเรียน" },
+  { href: "/admin/curricula", label: "หลักสูตร" },
+  { href: "/admin/transfers", label: "เทียบโอน" },
+  { href: "/admin/reference", label: "ข้อมูลกลาง" },
+  { href: "/admin/knowledge", label: "แหล่งความรู้" },
+  { href: "/admin/leave-statuses", label: "สถานะการลา" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [allowed, setAllowed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +65,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+              aria-current={pathname === link.href ? "page" : undefined}
+              className={`rounded-md border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${pathname === link.href ? "border-blue-700 bg-blue-50 text-blue-800" : "hover:bg-gray-50"}`}
             >
               {link.label}
             </Link>

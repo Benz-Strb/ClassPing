@@ -43,6 +43,17 @@ export async function submitLeave(
   }>("/leave-requests", { method: "POST", body: form }, LEAVE_TIMEOUT_MS);
 }
 
+export async function previewLeave(sessionId: string, evidenceUri: string) {
+  const form = new FormData();
+  form.append("sessionId", sessionId);
+  form.append("evidence", new File(evidenceUri));
+  return apiFetch<{ text: string; reason: string }>(
+    "/leave-requests/preview",
+    { method: "POST", body: form },
+    LEAVE_TIMEOUT_MS,
+  );
+}
+
 export function discardLeaveEvidence(uri: string | null) {
   if (!uri || !uri.startsWith(Paths.cache.uri)) return;
   try {

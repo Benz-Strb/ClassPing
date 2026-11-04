@@ -13,6 +13,10 @@ export interface AppConfig {
   matchReviewMin: number;
   cameraOpenBeforeMin: number;
   matchLog: boolean;
+  // คะแนน liveness ต่ำกว่านี้ถือว่าเป็นรูปหรือจอ null = ปิด
+  livenessMin: number | null;
+  // ต้องเจอคนจริงติดกันกี่ภาพ ถึงล้างสถานะสงสัยของแถวที่รอตรวจ
+  livenessStreak: number;
   // media server (MediaMTX) ไม่ตั้ง secret = ยังไม่เปิดใช้กล้องสด/ดูย้อนหลัง
   mediaTokenSecret: string | null;
   // ใช้เรียก playback และ control API ของ MediaMTX
@@ -79,6 +83,23 @@ function wholeNumber(env: NodeJS.ProcessEnv, name: string, fallback: number): nu
   return Number(raw);
 }
 
+function optionalOpenScore(env: NodeJS.ProcessEnv, name: string): number | null {
+  const raw = env[name]?.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0 || value >= 1) {
+    throw new Error(`${name} ต้องเป็นตัวเลขมากกว่า 0 และน้อยกว่า 1`);
+  }
+  return value;
+}
+
+function positiveWhole(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const raw = env[name]?.trim();
+  if (!raw) return fallback;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1) throw new Error(`${name} ต้องเป็นจำนวนเต็มตั้งแต่ 1`);
+  return Number(raw);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const matchAcceptMin = score(env, 'MATCH_ACCEPT_MIN', 0.5);
   const matchReviewMin = score(env, 'MATCH_REVIEW_MIN', 0.36);
@@ -92,10 +113,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     supabaseServiceRoleKey: required(env, 'SUPABASE_SERVICE_ROLE_KEY'),
     adminEmails: list(env.ADMIN_EMAILS).map((e) => e.toLowerCase()),
     allowedOrigins: list(env.ALLOWED_ORIGINS),
-    faceServiceUrl: (env.FACE_SERVICE_URL?.trim() || 'http://127.0.0.1:8001').replace(
-      /\/+$/,
-      '',
-    ),
+    faceServiceUrl: (env.FACE_SERVICE_URL?.trim() || 'http://127.0.0.1:8001').replace(/\/+$/, ''),
     faceServiceToken: faceToken(env),
     redisHost: env.REDIS_HOST?.trim() || '127.0.0.1',
     redisPort: wholeNumber(env, 'REDIS_PORT', 6379),
@@ -103,6 +121,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     matchReviewMin,
     cameraOpenBeforeMin: wholeNumber(env, 'CAMERA_OPEN_BEFORE_MIN', 20),
     matchLog: env.MATCH_LOG?.trim() === '1',
+    livenessMin: optionalOpenScore(env, 'LIVENESS_MIN'),
+    livenessStreak: positiveWhole(env, 'LIVENESS_STREAK', 3),
     mediaTokenSecret: optionalSecret(env, 'MEDIA_TOKEN_SECRET'),
     mediaServerSecret: optionalSecret(env, 'MEDIA_SERVER_SECRET'),
     mediaRtspUrl: url(env, 'MEDIA_RTSP_URL', 'rtsp://127.0.0.1:8554'),

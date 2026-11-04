@@ -10,6 +10,7 @@ class DetectedFace:
     det_score: float
     embedding: np.ndarray  # float32 ขนาด embedding_size ผ่าน L2-normalize แล้ว
     pose: tuple[float, float, float] | None  # pitch, yaw, roll (องศา)
+    kps: np.ndarray | None = None  # landmark 5 จุด (5x2) ไว้จัดหน้าให้โมเดล liveness
 
 
 class FaceEngine(Protocol):
@@ -57,6 +58,7 @@ class InsightFaceEngine:
                     det_score=float(face.det_score),
                     embedding=face.normed_embedding.astype(np.float32),
                     pose=None if pose is None else tuple(float(v) for v in pose),
+                    kps=None if face.kps is None else np.asarray(face.kps, dtype=np.float32),
                 )
             )
         return faces
