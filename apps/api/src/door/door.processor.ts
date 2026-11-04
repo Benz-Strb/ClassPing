@@ -7,10 +7,14 @@ import {
 } from '../attendance/attendance.repo.js';
 import { classify } from '../attendance/decide.js';
 import type { FrameDeps } from '../attendance/frame.processor.js';
-import { bestTwo, type BestTwo, type GalleryEntry } from '../attendance/gallery.js';
+import {
+  bestTwo,
+  loadCourseGallery,
+  type BestTwo,
+  type GalleryEntry,
+} from '../attendance/gallery.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
-import { isComplete } from '../enrollment/pose-check.js';
 import { DOOR_REPO, type DoorRepo, type TripStatus } from './door.repo.js';
 import { OpenTrips } from './open-trips.js';
 
@@ -47,7 +51,7 @@ export class DoorProcessor {
     private readonly openTrips: OpenTrips,
   ) {}
 
-  // คนเดินออกครั้งเดียว กล้องไม่ส่งซ้ำ ถ้าตรวจหน้าไม่ได้ก็ยังต้องจดไว้เป็น unknown
+  // คนเดินออกผ่านประตูครั้งเดียว ถ้าบันทึกไม่สำเร็จรอบนั้นจะหายไป จึงต้องจดไว้เป็น unknown แม้ตรวจหน้าไม่ได้
   async handleOut(sessionId: string, images: Buffer[], outAt: Date): Promise<TripResult> {
     let candidate: Candidate | null = null;
     try {
@@ -64,7 +68,7 @@ export class DoorProcessor {
       : ({ kind: 'unknown' } as const);
 
     if (verdict.kind === 'unknown') {
-      const imagePath = await this.upload(`${sessionId}/door-unknown`, images[0]);
+      const imagePath = await this.upload(`${sessionId}/door/unknown`, images[0]);
       await this.insert({
         sessionId,
         userId: null,
@@ -79,7 +83,7 @@ export class DoorProcessor {
     if (await this.openTrips.has(sessionId, verdict.userId)) return 'duplicate';
     const status = verdict.kind === 'match' ? 'confirmed' : 'pending';
     const crop = candidate?.crop ? Buffer.from(candidate.crop, 'base64') : undefined;
-    const imagePath = await this.upload(`${sessionId}/door-${verdict.userId}`, crop);
+    const imagePath = await this.upload(`${sessionId}/door/${verdict.userId}`, crop);
     const inserted = await this.insert({
       sessionId,
       userId: verdict.userId,
@@ -107,7 +111,7 @@ export class DoorProcessor {
       const { faces } = await this.deps.detect(image, 'image/jpeg', { crops: true });
       if (!faces.length) continue;
       gallery ??= await this.cached(this.galleries, context.courseId, () =>
-        this.loadGallery(context.courseId),
+        loadCourseGallery(this.attendance, this.deps, context.courseId),
       );
       for (const face of faces) {
         const best = bestTwo(face.embedding, gallery);
@@ -144,24 +148,6 @@ export class DoorProcessor {
     await this.attendance.removeCaptures([path]).catch((error: unknown) => {
       this.logger.warn(`ลบรูป ${path} ไม่สำเร็จ: ${String(error)}`);
     });
-  }
-
-  // เทียบเฉพาะคนในวิชาที่ลงทะเบียนครบทุกท่า เหมือนกล้องหน้าห้อง
-  private async loadGallery(courseId: string): Promise<GalleryEntry[]> {
-    const userIds = await this.deps.enrolledUserIds(courseId);
-    if (!userIds.length) return [];
-    const rows = await this.attendance.faceEmbeddings(userIds, await this.deps.model());
-
-    const byUser = new Map<string, { poses: string[]; embeddings: number[][] }>();
-    for (const row of rows) {
-      const entry = byUser.get(row.userId) ?? { poses: [], embeddings: [] };
-      entry.poses.push(row.pose);
-      entry.embeddings.push(row.embedding);
-      byUser.set(row.userId, entry);
-    }
-    return [...byUser]
-      .filter(([, entry]) => isComplete(entry.poses))
-      .map(([userId, entry]) => ({ userId, embeddings: entry.embeddings }));
   }
 
   private async cached<T>(
