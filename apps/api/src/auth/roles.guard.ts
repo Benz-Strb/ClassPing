@@ -17,7 +17,7 @@ export class RolesGuard implements CanActivate {
     if (!roles?.length) return true;
 
     const user = context.switchToHttp().getRequest<{ user?: AppUser }>().user;
-    if (user && (user.role === 'admin' || roles.includes(user.role))) return true;
+    if (user && roles.includes(user.role)) return true;
 
     throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ใช้งานส่วนนี้');
   }

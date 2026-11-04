@@ -7,7 +7,9 @@ from app.config import load_settings
 def test_health_public(client):
     res = client.get("/health")
     assert res.status_code == 200
-    assert res.json() == {"data": {"ok": True, "model": "buffalo_l", "embeddingSize": 512}}
+    assert res.json() == {
+        "data": {"ok": True, "model": "buffalo_l", "embeddingSize": 512, "liveness": None}
+    }
 
 
 def test_missing_token_401(client):
@@ -38,6 +40,7 @@ def test_load_settings_defaults():
     assert settings.det_size == 640
     assert settings.enroll_min_face_px == 112
     assert settings.max_image_bytes == 5 * 1024 * 1024
+    assert settings.max_card_bytes == 25 * 1024 * 1024
 
 
 def test_unknown_error_is_internal(app, client, auth):

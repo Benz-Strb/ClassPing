@@ -46,6 +46,20 @@ class FakeReader:
         return list(self.lines)
 
 
+class FakeLiveness:
+    """แทนโมเดล liveness จริง คืนคะแนนที่กำหนด และจดรูปที่ได้รับ"""
+
+    name = "fake-liveness"
+
+    def __init__(self, score: float | None = 0.9):
+        self.value = score
+        self.shapes: list[tuple[int, ...]] = []
+
+    def score(self, frame: np.ndarray, face: DetectedFace) -> float | None:
+        self.shapes.append(frame.shape)
+        return self.value
+
+
 @pytest.fixture
 def settings():
     return load_settings({"FACE_SERVICE_TOKEN": TOKEN})

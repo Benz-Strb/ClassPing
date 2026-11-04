@@ -16,13 +16,14 @@ import {
   LEAVE_STATUS_LABEL,
   OCR_STATUS_LABEL,
   submitLeave,
+  previewLeave,
 } from "../lib/leave";
 import type { LeaveRequest, LeaveSession } from "../lib/types";
 
-const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 
 interface Props {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function LeaveScreen({ onBack }: Props) {
@@ -35,6 +36,7 @@ export function LeaveScreen({ onBack }: Props) {
   );
   const evidenceUri = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ocrText, setOcrText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -70,15 +72,38 @@ export function LeaveScreen({ onBack }: Props) {
     if (!asset) return;
     if (asset.fileSize && asset.fileSize > MAX_EVIDENCE_BYTES) {
       discardLeaveEvidence(asset.uri);
-      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 10 MB");
+      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
       return;
     }
     discardLeaveEvidence(evidence?.uri ?? null);
     evidenceUri.current = asset.uri;
     setEvidence(asset);
+    setOcrText(null);
+  }
+
+  async function readEvidence() {
+    if (busy) return;
+    if (!sessionId || !evidence) {
+      setError("กรุณาเลือกคาบและหลักฐานก่อนอ่านร่าง");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const draft = await previewLeave(sessionId, evidence.uri);
+      setOcrText(draft.text);
+      if (!reason.trim()) setReason(draft.reason);
+    } catch (e) {
+      setError(
+        `${e instanceof Error ? e.message : "อ่านหลักฐานไม่สำเร็จ"} — กรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submit() {
+    if (busy) return;
     if (!sessionId) {
       setError("กรุณาเลือกคาบที่ต้องการลา");
       return;
@@ -98,6 +123,7 @@ export function LeaveScreen({ onBack }: Props) {
       discardLeaveEvidence(evidence.uri);
       evidenceUri.current = null;
       setEvidence(null);
+      setOcrText(null);
       setReason("");
       setSessionId(null);
       await load();
@@ -111,11 +137,16 @@ export function LeaveScreen({ onBack }: Props) {
   if (sessions === null || requests === null) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
-        {error && <Text style={styles.error}>{error}</Text>}
-        <Pressable style={styles.secondary} onPress={onBack}>
+        {error ? <>
+          <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+          <Pressable accessibilityRole="button" style={styles.secondary} onPress={() => {
+            setError(null);
+            void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
+          }}><Text>ลองใหม่</Text></Pressable>
+        </> : <ActivityIndicator />}
+        {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับหน้าบัญชี</Text>
-        </Pressable>
+        </Pressable>}
       </View>
     );
   }
@@ -130,9 +161,9 @@ export function LeaveScreen({ onBack }: Props) {
           <Text style={styles.title}>ระบบลา</Text>
           <Text style={styles.help}>เลือกคาบและแนบภาพหลักฐาน</Text>
         </View>
-        <Pressable style={styles.secondary} onPress={onBack}>
+        {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับ</Text>
-        </Pressable>
+        </Pressable>}
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -150,6 +181,7 @@ export function LeaveScreen({ onBack }: Props) {
                 accessibilityState={{ selected }}
                 style={[styles.session, selected && styles.sessionSelected]}
                 onPress={() => setSessionId(session.id)}
+                disabled={busy}
               >
                 <Text style={selected && styles.selectedText}>
                   {formatLeaveSession(session)}
@@ -165,6 +197,7 @@ export function LeaveScreen({ onBack }: Props) {
           maxLength={1000}
           value={reason}
           onChangeText={setReason}
+          editable={!busy}
           placeholder="เช่น มีไข้สูง แพทย์ให้พักรักษาตัว"
           style={styles.input}
         />
@@ -181,7 +214,26 @@ export function LeaveScreen({ onBack }: Props) {
               : "เลือกภาพจากเครื่อง"}
           </Text>
         </Pressable>
-        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 10 MB</Text>
+        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 25 MB</Text>
+        <Pressable
+          style={styles.secondary}
+          onPress={readEvidence}
+          disabled={busy || !sessionId || !evidence}
+        >
+          <Text>อ่านหลักฐานช่วยกรอกเหตุผล</Text>
+        </Pressable>
+        {ocrText !== null && (
+          <View accessibilityLiveRegion="polite">
+            <Text>{ocrText || "ไม่พบข้อความ กรุณากรอกเหตุผลเอง"}</Text>
+            <Text style={styles.help}>
+              ตรวจและแก้เหตุผลด้านบนก่อนส่ง หากกรอกไว้แล้วระบบจะไม่เขียนทับ
+            </Text>
+          </View>
+        )}
+        <Text style={styles.help}>
+          OCR เป็นข้อมูลร่าง ไม่รับรองความแท้ของหลักฐาน
+          การอ่านร่างยังไม่ส่งคำขอลา
+        </Text>
 
         <Pressable
           style={[styles.primary, busy && styles.disabled]}

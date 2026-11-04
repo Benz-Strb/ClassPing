@@ -1,5 +1,5 @@
 import type { Rules } from '../courses/courses.repo.js';
-import { classify, nextWrite, rulesFor, statusAt, type Thresholds } from './decide.js';
+import { classify, livenessOf, nextWrite, rulesFor, statusAt, type Thresholds } from './decide.js';
 import type { BestTwo } from './gallery.js';
 
 const t: Thresholds = { acceptMin: 0.5, reviewMin: 0.36 };
@@ -91,35 +91,77 @@ describe('rulesFor', () => {
   });
 });
 
+describe('livenessOf', () => {
+  it('ปิดระบบ (ไม่มีเกณฑ์) = ไม่ตรวจ', () => {
+    expect(livenessOf(0.9, null)).toBe('unchecked');
+  });
+
+  it('ไม่มีคะแนน = ไม่ตรวจ', () => {
+    expect(livenessOf(null, 0.15)).toBe('unchecked');
+    expect(livenessOf(undefined, 0.15)).toBe('unchecked');
+  });
+
+  it('ต่ำกว่าเกณฑ์ = รูปหรือจอ', () => {
+    expect(livenessOf(0.1, 0.15)).toBe('spoof');
+  });
+
+  it('เท่ากับเกณฑ์ = คนจริง', () => {
+    expect(livenessOf(0.15, 0.15)).toBe('live');
+    expect(livenessOf(0.8, 0.15)).toBe('live');
+  });
+});
+
 describe('nextWrite', () => {
-  const camera = (status: 'present' | 'late' | 'absent' | 'pending') => ({
+  const camera = (
+    status: 'present' | 'late' | 'absent' | 'pending',
+    reviewReason: 'spoof' | null = null,
+  ) => ({ status, byTeacher: false, reviewReason });
+  const inc = (status: 'present' | 'late' | 'absent' | 'pending', clearsSpoof = false) => ({
     status,
-    byTeacher: false,
+    clearsSpoof,
   });
 
   it('ยังไม่มีแถว = เพิ่ม', () => {
-    expect(nextWrite(null, { status: 'pending' })).toBe('insert');
-    expect(nextWrite(null, { status: 'present' })).toBe('insert');
+    expect(nextWrite(null, inc('pending'))).toBe('insert');
+    expect(nextWrite(null, inc('present'))).toBe('insert');
   });
 
   it('รอตรวจแล้วเจอแบบมั่นใจ = แทนที่', () => {
-    expect(nextWrite(camera('pending'), { status: 'late' })).toBe('replace');
+    expect(nextWrite(camera('pending'), inc('late'))).toBe('replace');
   });
 
   it('ผลมั่นใจแล้วไม่ถูกทับ ทั้งด้วยรอตรวจและผลใหม่', () => {
-    expect(nextWrite(camera('present'), { status: 'pending' })).toBe('skip');
-    expect(nextWrite(camera('present'), { status: 'late' })).toBe('skip');
-    expect(nextWrite(camera('pending'), { status: 'pending' })).toBe('skip');
+    expect(nextWrite(camera('present'), inc('pending'))).toBe('skip');
+    expect(nextWrite(camera('present'), inc('late'))).toBe('skip');
+    expect(nextWrite(camera('pending'), inc('pending'))).toBe('skip');
+  });
+
+  it('แถวสงสัยรูปหรือจอ เจอแบบมั่นใจแต่ยังไม่ผ่านรอบ = ไม่แทน', () => {
+    expect(nextWrite(camera('pending', 'spoof'), inc('present'))).toBe('skip');
+  });
+
+  it('แถวสงสัยรูปหรือจอ ผ่านครบรอบ = แทนที่', () => {
+    expect(nextWrite(camera('pending', 'spoof'), inc('present', true))).toBe('replace');
+  });
+
+  it('แถวสงสัยรูปหรือจอ ผลใหม่ยังรอตรวจ = ไม่แทน', () => {
+    expect(nextWrite(camera('pending', 'spoof'), inc('pending', true))).toBe('skip');
   });
 
   it('แถวที่อาจารย์แก้แล้ว กล้องไม่แตะ', () => {
-    expect(nextWrite({ status: 'pending', byTeacher: true }, { status: 'present' })).toBe(
-      'skip',
-    );
-    expect(nextWrite({ status: 'absent', byTeacher: true }, { status: 'present' })).toBe('skip');
+    const teacher = (status: 'pending' | 'absent', reviewReason: 'spoof' | null = null) => ({
+      status,
+      byTeacher: true,
+      reviewReason,
+    });
+    expect(nextWrite(teacher('pending'), inc('present'))).toBe('skip');
+    expect(nextWrite(teacher('absent'), inc('present'))).toBe('skip');
+    expect(nextWrite(teacher('pending', 'spoof'), inc('present', true))).toBe('skip');
   });
 
   it('แถวลาไม่ถูกกล้องทับ', () => {
-    expect(nextWrite({ status: 'leave', byTeacher: false }, { status: 'present' })).toBe('skip');
+    expect(
+      nextWrite({ status: 'leave', byTeacher: false, reviewReason: null }, inc('present')),
+    ).toBe('skip');
   });
 });

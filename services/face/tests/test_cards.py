@@ -35,6 +35,18 @@ def test_read_card_requires_token(client):
     assert res.status_code == 401
 
 
+def test_read_card_accepts_25_mb(client, auth):
+    data = png(noise_image())
+    data += b"\0" * (25 * 1024 * 1024 - len(data))
+    assert post(client, auth, data).status_code == 200
+
+
+def test_read_card_rejects_over_25_mb(client, auth):
+    res = post(client, auth, b"x" * (25 * 1024 * 1024 + 1))
+    assert res.status_code == 413
+    assert res.json()["error"]["code"] == "IMAGE_TOO_LARGE"
+
+
 def test_read_card_rejects_non_image(client, auth):
     res = post(client, auth, b"not an image", "c.txt", "text/plain")
     assert res.status_code == 400
