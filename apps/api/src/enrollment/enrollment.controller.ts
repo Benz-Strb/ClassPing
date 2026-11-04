@@ -15,7 +15,8 @@ import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
 import { EnrollmentService, type FaceStatus, type UploadedImage } from './enrollment.service.js';
-import { MAX_IMAGE_BYTES, UploadErrorsInterceptor } from './upload-errors.interceptor.js';
+import { MAX_CARD_BYTES, MAX_IMAGE_BYTES, CardUploadErrorsInterceptor, UploadErrorsInterceptor } from './upload-errors.interceptor.js';
+import { AppError } from '../common/app-error.js';
 
 @Controller()
 export class EnrollmentController {
@@ -36,19 +37,22 @@ export class EnrollmentController {
   @Post('me/identity')
   @HttpCode(200)
   @UseInterceptors(
-    UploadErrorsInterceptor,
+    CardUploadErrorsInterceptor,
     FileFieldsInterceptor(
       [
         { name: 'card', maxCount: 1 },
         { name: 'face', maxCount: 1 },
       ],
-      { limits: { fileSize: MAX_IMAGE_BYTES, files: 2 } },
+      { limits: { fileSize: MAX_CARD_BYTES, files: 2 } },
     ),
   )
   verifyIdentity(
     @CurrentUser() user: AppUser,
     @UploadedFiles() files: { card?: UploadedImage[]; face?: UploadedImage[] } | undefined,
   ): Promise<FaceStatus> {
+    if ((files?.face?.[0]?.buffer.length ?? 0) > MAX_IMAGE_BYTES) {
+      throw new AppError(413, 'IMAGE_TOO_LARGE', 'รูปหน้าใหญ่เกิน 5 MB');
+    }
     return this.enrollment.verifyIdentity(user, files?.card?.[0], files?.face?.[0]);
   }
 

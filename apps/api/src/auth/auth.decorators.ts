@@ -12,7 +12,7 @@ export const ROLES_KEY = 'roles';
 // route ที่เปิดให้เรียกได้โดยไม่ต้อง login
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
-// จำกัดบทบาทที่เรียก route ได้ (แอดมินผ่านทุก route)
+// จำกัดเฉพาะบทบาทที่ระบุ ไม่มีสิทธิ์ข้ามบทบาทอัตโนมัติ
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
 export const CurrentUser = createParamDecorator(

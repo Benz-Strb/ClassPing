@@ -21,8 +21,9 @@ export class ChatService {
   constructor(private readonly repo: ChatRepository, @Inject(CHAT_PROVIDER) private readonly provider: ChatProvider) {}
   async ask(body: unknown, user: AppUser | null) {
     const { message } = parseBody(question, body);
-    const embedding = await this.provider.embed(message);
-    const sources = await this.repo.search(embedding, user?.id ?? null, this.provider.model);
+    const embedding = await this.provider.embed(message, 'query');
+    const viewerId = user?.role === 'student' || user?.role === 'teacher' ? user.id : null;
+    const sources = await this.repo.search(embedding, viewerId, this.provider.model);
     const answer = sources.length ? await this.provider.answer(message, sources) :
       'ไม่พบข้อมูลที่รองรับคำถามนี้ในแหล่งข้อมูลที่คุณมีสิทธิ์เข้าถึง';
     return { answer, sources, mock: this.provider.mock, classroom: 'not_connected' as const };

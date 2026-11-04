@@ -6,7 +6,7 @@ import { CoursesService } from './courses.service.js';
 import { RosterService, type AddResult, type RosterView } from './roster.service.js';
 
 @Controller('courses')
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class CoursesController {
   constructor(
     private readonly courses: CoursesService,
