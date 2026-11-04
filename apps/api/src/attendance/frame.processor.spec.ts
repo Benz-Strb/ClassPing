@@ -8,6 +8,8 @@ import type {
   FaceEmbedding,
   SessionContext,
 } from './attendance.repo.js';
+import type { DoorRepo } from '../door/door.repo.js';
+import { OpenTrips } from '../door/open-trips.js';
 import type { FrameJob } from './frame-queue.js';
 import { FrameProcessor, type FrameDeps } from './frame.processor.js';
 import { LiveFaces } from './live-faces.js';
@@ -55,6 +57,7 @@ function setup(
     complete?: string[];
     liveness?: boolean;
     matchLog?: boolean;
+    openTrips?: string[];
   } = {},
 ) {
   const rows = new Map<string, AttendanceRow & { record: CameraRecord }>();
@@ -65,6 +68,10 @@ function setup(
   let failWrite = false;
   let beforeWrite = () => {};
   let detectCalls = 0;
+  const closes: { userId: string; backAt: Date; by: string }[] = [];
+  let closeResult = true;
+  let failClose: string | null = null;
+  let failLoad = false;
 
   const embeddings: FaceEmbedding[] = [];
   for (const [userId, vector] of [
@@ -112,6 +119,22 @@ function setup(
     uploadCapture: async (path) => void uploads.push(path),
     removeCaptures: async (paths) => void removed.push(...paths),
   };
+  const door: DoorRepo = {
+    insertTrip: async () => true,
+    unknownTripsBefore: async () => [],
+    deleteTrips: async () => undefined,
+    openTripUserIds: async () => {
+      if (failLoad) throw new Error('db down');
+      return opts.openTrips ?? [];
+    },
+    closeTrip: async (_s: string, userId: string, backAt: Date, by: 'front') => {
+      if (failClose === userId) throw new Error('db down');
+      closes.push({ userId, backAt, by });
+      return closeResult;
+    },
+  };
+  const clock = () => new Date(START.getTime() + 3_600_000);
+  const openTrips = new OpenTrips(door, clock);
   const deps: FrameDeps = {
     detect: async () => {
       detectCalls++;
@@ -137,10 +160,17 @@ function setup(
     rejected,
     liveFaces,
     new LiveStreaks(),
+    openTrips,
+    door,
   );
 
   return {
     processor,
+    closes,
+    openTrips,
+    closeReturns: (value: boolean) => (closeResult = value),
+    closeFailsFor: (userId: string) => (failClose = userId),
+    loadFails: () => (failLoad = true),
     rows,
     uploads,
     removed,
@@ -440,5 +470,104 @@ describe('FrameProcessor liveness', () => {
     log.mockRestore();
     expect(lines[0]).toContain('live 0.823');
     expect(lines[1]).toMatch(/\| -$/);
+  });
+});
+
+describe('FrameProcessor กล้องหน้าห้องปิดรอบนอกห้อง', () => {
+  const withLiveness = (embedding: number[], liveness: number) => ({
+    ...face(embedding),
+    liveness,
+  });
+
+  it('match ของคนที่มีรอบเปิด ปิดรอบด้วยเวลาที่รับภาพ และเอาออกจากรายการ', async () => {
+    const t = setup({ openTrips: ['a'] });
+    t.show([face(A)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toEqual([{ userId: 'a', backAt: new Date(job(30).receivedAt), by: 'front' }]);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(false);
+  });
+
+  it('ปิดรอบได้แม้มีแถวเช็คชื่อแล้ว (record ข้าม)', async () => {
+    const t = setup({ openTrips: ['a'] });
+    t.show([face(A)]);
+    await t.processor.process(job(5));
+    t.closes.length = 0;
+    await t.openTrips.add('s1', 'a');
+    await t.processor.process(job(30));
+    expect(t.uploads).toHaveLength(1);
+    expect(t.closes).toHaveLength(1);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(false);
+  });
+
+  it('review ไม่ปิดรอบ', async () => {
+    const t = setup({ openTrips: ['a'] });
+    t.show([face(between)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toHaveLength(0);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('คนที่ไม่มีรอบเปิด ไม่เรียก repo', async () => {
+    const t = setup({ openTrips: ['b'] });
+    t.show([face(A)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toHaveLength(0);
+  });
+
+  it('match แต่ spoof ไม่ปิดรอบ', async () => {
+    const t = setup({ liveness: true, openTrips: ['a'] });
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toHaveLength(0);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('unchecked (ปิดฟีเจอร์) ปิดรอบตามปกติ', async () => {
+    const t = setup({ openTrips: ['a'] });
+    t.show([withLiveness(A, 0.05)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toHaveLength(1);
+  });
+
+  it('live ปิดรอบตามปกติ', async () => {
+    const t = setup({ liveness: true, openTrips: ['a'] });
+    t.show([withLiveness(A, 0.9)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toHaveLength(1);
+  });
+
+  it('repo ไม่ปิดให้ (เวลากลับไม่เกินเวลาออก หรืออาจารย์แก้แล้ว) ไม่เอาออกจากรายการ', async () => {
+    const t = setup({ openTrips: ['a'] });
+    t.closeReturns(false);
+    t.show([face(A)]);
+    await t.processor.process(job(30));
+    expect(t.closes).toHaveLength(1);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('closeTrip พัง log แล้วเช็คชื่อหน้าอื่นในเฟรมต่อ', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const t = setup({ openTrips: ['a'] });
+    t.closeFailsFor('a');
+    t.show([face(A), face(B)]);
+    await expect(t.processor.process(job(30))).resolves.toMatchObject({ matched: 2 });
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+    expect(t.rows.get('a')!.status).toBe('late');
+    expect(t.rows.get('b')!.status).toBe('late');
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('OpenTrips.has โยน error (โหลดจากฐานข้อมูลไม่ได้) log แล้วเช็คชื่อต่อ', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const t = setup({ openTrips: ['a'] });
+    t.loadFails();
+    t.show([face(A), face(B)]);
+    await expect(t.processor.process(job(30))).resolves.toMatchObject({ matched: 2 });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+    expect(t.closes).toHaveLength(0);
+    expect(t.rows.get('a')!.status).toBe('late');
+    expect(t.rows.get('b')!.status).toBe('late');
   });
 });
