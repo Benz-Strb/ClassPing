@@ -209,7 +209,7 @@ describe('CameraService.acceptDoorCrossing', () => {
     expect(outs).toEqual([]);
   });
 
-  it('ไม่มีคาบ หรือเลยเวลาจบ ได้ 409 NO_LIVE_SESSION', async () => {
+  it('ไม่มีคาบได้ 409 NO_LIVE_SESSION (ทั้งออกและเข้า)', async () => {
     const { service, outs } = setup({ live: null });
     await expect(service.acceptDoorCrossing(door, 'out', [jpeg()])).rejects.toMatchObject({
       status: 409,
