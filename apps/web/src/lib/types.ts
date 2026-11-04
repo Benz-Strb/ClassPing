@@ -170,6 +170,8 @@ export interface AttendanceRow {
   imageUrl: string | null;
   // ชื่อคนแก้ล่าสุด null = กล้องบันทึก
   updatedBy: string | null;
+  // เหตุที่ต้องรอตรวจ
+  reviewReason: "spoof" | null;
 }
 
 export interface SessionAttendance {
