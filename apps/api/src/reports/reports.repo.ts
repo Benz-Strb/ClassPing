@@ -51,6 +51,7 @@ interface RawSession {
   title: string | null;
   late_after_min: number | null;
   absent_after_min: number | null;
+  out_of_room_limit_min: number | null;
   rooms: { name: string } | null;
 }
 
@@ -194,7 +195,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
     let sessionQuery = this.db
       .from('sessions')
       .select(
-        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, rooms(name)',
+        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name)',
       )
       .eq('course_id', courseId)
       .order('starts_at', { ascending: true })
@@ -343,6 +344,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
             kind: s.kind,
             lateAfterMin: s.late_after_min,
             absentAfterMin: s.absent_after_min,
+            outOfRoomLimitMin: s.out_of_room_limit_min,
             startsAt,
             endsAt: sessionEndsAt,
           },
