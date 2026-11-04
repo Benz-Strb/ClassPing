@@ -3,6 +3,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { cosine } from '../enrollment/pose-check.js';
+import { DOOR_REPO, type DoorRepo } from '../door/door.repo.js';
+import { OpenTrips } from '../door/open-trips.js';
 import type { DetectedFace, DetectResult } from '../face/face.client.js';
 import {
   ATTENDANCE_REPO,
@@ -63,6 +65,8 @@ export class FrameProcessor {
     private readonly rejected: RejectedGuesses,
     private readonly liveFaces: LiveFaces,
     private readonly streaks: LiveStreaks,
+    private readonly openTrips: OpenTrips,
+    @Inject(DOOR_REPO) private readonly door: DoorRepo,
   ) {}
 
   async process(job: FrameJob): Promise<FrameOutcome> {
@@ -121,12 +125,28 @@ export class FrameProcessor {
         await this.saveUnknown(job.sessionId, context.endsAt, face, seenAt);
         outcome.unknown++;
       } else {
+        if (verdict.kind === 'match' && liveness !== 'spoof') {
+          await this.closeTripIfOut(job.sessionId, verdict.userId, seenAt);
+        }
         await this.record(job.sessionId, context, verdict, face, seenAt, liveness);
         outcome[verdict.kind === 'match' ? 'matched' : 'review']++;
       }
     }
     this.liveFaces.set(job.sessionId, seenAt, live);
     return outcome;
+  }
+
+  // เห็นคนที่ออกนอกห้องอยู่ด้วยความมั่นใจ ปิดรอบ ถ้า repo ไม่ปิดให้ก็ปล่อยไว้
+  // พังตรงนี้ไม่กระทบการเช็คชื่อ
+  private async closeTripIfOut(sessionId: string, userId: string, seenAt: Date) {
+    try {
+      if (!(await this.openTrips.has(sessionId, userId))) return;
+      if (await this.door.closeTrip(sessionId, userId, seenAt, 'front')) {
+        await this.openTrips.remove(sessionId, userId);
+      }
+    } catch (error) {
+      this.logger.warn(`ปิดรอบนอกห้องของ ${userId} ไม่สำเร็จ: ${String(error)}`);
+    }
   }
 
   private async record(
