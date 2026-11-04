@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { KnowledgeChunk } from '../chat/chat.repo.js';
 import { AppError } from '../common/app-error.js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
@@ -14,8 +15,9 @@ export interface CatalogInput {
   content: string;
   active: boolean;
 }
-export interface CatalogEntry extends CatalogInput { id: string; kind: CatalogKind }
+export interface CatalogEntry extends CatalogInput { id: string; kind: CatalogKind; ragStatus?: 'synced' | 'pending' | 'inactive' }
 export interface CatalogRepo {
+  saveKnowledge(id: string | null, row: CatalogInput, chunks: KnowledgeChunk[]): Promise<CatalogEntry | null>;
   list(kind: CatalogKind): Promise<CatalogEntry[]>;
   insert(kind: CatalogKind, rows: CatalogInput[]): Promise<CatalogEntry[]>;
   update(kind: CatalogKind, id: string, row: CatalogInput): Promise<CatalogEntry | null>;
@@ -37,8 +39,26 @@ export class SupabaseCatalogRepo implements CatalogRepo {
       const { data, error } = await this.db.from('admin_catalog').select(COLUMNS).eq('kind', kind).order('id').range(offset, offset + 499);
       if (error) throw dbError();
       entries.push(...(data as CatalogEntry[]));
-      if (data.length < 500) return entries.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+      if (data.length < 500) break;
     }
+    if (kind === 'knowledge' && entries.length) {
+      const keys = new Set<string>();
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await this.db.from('chat_knowledge_sources').select('source_key').like('source_key', 'catalog:%').order('source_key').range(offset, offset + 499);
+        if (error) throw dbError();
+        for (const row of data as { source_key: string }[]) keys.add(row.source_key);
+        if (data.length < 500) break;
+      }
+      for (const entry of entries) entry.ragStatus = !entry.active ? 'inactive' : keys.has(`catalog:${entry.id}`) ? 'synced' : 'pending';
+    }
+    return entries.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+  }
+
+  async saveKnowledge(id: string | null, row: CatalogInput, chunks: KnowledgeChunk[]): Promise<CatalogEntry | null> {
+    const { data, error } = await this.db.rpc('save_catalog_knowledge', { entry_id: id, entry: row, chunks });
+    if (error) throw dbError();
+    if (!data) return null;
+    return { ...(data as CatalogEntry), ragStatus: row.active ? 'synced' : 'inactive' };
   }
 
   async insert(kind: CatalogKind, rows: CatalogInput[]): Promise<CatalogEntry[]> {
