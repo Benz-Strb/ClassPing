@@ -31,6 +31,7 @@ const session: SessionInfo = {
   title: null,
   lateAfterMin: null,
   absentAfterMin: null,
+  outOfRoomLimitMin: null,
   courseId: 'c1',
   scheduleId: 'sch1',
   roomId: 'r1',
