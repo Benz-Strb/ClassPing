@@ -7,11 +7,11 @@ import { AuthGuard } from '../src/auth/auth.guard.js';
 import { RolesGuard } from '../src/auth/roles.guard.js';
 import { ChatModule } from '../src/chat/chat.module.js';
 import { ChatRepository } from '../src/chat/chat.repo.js';
+import { CHAT_PROVIDER, MockChatProvider } from '../src/chat/chat.provider.js';
 import { APP_CONFIG } from '../src/config/config.js';
 import { SUPABASE_ADMIN } from '../src/supabase/supabase.module.js';
 import { UsersService } from '../src/users/users.service.js';
-import { EnvelopeInterceptor } from '../src/common/envelope.interceptor.js';
-import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
+import { configureApp } from '../src/app.setup.js';
 
 describe('Chat HTTP authorization and envelopes', () => {
   let app: INestApplication;
@@ -30,9 +30,10 @@ describe('Chat HTTP authorization and envelopes', () => {
         { provide: UsersService, useValue: { ensureUser: async (user: { id: string }) => ({ id: user.id, role: user.id === 'admin' ? 'admin' : 'student' }) } },
         { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_GUARD, useClass: RolesGuard },
       ],
-    }).overrideProvider(ChatRepository).useValue(repo).compile();
+    }).overrideProvider(ChatRepository).useValue(repo)
+      .overrideProvider(CHAT_PROVIDER).useValue(new MockChatProvider()).compile();
     app = module.createNestApplication();
-    app.useGlobalInterceptors(new EnvelopeInterceptor()); app.useGlobalFilters(new HttpExceptionFilter());
+    configureApp(app);
     await app.init();
   });
   afterEach(async () => { await app?.close(); });
@@ -56,6 +57,12 @@ describe('Chat HTTP authorization and envelopes', () => {
     await request(app.getHttpServer()).post('/chat/student').set('Authorization', 'Bearer student').send({ message: 'ทุน', userId: 'other' }).expect(200);
     expect(repo.search).toHaveBeenCalledWith(expect.any(Array), 'student', 'mock-trigram-v1');
   });
+  it('admin can only retrieve public knowledge even when requesting another identity', async () => {
+    await request(app.getHttpServer()).post('/chat/student').set('Authorization', 'Bearer admin')
+      .send({ message: 'ข้อมูลนักศึกษา', userId: 'student', role: 'student' }).expect(200);
+    expect(repo.search).toHaveBeenCalledWith(expect.any(Array), null, 'mock-trigram-v1');
+  });
+
   it('invalid input uses Thai shared error envelope', async () => {
     const res = await request(app.getHttpServer()).post('/chat/public').send({ message: 123 }).expect(400);
     expect(res.body).toEqual({ error: { code: 'BAD_REQUEST', message: 'ข้อมูลที่ส่งมาไม่ถูกต้อง' } });

@@ -1,0 +1,61 @@
+{
+  "status": "updated-locally; cloud-sync-pending",
+  "figmaUrl": "https://www.figma.com/design/kaMgswYGB5XiMnEMZaFRO6",
+  "screens": 93,
+  "webScreens": 57,
+  "mobileAndResponsiveScreens": 36,
+  "componentFamilies": 7,
+  "instances": 449,
+  "variables": 60,
+  "textStyles": 7,
+  "runtime": {
+    "webLoginHTTP": 200,
+    "authenticatedFlowsTested": false,
+    "nativeMobileRuntimeTested": false
+  },
+  "plannedFeatureScreens": 32,
+  "connectedPrototypeNodes": 586,
+  "flowStartingPoints": 8,
+  "missingPrototypeTargets": [],
+  "visualReference": "/Users/a1/Film/project classping/DESIGN.md",
+  "font": "Kanit",
+  "cloudSync": "Not verified for this revision; previous Desktop sync was pending",
+  "visualReview": "Foundations and mobile overview inspected; full latest-screen visual review incomplete",
+  "historicalBaseline": {
+    "componentVariants": 43,
+    "prototypeLinks": 262,
+    "topLevelOverflow": [],
+    "missingTargets": [],
+    "contrastRatios": {
+      "ink_on_bg": 12.75,
+      "muted_on_white": 6.05,
+      "white_on_action": 6.4,
+      "warning": 5.77,
+      "danger": 5.56,
+      "info": 6.3
+    },
+    "note": "Previous design revision; not latest visual QA"
+  },
+  "theme": "SLCM monochrome",
+  "textNodes": 2052,
+  "contrastIssues": [
+    {
+      "id": "2001:1251",
+      "text": "กำลังโหลด…",
+      "ratio": 4.27,
+      "fixStatus": "Prepared in plugin source; latest rerun unconfirmed"
+    },
+    {
+      "id": "2001:1253",
+      "text": "กำลังโหลด…",
+      "ratio": 4.27,
+      "fixStatus": "Prepared in plugin source; latest rerun unconfirmed"
+    },
+    {
+      "id": "2001:1255",
+      "text": "กำลังโหลด…",
+      "ratio": 4.27,
+      "fixStatus": "Prepared in plugin source; latest rerun unconfirmed"
+    }
+  ]
+}

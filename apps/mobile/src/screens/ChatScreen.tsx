@@ -24,42 +24,76 @@ export function ChatScreen({ authenticated }: { authenticated: boolean }) {
     try {
       const reply = await apiFetch<Reply>(authenticated ? '/chat/student' : '/chat/public', {
         method: 'POST', body: JSON.stringify({ message: question }),
-      });
+      }, 70_000);
       setMessages((items) => [...items.slice(-19), { question, reply }]);
       setText('');
     } catch (e) { setError(e instanceof Error ? e.message : 'ส่งข้อความไม่ได้'); }
     finally { sending.current = false; setBusy(false); }
   }
   return <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    <Text style={styles.heading}>{authenticated ? 'ผู้ช่วยนักศึกษา' : 'Open House / บุคคลทั่วไป'}</Text>
-    <Text>โหมดทดสอบ ยังไม่เชื่อม LLM และ Classroom</Text>
-    <Text>{authenticated ? 'ค้นเฉพาะข้อมูลสาธารณะและข้อมูลที่บัญชีนี้มีสิทธิ์' : 'ค้นเฉพาะแหล่งความรู้สาธารณะ ไม่ต้องเข้าสู่ระบบ'}</Text>
-    <ScrollView ref={history} onContentSizeChange={() => history.current?.scrollToEnd({ animated: true })} style={styles.history} keyboardShouldPersistTaps="handled" accessibilityLabel="ประวัติแชท">
-      {!messages.length && <Text>ถามเกี่ยวกับมหาวิทยาลัยได้ คำตอบจะแสดงข้อความและแหล่งอ้างอิงที่นำเข้าแล้ว</Text>}
-      {messages.map((m, i) => <View key={i} style={styles.message}>
-        <Text style={styles.heading}>คุณ: {m.question}</Text>
-        <Text selectable>{m.reply.answer}</Text>
-        {m.reply.sources.map((s, n) => <View key={s.id}>
-          <Text>แหล่งอ้างอิง [{n + 1}]: {s.title}</Text>
-          {s.url && /^https?:\/\//i.test(s.url) && <Pressable accessibilityRole="link" onPress={() => {
-            void Linking.openURL(s.url!).catch(() => setError('เปิดลิงก์ไม่ได้'));
-          }}><Text style={styles.link}>เปิดแหล่งข้อมูล</Text></Pressable>}
-        </View>)}
+    <View style={styles.header}>
+      <Text accessibilityRole="header" style={styles.heading}>DPU Chat</Text>
+      <Text style={styles.caption}>ถามข้อมูลมหาวิทยาลัย</Text>
+    </View>
+    <ScrollView ref={history} onContentSizeChange={() => history.current?.scrollToEnd({ animated: true })} style={styles.history} contentContainerStyle={styles.historyContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" accessibilityLabel="ประวัติแชท">
+      {!messages.length && <View style={styles.empty}>
+        <Text style={styles.emptyTitle}>อยากรู้อะไรเกี่ยวกับ DPU?</Text>
+        <Text style={styles.caption}>พิมพ์คำถามด้านล่างได้เลย</Text>
+      </View>}
+      {messages.map((m, i) => <View key={i} style={styles.exchange}>
+        <View style={styles.question}><Text selectable style={styles.questionText}>{m.question}</Text></View>
+        <View style={styles.answer}>
+          <Text selectable style={styles.answerText}>{m.reply.answer}</Text>
+          {m.reply.sources.length > 0 && <View style={styles.sources}>
+            <Text style={styles.caption}>แหล่งอ้างอิง</Text>
+            {m.reply.sources.map((source, n) => source.url && /^https?:\/\//i.test(source.url) ? (
+              <Pressable key={source.id} accessibilityRole="link" accessibilityLabel={source.title} style={({ pressed }) => [styles.sourceLink, pressed && styles.pressed]} onPress={() => {
+                void Linking.openURL(source.url!).catch(() => setError('เปิดลิงก์ไม่ได้'));
+              }}><Text style={styles.link}>{n + 1}. {source.title}</Text></Pressable>
+            ) : <Text key={source.id} style={styles.caption}>{n + 1}. {source.title}</Text>)}
+          </View>}
+        </View>
       </View>)}
+      {busy && <View style={styles.loading} accessibilityLiveRegion="polite"><ActivityIndicator color="#111" /><Text style={styles.caption}>กำลังค้นหาคำตอบ…</Text></View>}
     </ScrollView>
-    {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    <TextInput accessibilityLabel="คำถาม" placeholder="พิมพ์คำถาม" value={text} onChangeText={setText}
-      multiline maxLength={2000} editable={!busy} style={styles.input} />
-    <Pressable accessibilityRole="button" accessibilityLabel="ส่งคำถาม" accessibilityState={{ disabled: busy || !text.trim(), busy }} disabled={busy || !text.trim()} onPress={() => void send()} style={[styles.button, (busy || !text.trim()) && styles.disabled]}>
-      {busy ? <ActivityIndicator /> : <Text>ส่งคำถาม</Text>}
-    </Pressable>
+    <View style={styles.composer}>
+      {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+      <View style={styles.inputRow}>
+        <TextInput accessibilityLabel="คำถาม" placeholder="ถามเกี่ยวกับ DPU…" placeholderTextColor="#5e6168" value={text} onChangeText={setText}
+          multiline maxLength={2000} editable={!busy} style={styles.input} />
+        <Pressable accessibilityRole="button" accessibilityLabel="ส่งคำถาม" accessibilityState={{ disabled: busy || !text.trim(), busy }} disabled={busy || !text.trim()} onPress={() => void send()} style={({ pressed }) => [styles.button, (busy || !text.trim()) && styles.disabled, pressed && styles.pressed]}>
+          <Text style={styles.buttonText}>ส่ง</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.notice}>รุ่นทดสอบ · ตอบจากข้อมูลที่มีในระบบ</Text>
+    </View>
   </KeyboardAvoidingView>;
 }
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: 16, gap: 10 }, heading: { fontSize: 18, fontWeight: '600' },
-  history: { flex: 1 }, message: { padding: 12, gap: 8, marginBottom: 12, backgroundColor: '#f2f4f7', borderRadius: 8 },
-  input: { borderWidth: 1, borderColor: '#98a2b3', borderRadius: 8, padding: 12, minHeight: 48, maxHeight: 130 },
-  button: { padding: 14, backgroundColor: '#dbeafe', alignItems: 'center', borderRadius: 8 },
-  link: { color: '#175cd3', paddingVertical: 8 }, error: { color: '#b42318' },
+  root: { flex: 1, backgroundColor: '#efefef' },
+  header: { paddingHorizontal: 24, paddingVertical: 16, gap: 4, borderBottomWidth: 1, borderColor: '#d5d5d5' },
+  heading: { fontSize: 22, fontWeight: '600', color: '#111' },
+  caption: { fontSize: 14, lineHeight: 22, color: '#5e6168' },
+  history: { flex: 1 },
+  historyContent: { flexGrow: 1, padding: 20, gap: 24, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, paddingVertical: 32 },
+  emptyTitle: { fontSize: 22, lineHeight: 32, fontWeight: '600', color: '#111', textAlign: 'center' },
+  exchange: { gap: 16 },
+  question: { alignSelf: 'flex-end', maxWidth: '88%', backgroundColor: '#111', padding: 16, borderRadius: 16 },
+  questionText: { fontSize: 16, lineHeight: 26, color: '#fff' },
+  answer: { alignSelf: 'stretch', gap: 16, paddingVertical: 4 },
+  answerText: { fontSize: 16, lineHeight: 28, color: '#111' },
+  sources: { gap: 8, borderTopWidth: 1, borderColor: '#d5d5d5', paddingTop: 12 },
+  sourceLink: { minHeight: 48, justifyContent: 'center' },
+  link: { fontSize: 14, lineHeight: 22, color: '#111', textDecorationLine: 'underline' },
+  loading: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 8 },
+  composer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 8, backgroundColor: '#efefef', borderTopWidth: 1, borderColor: '#d5d5d5' },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, width: '100%', maxWidth: 800, alignSelf: 'center' },
+  input: { flex: 1, borderWidth: 1, borderColor: '#999', backgroundColor: '#fff', color: '#111', borderRadius: 12, padding: 12, minHeight: 48, maxHeight: 130, fontSize: 16, lineHeight: 24 },
+  button: { minHeight: 48, minWidth: 48, padding: 12, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  buttonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  notice: { fontSize: 12, lineHeight: 18, color: '#5e6168', textAlign: 'center' },
+  error: { color: '#b42318', fontSize: 14, lineHeight: 22 },
   disabled: { opacity: 0.5 },
+  pressed: { opacity: 0.7 },
 });

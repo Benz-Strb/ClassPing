@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
+import { LeaveAccess } from "@/components/leave-access";
 import {
   formatSession,
   formatSubmittedAt,
@@ -13,9 +14,13 @@ import {
   type LeaveSession,
 } from "@/lib/leave";
 
-const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 
 export default function LeavePage() {
+  return <LeaveAccess role="student"><StudentLeavePage /></LeaveAccess>;
+}
+
+function StudentLeavePage() {
   const router = useRouter();
   const [requests, setRequests] = useState<LeaveRequest[] | null>(null);
   const [sessions, setSessions] = useState<LeaveSession[] | null>(null);
@@ -67,7 +72,7 @@ export default function LeavePage() {
       return;
     }
     if (evidence.size > MAX_EVIDENCE_BYTES) {
-      setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 10 MB");
+      setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 25 MB");
       return;
     }
     setReading(true);
@@ -103,7 +108,7 @@ export default function LeavePage() {
       return;
     }
     if (evidence.size > MAX_EVIDENCE_BYTES) {
-      setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 10 MB");
+      setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 25 MB");
       return;
     }
     setSaving(true);
@@ -218,7 +223,7 @@ export default function LeavePage() {
               className="block w-full text-sm"
             />
             <span className="mt-1 block text-sm text-gray-500">
-              PDF, JPG หรือ PNG ขนาดไม่เกิน 10 MB
+              PDF, JPG หรือ PNG ขนาดไม่เกิน 25 MB
             </span>
           </label>
           <button

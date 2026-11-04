@@ -10,7 +10,7 @@ import pypdfium2 as pdfium
 from app.errors import FaceError
 from app.images import MAX_PIXELS, decode_image, invalid, too_large
 
-MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
 MAX_PDF_PAGES = 10
 # PDFium ไม่รองรับการเรียกพร้อมกันหลายเธรด
 PDF_LOCK = Lock()
@@ -18,7 +18,7 @@ PDF_LOCK = Lock()
 
 def document_frames(data: bytes):
     if len(data) > MAX_DOCUMENT_BYTES:
-        raise too_large('หลักฐานใหญ่เกิน 10 MB')
+        raise too_large('หลักฐานใหญ่เกิน 25 MB')
     if not data.startswith(b'%PDF-'):
         yield decode_image(data, MAX_DOCUMENT_BYTES)
         return
