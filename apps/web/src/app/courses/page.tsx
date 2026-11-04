@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
-import type { Course } from "@/lib/types";
+import type { Course, Me } from "@/lib/types";
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -17,8 +17,11 @@ export default function CoursesPage() {
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
-    apiFetch<Course[]>("/courses")
-      .then(setCourses)
+    Promise.all([apiFetch<Course[]>("/courses"), apiFetch<Me>("/me")])
+      .then(([rows, me]) => {
+        if (me.role === "admin") router.replace("/admin/courses");
+        else setCourses(rows);
+      })
       .catch(async (e: unknown) => setError(await handleApiError(e, router)));
   }, [router, version]);
 

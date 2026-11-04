@@ -3,7 +3,7 @@ import { Roles } from '../auth/auth.decorators.js';
 import { RoomsRepo, type Room } from './rooms.repo.js';
 
 @Controller('rooms')
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class RoomsController {
   constructor(private readonly rooms: RoomsRepo) {}
 

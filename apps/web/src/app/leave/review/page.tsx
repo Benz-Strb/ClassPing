@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
+import { LeaveAccess } from "@/components/leave-access";
 import {
   formatSession,
   formatSubmittedAt,
@@ -13,6 +14,10 @@ import {
 } from "@/lib/leave";
 
 export default function LeaveReviewPage() {
+  return <LeaveAccess role="teacher"><TeacherLeaveReviewPage /></LeaveAccess>;
+}
+
+function TeacherLeaveReviewPage() {
   const router = useRouter();
   const [requests, setRequests] = useState<LeaveRequest[] | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});

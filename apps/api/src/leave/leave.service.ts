@@ -11,7 +11,7 @@ import {
   type LeaveSessionOption,
 } from './leave.repo.js';
 
-const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+export const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXTENSIONS: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -33,25 +33,9 @@ export class LeaveService {
     private readonly face: FaceClient,
   ) {}
 
-  async submit(
-    user: AppUser,
-    sessionId: string,
-    reason: string,
+  private validateEvidence(
     evidence?: LeaveEvidence,
-  ) {
-    if (!user.studentId)
-      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
-    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
-      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
-    const cleanReason = typeof reason === 'string' ? reason.trim() : '';
-    if (!cleanReason)
-      throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
-    if (cleanReason.length > 1000)
-      throw new AppError(
-        400,
-        'BAD_REQUEST',
-        'เหตุผลการลายาวเกิน 1000 ตัวอักษร',
-      );
+  ): asserts evidence is LeaveEvidence {
     if (!evidence)
       throw new AppError(400, 'EVIDENCE_REQUIRED', 'กรุณาแนบหลักฐานการลา');
     if (!EXTENSIONS[evidence.mimetype]) {
@@ -65,7 +49,7 @@ export class LeaveService {
       throw new AppError(
         413,
         'EVIDENCE_TOO_LARGE',
-        'ไฟล์หลักฐานต้องมีขนาดไม่เกิน 10 MB',
+        'ไฟล์หลักฐานต้องมีขนาดไม่เกิน 25 MB',
       );
     }
     const validFile =
@@ -74,6 +58,51 @@ export class LeaveService {
         : looksLike(evidence.mimetype, evidence.buffer);
     if (!validFile)
       throw new AppError(400, 'INVALID_EVIDENCE', 'ชนิดไฟล์หลักฐานไม่ถูกต้อง');
+  }
+
+  async preview(user: AppUser, sessionId: string, evidence?: LeaveEvidence) {
+    if (user.role !== 'student' || !user.studentId)
+      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
+    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
+      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
+    this.validateEvidence(evidence);
+    if (!(await this.repo.studentCanRequest(user.id, sessionId)))
+      throw new AppError(
+        404,
+        'SESSION_NOT_FOUND',
+        'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้',
+      );
+    const ocr = await this.face.readLeaveDocument(
+      evidence.buffer,
+      evidence.mimetype,
+    );
+    const text = ocr.lines
+      .map((line) => line.text)
+      .join('\n')
+      .trim();
+    return { text, reason: text.slice(0, 1000) };
+  }
+
+  async submit(
+    user: AppUser,
+    sessionId: string,
+    reason: string,
+    evidence?: LeaveEvidence,
+  ) {
+    if (user.role !== 'student' || !user.studentId)
+      throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
+    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
+      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
+    const cleanReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!cleanReason)
+      throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
+    if (cleanReason.length > 1000)
+      throw new AppError(
+        400,
+        'BAD_REQUEST',
+        'เหตุผลการลายาวเกิน 1000 ตัวอักษร',
+      );
+    this.validateEvidence(evidence);
     if (!(await this.repo.studentCanRequest(user.id, sessionId))) {
       throw new AppError(
         404,
@@ -135,7 +164,7 @@ export class LeaveService {
   }
 
   listSessions(user: AppUser): Promise<LeaveSessionOption[]> {
-    if (!user.studentId)
+    if (user.role !== 'student' || !user.studentId)
       throw new AppError(
         403,
         'STUDENT_ONLY',
@@ -190,8 +219,16 @@ export class LeaveService {
     return { id: requestId, status: decision };
   }
 
+  async listStatuses(user: AppUser) {
+    if (user.role !== 'admin') {
+      throw new AppError(403, 'FORBIDDEN', 'ดูภาพรวมสถานะได้เฉพาะผู้ดูแลระบบ');
+    }
+    const statuses = await this.repo.listStatuses();
+    return statuses.map(({ id, status, createdAt, reviewedAt }) => ({ id, status, createdAt, reviewedAt }));
+  }
+
   listMine(user: AppUser): Promise<LeaveRequestView[]> {
-    if (!user.studentId)
+    if (user.role !== 'student' || !user.studentId)
       throw new AppError(403, 'STUDENT_ONLY', 'ดูคำขอลาได้เฉพาะบัญชีนักศึกษา');
     return this.repo.listByStudent(user.id);
   }

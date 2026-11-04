@@ -12,10 +12,9 @@ import { discardCard } from "../lib/face";
 import { supabase } from "../lib/supabase";
 import type { FaceStatus, Me } from "../lib/types";
 import { ConsentScreen } from "./ConsentScreen";
-import { AttendanceSummarySection } from "./AttendanceSummarySection";
+import { StudentNavigator } from "./StudentNavigator";
 import { EnrollScreen } from "./EnrollScreen";
 import { IdentityScreen } from "./IdentityScreen";
-import { LeaveScreen } from "./LeaveScreen";
 
 const ROLE_LABEL: Record<Me["role"], string> = {
   student: "นักศึกษา",
@@ -28,16 +27,14 @@ interface Props {
   onRejected: (message: string) => void;
 }
 
-const signOut = () => supabase.auth.signOut();
-
 // นักศึกษาต้องยินยอมก่อน ยืนยันบัตร แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
 export function MeScreen({ onRejected }: Props) {
+  const signOut = () => supabase.auth.signOut();
   const [me, setMe] = useState<Me | null>(null);
   const [face, setFace] = useState<FaceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [card, setCard] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
-  const [showLeave, setShowLeave] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -119,8 +116,8 @@ export function MeScreen({ onRejected }: Props) {
     );
   }
 
-  if (me.studentId && showLeave) {
-    return <LeaveScreen onBack={() => setShowLeave(false)} />;
+  if (me.studentId) {
+    return <StudentNavigator me={me} face={face} onSignOut={signOut} />;
   }
 
   return (
@@ -135,12 +132,6 @@ export function MeScreen({ onRejected }: Props) {
         </Text>
       ) : (
         <Text style={styles.pending}>บัญชีนี้ใช้งานบนเว็บ</Text>
-      )}
-      {me.studentId && <AttendanceSummarySection />}
-      {me.studentId && (
-        <Pressable style={styles.primary} onPress={() => setShowLeave(true)}>
-          <Text style={styles.primaryText}>ระบบลา</Text>
-        </Pressable>
       )}
       <Pressable style={styles.button} onPress={signOut}>
         <Text>ออกจากระบบ</Text>

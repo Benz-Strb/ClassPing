@@ -29,6 +29,32 @@ describe('checkCard', () => {
     });
   });
 
+  // PaddleOCR ตัดบรรทัดตรงช่องว่างก่อน ID ในบางขนาดภาพ (ภาพหน้าจอย่อเหลือสูง 1600)
+  it('OCR ตัด OFFICIAL STUDENT VIRTUAL ID เป็นหลายบรรทัดติดกัน ยังผ่าน', () => {
+    const card = CARD.flatMap((l) =>
+      l.text === 'OFFICIAL STUDENT VIRTUAL ID'
+        ? [
+            { text: 'OFFICIAL', score: 0.957 },
+            { text: 'STUDENT VIRTUAL', score: 0.99 },
+            { text: 'ID', score: 0.997 },
+          ]
+        : [l],
+    );
+    expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+
+  it('ชิ้นส่วนของ marker ที่ OCR ไม่มั่นใจ ไม่นับ', () => {
+    const card = CARD.flatMap((l) =>
+      l.text === 'OFFICIAL STUDENT VIRTUAL ID'
+        ? [
+            { text: 'OFFICIAL STUDENT VIRTUAL', score: 0.994 },
+            { text: 'ID', score: 0.5 },
+          ]
+        : [l],
+    );
+    expect(checkCard(card, expect106)).toMatchObject({ ok: false, code: 'CARD_UNREADABLE' });
+  });
+
   it('รหัสบนบัตรเป็นของคนอื่น', () => {
     const card = replace('66112106', { text: '66112126', score: 0.9999 });
     expect(checkCard(card, expect106)).toMatchObject({ ok: false, code: 'CARD_NOT_YOURS' });
