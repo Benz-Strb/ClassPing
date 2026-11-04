@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
-import { cosine, isComplete } from '../enrollment/pose-check.js';
+import { cosine } from '../enrollment/pose-check.js';
 import type { DetectedFace, DetectResult } from '../face/face.client.js';
 import {
   ATTENDANCE_REPO,
@@ -19,7 +19,7 @@ import {
   type Verdict,
 } from './decide.js';
 import type { FrameJob } from './frame-queue.js';
-import { bestTwo, type GalleryEntry } from './gallery.js';
+import { bestTwo, loadCourseGallery, type GalleryEntry } from './gallery.js';
 import { LiveFaces, type LiveFace } from './live-faces.js';
 import { LiveStreaks } from './live-streaks.js';
 import { RejectedGuesses } from './rejected-guesses.js';
@@ -87,7 +87,7 @@ export class FrameProcessor {
     }
 
     const gallery = await this.cached(this.galleries, context.courseId, () =>
-      this.loadGallery(context.courseId),
+      loadCourseGallery(this.repo, this.deps, context.courseId),
     );
     const thresholds = {
       acceptMin: this.config.matchAcceptMin,
@@ -222,24 +222,6 @@ export class FrameProcessor {
     await this.repo.removeCaptures([path]).catch((error: unknown) => {
       this.logger.warn(`ลบรูป ${path} ไม่สำเร็จ: ${String(error)}`);
     });
-  }
-
-  // เทียบเฉพาะคนในวิชาที่ลงทะเบียนครบทุกท่า ด้วยโมเดลเดียวกับที่ service ใช้อยู่
-  private async loadGallery(courseId: string): Promise<GalleryEntry[]> {
-    const userIds = await this.deps.enrolledUserIds(courseId);
-    if (!userIds.length) return [];
-    const rows = await this.repo.faceEmbeddings(userIds, await this.deps.model());
-
-    const byUser = new Map<string, { poses: string[]; embeddings: number[][] }>();
-    for (const row of rows) {
-      const entry = byUser.get(row.userId) ?? { poses: [], embeddings: [] };
-      entry.poses.push(row.pose);
-      entry.embeddings.push(row.embedding);
-      byUser.set(row.userId, entry);
-    }
-    return [...byUser]
-      .filter(([, entry]) => isComplete(entry.poses))
-      .map(([userId, entry]) => ({ userId, embeddings: entry.embeddings }));
   }
 
   private async cached<T>(

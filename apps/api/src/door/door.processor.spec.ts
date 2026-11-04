@@ -106,6 +106,7 @@ describe('DoorProcessor.handleOut', () => {
     await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe('confirmed');
     expect(uploads).toHaveLength(1);
     expect(uploads[0].bytes).toBe('crop');
+    expect(uploads[0].path).toMatch(/^s1\/door\/a-[0-9a-f-]+\.jpg$/);
     expect(trips).toEqual([
       {
         sessionId: 's1',
@@ -139,6 +140,7 @@ describe('DoorProcessor.handleOut', () => {
       processor.handleOut('s1', [image('first'), image('second')], OUT_AT),
     ).resolves.toBe('unknown');
     expect(uploads.map((u) => u.bytes)).toEqual(['first']);
+    expect(uploads[0].path).toMatch(/^s1\/door\/unknown-[0-9a-f-]+\.jpg$/);
     expect(trips[0]).toMatchObject({ userId: null, status: 'unknown', imagePath: uploads[0].path });
     expect(openLoads()).toBe(0);
   });
