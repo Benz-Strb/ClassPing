@@ -27,6 +27,7 @@ export interface StoredAttendance {
   imagePath: string | null;
   updatedBy: string | null;
   updatedByName: string | null;
+  reviewReason: 'spoof' | null;
 }
 
 export interface UnknownFace {
@@ -42,7 +43,12 @@ export interface AttendanceAdminRepo {
   recentUnknown(sessionId: string, limit: number): Promise<UnknownFace[]>;
   signCaptures(paths: string[], seconds: number): Promise<Map<string, string>>;
   // ไม่มีแถวก็เพิ่มใหม่ ค่าอื่นของแถวเดิม (เวลาที่เห็น รูป) คงไว้
-  setStatus(sessionId: string, userId: string, status: AttendanceStatus, teacherId: string): Promise<void>;
+  setStatus(
+    sessionId: string,
+    userId: string,
+    status: AttendanceStatus,
+    teacherId: string,
+  ): Promise<void>;
   moveRow(
     sessionId: string,
     fromUserId: string,
@@ -65,6 +71,7 @@ interface Row {
   confidence: number | null;
   image_path: string | null;
   updated_by: string | null;
+  review_reason: 'spoof' | null;
   editor: { full_name: string | null; email: string } | null;
 }
 
@@ -136,7 +143,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     const { data, error } = await this.db
       .from('attendance')
       .select(
-        'student_id, status, first_seen_at, confidence, image_path, updated_by, ' +
+        'student_id, status, first_seen_at, confidence, image_path, updated_by, review_reason, ' +
           'editor:users!attendance_updated_by_fkey(full_name, email)',
       )
       .eq('session_id', sessionId);
@@ -149,6 +156,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       imagePath: r.image_path,
       updatedBy: r.updated_by,
       updatedByName: r.editor ? (r.editor.full_name ?? r.editor.email) : null,
+      reviewReason: r.review_reason,
     }));
   }
 
@@ -188,6 +196,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
         session_id: sessionId,
         student_id: userId,
         status,
+        review_reason: null,
         updated_by: teacherId,
         updated_at: new Date().toISOString(),
       },
@@ -209,6 +218,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       .update({
         student_id: toUserId,
         status,
+        review_reason: null,
         updated_by: teacherId,
         updated_at: new Date().toISOString(),
       })

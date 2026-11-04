@@ -5,14 +5,24 @@ export const attendanceFilterSchema = z
   .object({
     sessionId: z.string().uuid().optional(),
     kind: z.enum(['all', 'class', 'exam']).default('all'),
-    startDate: z.iso.date({ error: 'วันที่เริ่มต้นต้องเป็นรูปแบบ YYYY-MM-DD' }).optional(),
-    endDate: z.iso.date({ error: 'วันที่สิ้นสุดต้องเป็นรูปแบบ YYYY-MM-DD' }).optional(),
+    startDate: z.iso
+      .date({ error: 'วันที่เริ่มต้นต้องเป็นรูปแบบ YYYY-MM-DD' })
+      .optional(),
+    endDate: z.iso
+      .date({ error: 'วันที่สิ้นสุดต้องเป็นรูปแบบ YYYY-MM-DD' })
+      .optional(),
     studentCode: z.string().trim().min(1).optional(),
   })
-  .refine((filter) => !filter.startDate || !filter.endDate || filter.startDate <= filter.endDate, {
-    error: 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด',
-    path: ['endDate'],
-  });
+  .refine(
+    (filter) =>
+      !filter.startDate ||
+      !filter.endDate ||
+      filter.startDate <= filter.endDate,
+    {
+      error: 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด',
+      path: ['endDate'],
+    },
+  );
 
 export type AttendanceFilterDto = z.infer<typeof attendanceFilterSchema>;
 
@@ -40,6 +50,9 @@ export interface StudentSessionStatus {
   kind: 'class' | 'exam';
   title: string | null;
   status: AttendanceStatus | 'unrecorded';
+  firstSeenAt?: string | null;
+  roomName?: string;
+  imageUrl?: string | null;
 }
 
 export interface StudentAttendanceReport {

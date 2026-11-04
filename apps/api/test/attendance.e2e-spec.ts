@@ -61,17 +61,17 @@ describe('ผลเช็คชื่อรายคาบ (สิทธิ์�
     await app.close();
   });
 
-  it('นักศึกษาได้ 403 ทุก route และไม่ถึง service', async () => {
+  it.each(['student', 'admin'])('%s ได้ 403 ทุก route และไม่ถึง service', async (role) => {
     const server = app.getHttpServer();
-    await request(server).get(`/sessions/${SESSION}/attendance`).set('x-role', 'student').expect(403);
+    await request(server).get(`/sessions/${SESSION}/attendance`).set('x-role', role).expect(403);
     await request(server)
       .patch(`/sessions/${SESSION}/attendance/66000001`)
-      .set('x-role', 'student')
+      .set('x-role', role)
       .send({ status: 'present' })
       .expect(403);
     await request(server)
       .post(`/sessions/${SESSION}/attendance/66000001/review`)
-      .set('x-role', 'student')
+      .set('x-role', role)
       .send({ action: 'confirm' })
       .expect(403);
     expect(calls).toEqual([]);

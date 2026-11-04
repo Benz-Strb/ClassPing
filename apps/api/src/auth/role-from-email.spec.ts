@@ -9,10 +9,10 @@ describe('classifyEmail', () => {
     });
   });
 
-  it('เมลเป็นชื่อเป็นอาจารย์', () => {
+  it('เมลเป็นชื่อไม่ได้สิทธิ์อาจารย์อัตโนมัติ', () => {
     expect(classifyEmail('somsak.kit@dpu.ac.th', [])).toEqual({
       email: 'somsak.kit@dpu.ac.th',
-      role: 'teacher',
+      role: 'student',
       studentId: null,
     });
   });
@@ -50,7 +50,7 @@ describe('classifyEmail', () => {
     expect(classifyEmail(email, [])).toBeNull();
   });
 
-  it('ตัวเลขปนตัวอักษรไม่นับเป็นนักศึกษา', () => {
-    expect(classifyEmail('66112106a@dpu.ac.th', [])?.role).toBe('teacher');
+  it('ตัวเลขปนตัวอักษรไม่ได้รหัสนักศึกษาหรือสิทธิ์อาจารย์', () => {
+    expect(classifyEmail('66112106a@dpu.ac.th', [])).toMatchObject({ role: 'student', studentId: null });
   });
 });

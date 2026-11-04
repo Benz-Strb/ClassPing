@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
@@ -50,6 +51,23 @@ export default function AdminDashboardPage() {
           {error}
         </p>
       )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {[
+          ["/admin/users", "ผู้ใช้และสิทธิ์", "เปลี่ยนบทบาทและรีเซ็ตใบหน้า"],
+          ["/admin/cameras", "กล้องประจำห้อง", "ดูการติดต่อและออก token"],
+          ["/admin/courses", "รายวิชาและตารางเรียน", "จัดกลุ่มเรียนและมอบหมายผู้สอน"],
+          ["/admin/curricula", "หลักสูตร", "เพิ่ม แก้ไข และนำเข้า CSV"],
+          ["/admin/transfers", "เทียบโอน", "เอกสารหลักสูตร ชุดจับคู่ และพิจารณาคำขอ"],
+          ["/admin/reference", "ข้อมูลกลาง", "จัดหมวดและปรับปรุงข้อมูลมหาวิทยาลัย"],
+          ["/admin/knowledge", "แหล่งความรู้", "จัดการเนื้อหาและแหล่งอ้างอิงแชทบอท"],
+          ["/admin/leave-statuses", "สถานะการลา", "ติดตามสถานะการพิจารณาคำขอ"],
+        ].map(([href, title, description]) => (
+          <Link key={href} href={href} className="space-y-1 rounded-lg border bg-white p-4 hover:border-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2">
+            <h3 className="font-medium text-blue-800">{title}</h3>
+            <p className="text-sm text-gray-600">{description}</p>
+          </Link>
+        ))}
+      </div>
       {!summary ? (
         !error && <p role="status">กำลังโหลดข้อมูล...</p>
       ) : (
