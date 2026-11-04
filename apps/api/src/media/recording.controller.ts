@@ -11,7 +11,7 @@ import { PLAYBACK_CLIENT, type PlaybackClient } from './playback.client.js';
 import { RecordingService, type RecordingView } from './recording.service.js';
 
 @Controller('sessions/:id/recording')
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class RecordingController {
   constructor(private readonly recording: RecordingService) {}
 

@@ -1,6 +1,21 @@
 from tests.images import noise_image, png
 
 
+def test_leave_ocr_accepts_25_mb(client, auth):
+    data = png(noise_image())
+    data += b'\0' * (25 * 1024 * 1024 - len(data))
+    response = client.post('/leave/ocr', headers=auth,
+        files={'image': ('leave.png', data, 'image/png')})
+    assert response.status_code == 200
+
+
+def test_leave_ocr_rejects_over_25_mb(client, auth):
+    response = client.post('/leave/ocr', headers=auth,
+        files={'image': ('leave.png', b'x' * (25 * 1024 * 1024 + 1), 'image/png')})
+    assert response.status_code == 413
+    assert response.json()['error']['code'] == 'IMAGE_TOO_LARGE'
+
+
 def test_leave_ocr_returns_text_lines(client, auth, reader):
     reader.lines = [('ลาป่วย', 0.98)]
     response = client.post(

@@ -95,10 +95,25 @@ describe('PUT /me/face/:pose (อัปโหลด)', () => {
     expect(identity).toEqual({ card: undefined, face: undefined });
   });
 
-  it('POST /me/identity บัตรเกิน 5 MB ได้ 413', async () => {
+  it('POST /me/identity บัตร 25 MB ส่งถึง service ได้', async () => {
+    await request(app.getHttpServer()).post('/me/identity')
+      .attach('card', Buffer.alloc(25 * 1024 * 1024, 1), { filename: 'card.png', contentType: 'image/png' })
+      .attach('face', Buffer.alloc(1000, 1), { filename: 'face.jpg', contentType: 'image/jpeg' })
+      .expect(200);
+    expect(identity?.card?.size).toBe(25 * 1024 * 1024);
+  });
+
+  it('POST /me/identity รูปหน้ายังคงจำกัด 5 MB', async () => {
+    await request(app.getHttpServer()).post('/me/identity')
+      .attach('face', Buffer.alloc(6 * 1024 * 1024, 1), { filename: 'face.jpg', contentType: 'image/jpeg' })
+      .expect(413);
+    expect(identity).toBeUndefined();
+  });
+
+  it('POST /me/identity บัตรเกิน 25 MB ได้ 413', async () => {
     await request(app.getHttpServer())
       .post('/me/identity')
-      .attach('card', Buffer.alloc(6 * 1024 * 1024, 1), {
+      .attach('card', Buffer.alloc(25 * 1024 * 1024 + 1, 1), {
         filename: 'card.png',
         contentType: 'image/png',
       })

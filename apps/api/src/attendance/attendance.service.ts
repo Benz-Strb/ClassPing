@@ -27,6 +27,8 @@ export interface AttendanceView {
   imageUrl: string | null;
   // ชื่อคนแก้ล่าสุด null = กล้องบันทึก
   updatedBy: string | null;
+  // เหตุที่ต้องรอตรวจ null = ความเหมือนไม่พอ
+  reviewReason: 'spoof' | null;
 }
 
 export interface SessionAttendance {
@@ -49,7 +51,10 @@ const reviewSchema = z.discriminatedUnion(
     z.object({ action: z.literal('reject') }),
     z.object({
       action: z.literal('reassign'),
-      toCode: z.string({ error: 'กรุณาเลือกนักศึกษา' }).trim().min(1, { error: 'กรุณาเลือกนักศึกษา' }),
+      toCode: z
+        .string({ error: 'กรุณาเลือกนักศึกษา' })
+        .trim()
+        .min(1, { error: 'กรุณาเลือกนักศึกษา' }),
     }),
   ],
   { error: 'คำสั่งไม่ถูกต้อง' },
@@ -98,6 +103,7 @@ export class AttendanceService {
         confidence: row?.confidence ?? null,
         imageUrl: row?.imagePath ? (urls.get(row.imagePath) ?? null) : null,
         updatedBy: row?.updatedBy ? row.updatedByName : null,
+        reviewReason: row?.reviewReason ?? null,
       };
     });
     // รอตรวจขึ้นก่อน ที่เหลือเรียงตามรหัส
@@ -152,7 +158,8 @@ export class AttendanceService {
         await this.repo.insertUnknown(sessionId, row.imagePath, row.firstSeenAt ?? this.now());
       }
       await this.repo.deleteRow(sessionId, userId);
-      this.rejected.reject(sessionId, userId, session.endsAt);
+      // แถว spoof ไม่ล็อกคนนี้ ถ้าตัวจริงเข้ามากล้องจะบันทึกให้ใหม่
+      if (row.reviewReason !== 'spoof') this.rejected.reject(sessionId, userId, session.endsAt);
       return this.view(user, sessionId);
     }
 
@@ -216,8 +223,7 @@ export class AttendanceService {
       onDate: session.onDate,
       startsAt: session.startsAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
-      status:
-        session.endsAt <= now ? 'ended' : session.startsAt <= now ? 'live' : 'upcoming',
+      status: session.endsAt <= now ? 'ended' : session.startsAt <= now ? 'live' : 'upcoming',
     };
   }
 }

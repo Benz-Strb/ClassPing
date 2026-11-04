@@ -5,7 +5,7 @@ import type { Person } from './exams.repo.js';
 import { ExamsService, type ExamView } from './exams.service.js';
 
 @Controller()
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class ExamsController {
   constructor(private readonly exams: ExamsService) {}
 
