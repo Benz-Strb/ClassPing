@@ -16,7 +16,7 @@ describe('statusForReport', () => {
   it('คงผลรอตรวจไว้แม้หมดคาบและมีเวลาพบใบหน้า', () => {
     expect(
       statusForReport(
-        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30 },
+        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30, outOfRoomLimitMin: null },
         courseRules,
         {
           status: 'pending',
@@ -36,7 +36,7 @@ describe('statusForReport', () => {
 
     expect(
       statusForReport(
-        { ...times, kind: 'class', lateAfterMin: null, absentAfterMin: null },
+        { ...times, kind: 'class', lateAfterMin: null, absentAfterMin: null, outOfRoomLimitMin: null },
         courseRules,
         attendance,
         new Date('2026-10-30T09:31:00Z'),
@@ -44,7 +44,7 @@ describe('statusForReport', () => {
     ).toBe('present');
     expect(
       statusForReport(
-        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30 },
+        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30, outOfRoomLimitMin: null },
         courseRules,
         attendance,
         new Date('2026-10-30T09:31:00Z'),
@@ -57,7 +57,7 @@ describe('statusForReport', () => {
 
     expect(
       statusForReport(
-        { ...times, kind: 'class', lateAfterMin: null, absentAfterMin: null },
+        { ...times, kind: 'class', lateAfterMin: null, absentAfterMin: null, outOfRoomLimitMin: null },
         courseRules,
         null,
         now,
@@ -65,7 +65,7 @@ describe('statusForReport', () => {
     ).toBe('unrecorded');
     expect(
       statusForReport(
-        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30 },
+        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30, outOfRoomLimitMin: null },
         courseRules,
         null,
         now,
@@ -79,6 +79,7 @@ describe('statusForReport', () => {
       kind: 'exam' as const,
       lateAfterMin: 10,
       absentAfterMin: null,
+      outOfRoomLimitMin: null,
     };
 
     expect(
