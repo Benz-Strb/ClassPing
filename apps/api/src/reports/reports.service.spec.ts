@@ -130,7 +130,11 @@ describe('ReportsService', () => {
 
   it('รายละเอียดรายวิชาคืนเฉพาะนักศึกษาปัจจุบัน แม้ส่งรหัสคนอื่นมา', async () => {
     const own = {
-      studentCode: studentUser.studentId,
+      studentCode: '66123456',
+      fullName: null,
+      userId: null,
+      totalSessions: 0,
+      attendanceRate: 0,
       sessions: [],
       counts: studentSummary.summary.counts,
     };
