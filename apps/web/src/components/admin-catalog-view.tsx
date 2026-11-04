@@ -61,10 +61,13 @@ export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
   async function uploadText(file: File) {
     setBusy(true); setError(null); setStatus("");
     try {
-      const content = await readAdminText(file);
-      if (content.length > 50_000) throw new Error("เนื้อหาต้องไม่เกิน 50,000 ตัวอักษร");
-      setForm((current) => ({ ...current, content })); setStatus("อ่านไฟล์แล้ว กรุณาตรวจเนื้อหาและกดบันทึก");
-    } catch (value) { setError(value instanceof Error ? value.message : "อ่านไฟล์ไม่ได้"); }
+      if (file.size > 25 * 1024 * 1024) throw new Error("ไฟล์ต้องไม่เกิน 25 MB");
+      const body = new FormData();
+      body.append("file", file);
+      const result = await apiFetch<{ name: string; content: string }>("/admin/catalog/knowledge/extract", { method: "POST", body });
+      setForm((current) => ({ ...current, content: result.content, name: current.name || result.name }));
+      setStatus(`อ่านไฟล์ ${file.name} แล้ว กรุณาตรวจเนื้อหาและกดบันทึก`);
+    } catch (value) { setError(value instanceof Error && !(value instanceof ApiError) ? value.message : await handleApiError(value, router)); }
     finally { setBusy(false); }
   }
   function edit(row: CatalogEntry) {
@@ -105,7 +108,8 @@ export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
           {kind === "reference" && <label className="block text-sm">หมวดข้อมูล<input required maxLength={100} value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} placeholder="เช่น คณะ สาขา ระเบียบ" className={inputClass} /></label>}
           {kind === "knowledge" && <>
             <label className="block text-sm">URL อ้างอิง (ถ้ามี)<input type="url" maxLength={2000} pattern="https?://.*" value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} className={inputClass} /></label>
-            <label className="block text-sm">อ่านเนื้อหาจากไฟล์ข้อความ UTF-8<input type="file" accept=".txt,.md,text/plain,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadText(file); event.target.value = ""; }} className="mt-1 block w-full" /></label>
+            <label className="block text-sm">นำเข้าเนื้อหาจากไฟล์<input type="file" aria-describedby="knowledge-file-help" accept=".pdf,.docx,.txt,.md,.csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadText(file); event.target.value = ""; }} className="mt-1 block w-full" /></label>
+            <p id="knowledge-file-help" className="text-sm text-gray-600">PDF, Word (.docx), TXT, Markdown หรือ CSV ไม่เกิน 25 MB และ 50,000 ตัวอักษร PDF ไม่เกิน 100 หน้า เอกสารสแกนต้องแปลงด้วย OCR ก่อน เนื้อหาจะมาแทนที่ข้อความในช่องด้านล่าง ตรวจสอบก่อนบันทึก</p>
           </>}
           <label className="block text-sm">{kind === "knowledge" ? "เนื้อหาความรู้" : "รายละเอียด"}<textarea required={kind === "knowledge"} maxLength={50000} rows={8} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} className={inputClass} /></label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} />{kind === "knowledge" ? "เปิดใช้ตอบคำถามสาธารณะใน DPU Chat" : "เปิดใช้งาน"}</label>

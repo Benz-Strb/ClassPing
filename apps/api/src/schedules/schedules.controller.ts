@@ -5,7 +5,7 @@ import type { Override, Schedule } from './schedules.repo.js';
 import { SchedulesService } from './schedules.service.js';
 
 @Controller()
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class SchedulesController {
   constructor(private readonly schedules: SchedulesService) {}
 

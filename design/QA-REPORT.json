@@ -5,8 +5,8 @@
   "webScreens": 57,
   "mobileAndResponsiveScreens": 36,
   "componentFamilies": 7,
-  "instances": 446,
-  "variables": 59,
+  "instances": 449,
+  "variables": 60,
   "textStyles": 7,
   "runtime": {
     "webLoginHTTP": 200,
@@ -18,9 +18,9 @@
   "flowStartingPoints": 8,
   "missingPrototypeTargets": [],
   "visualReference": "/Users/a1/Film/project classping/DESIGN.md",
-  "font": "Noto Sans Thai",
-  "cloudSync": "Figma Desktop reports changes saved locally and waiting to reconnect",
-  "visualReview": "Login rendered and inspected; full new-screen visual review is not complete",
+  "font": "Kanit",
+  "cloudSync": "Not verified for this revision; previous Desktop sync was pending",
+  "visualReview": "Foundations and mobile overview inspected; full latest-screen visual review incomplete",
   "historicalBaseline": {
     "componentVariants": 43,
     "prototypeLinks": 262,
@@ -35,5 +35,27 @@
       "info": 6.3
     },
     "note": "Previous design revision; not latest visual QA"
-  }
+  },
+  "theme": "SLCM monochrome",
+  "textNodes": 2052,
+  "contrastIssues": [
+    {
+      "id": "2001:1251",
+      "text": "กำลังโหลด…",
+      "ratio": 4.27,
+      "fixStatus": "Prepared in plugin source; latest rerun unconfirmed"
+    },
+    {
+      "id": "2001:1253",
+      "text": "กำลังโหลด…",
+      "ratio": 4.27,
+      "fixStatus": "Prepared in plugin source; latest rerun unconfirmed"
+    },
+    {
+      "id": "2001:1255",
+      "text": "กำลังโหลด…",
+      "ratio": 4.27,
+      "fixStatus": "Prepared in plugin source; latest rerun unconfirmed"
+    }
+  ]
 }

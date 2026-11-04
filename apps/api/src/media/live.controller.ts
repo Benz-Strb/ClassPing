@@ -10,7 +10,7 @@ import {
 
 // อาจารย์ (รวมคนคุมสอบ) กับแอดมิน สิทธิ์รายคาบตรวจใน LiveService
 @Controller()
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class LiveController {
   constructor(private readonly live: LiveService) {}
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ChatService } from './chat.service.js';
 import { MockChatProvider } from './chat.provider.js';
+import { GeminiChatProvider } from './gemini.provider.js';
 import type { ChatRepository } from './chat.repo.js';
 import type { AppUser } from '../users/users.service.js';
 
@@ -11,6 +12,19 @@ function setup() {
   return { repo, service: new ChatService(repo as unknown as ChatRepository, new MockChatProvider()) };
 }
 describe('ChatService', () => {
+  it('retrieves with Gemini query embeddings and sends only authorized search results to generation', async () => {
+    const { repo } = setup();
+    const provider = new GeminiChatProvider('test-key');
+    const vector = Array<number>(256).fill(0.0625);
+    const embed = vi.spyOn(provider, 'embed').mockResolvedValue(vector);
+    const answer = vi.spyOn(provider, 'answer').mockResolvedValue('สมัครทุนที่ฝ่ายกิจการนักศึกษา [1]');
+    const service = new ChatService(repo as unknown as ChatRepository, provider);
+    const result = await service.ask({ message: 'สมัครทุน', userId: 'other' }, student);
+    expect(embed).toHaveBeenCalledWith('สมัครทุน', 'query');
+    expect(repo.search).toHaveBeenCalledWith(vector, student.id, provider.model);
+    expect(answer).toHaveBeenCalledWith('สมัครทุน', [source]);
+    expect(result.mock).toBe(false);
+  });
   it('always searches anonymous requests with null identity', async () => {
     const { service, repo } = setup();
     const result = await service.ask({ message: 'สมัครทุน', userId: student.id }, null);
