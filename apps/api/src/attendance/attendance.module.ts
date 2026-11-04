@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CLOCK } from '../common/clock.js';
 import { CoursesModule } from '../courses/courses.module.js';
 import { RosterService } from '../courses/roster.service.js';
+import { DoorModule } from '../door/door.module.js';
 import { FaceClient } from '../face/face.client.js';
 import { ATTENDANCE_ADMIN_REPO, SupabaseAttendanceAdminRepo } from './attendance-admin.repo.js';
 import { AttendanceController } from './attendance.controller.js';
@@ -15,7 +16,7 @@ import { RejectedGuesses } from './rejected-guesses.js';
 import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
 
 @Module({
-  imports: [CoursesModule],
+  imports: [CoursesModule, DoorModule],
   controllers: [AttendanceController],
   providers: [
     AttendanceService,

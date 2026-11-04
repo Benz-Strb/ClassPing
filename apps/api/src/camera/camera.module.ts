@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { BullFrameQueue, FRAME_QUEUE } from '../attendance/frame-queue.js';
 import { CLOCK } from '../common/clock.js';
+import { DoorModule } from '../door/door.module.js';
 import { CameraController } from './camera.controller.js';
 import { CameraGuard } from './camera.guard.js';
 import { CAMERA_REPO, SupabaseCameraRepo } from './camera.repo.js';
 import { CameraService } from './camera.service.js';
 
 @Module({
+  imports: [DoorModule],
   controllers: [CameraController],
   providers: [
     CameraService,
