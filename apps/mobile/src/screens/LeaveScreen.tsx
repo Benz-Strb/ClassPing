@@ -20,10 +20,10 @@ import {
 } from "../lib/leave";
 import type { LeaveRequest, LeaveSession } from "../lib/types";
 
-const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 
 interface Props {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function LeaveScreen({ onBack }: Props) {
@@ -72,7 +72,7 @@ export function LeaveScreen({ onBack }: Props) {
     if (!asset) return;
     if (asset.fileSize && asset.fileSize > MAX_EVIDENCE_BYTES) {
       discardLeaveEvidence(asset.uri);
-      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 10 MB");
+      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
       return;
     }
     discardLeaveEvidence(evidence?.uri ?? null);
@@ -137,11 +137,16 @@ export function LeaveScreen({ onBack }: Props) {
   if (sessions === null || requests === null) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
-        {error && <Text style={styles.error}>{error}</Text>}
-        <Pressable style={styles.secondary} onPress={onBack}>
+        {error ? <>
+          <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+          <Pressable accessibilityRole="button" style={styles.secondary} onPress={() => {
+            setError(null);
+            void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
+          }}><Text>ลองใหม่</Text></Pressable>
+        </> : <ActivityIndicator />}
+        {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับหน้าบัญชี</Text>
-        </Pressable>
+        </Pressable>}
       </View>
     );
   }
@@ -156,9 +161,9 @@ export function LeaveScreen({ onBack }: Props) {
           <Text style={styles.title}>ระบบลา</Text>
           <Text style={styles.help}>เลือกคาบและแนบภาพหลักฐาน</Text>
         </View>
-        <Pressable style={styles.secondary} onPress={onBack}>
+        {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับ</Text>
-        </Pressable>
+        </Pressable>}
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -209,7 +214,7 @@ export function LeaveScreen({ onBack }: Props) {
               : "เลือกภาพจากเครื่อง"}
           </Text>
         </Pressable>
-        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 10 MB</Text>
+        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 25 MB</Text>
         <Pressable
           style={styles.secondary}
           onPress={readEvidence}

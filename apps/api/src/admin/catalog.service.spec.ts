@@ -1,3 +1,4 @@
+import { MockChatProvider } from '../chat/chat.provider.js';
 import { CatalogService } from './catalog.service.js';
 import { parseCsv } from './catalog.csv.js';
 import type { CatalogRepo } from './catalog.repo.js';
@@ -6,8 +7,8 @@ import { readFileSync } from 'node:fs';
 const ID = '11111111-1111-4111-8111-111111111111';
 const input = { code: 'CS', name: 'วิทยาการคอมพิวเตอร์', year: 2569, content: '', active: true };
 function setup() {
-  const repo = { list: vi.fn().mockResolvedValue([]), insert: vi.fn().mockImplementation(async (_kind, rows) => rows.map((row: object) => ({ id: ID, ...row }))), update: vi.fn().mockResolvedValue(null) };
-  return { repo, service: new CatalogService(repo as unknown as CatalogRepo) };
+  const repo = { saveKnowledge: vi.fn().mockImplementation(async (id, row) => ({ id: id ?? ID, ...row })), list: vi.fn().mockResolvedValue([]), insert: vi.fn().mockImplementation(async (_kind, rows) => rows.map((row: object) => ({ id: ID, ...row }))), update: vi.fn().mockResolvedValue(null) };
+  return { repo, service: new CatalogService(repo as unknown as CatalogRepo, new MockChatProvider()) };
 }
 
 describe('Catalog validation and atomic import', () => {
@@ -76,5 +77,42 @@ describe('strict CSV', () => {
     for (const csv of ['a\n"unfinished', 'a\nab"c', 'a\n"ok"oops', 'a\n' + 'x\n'.repeat(501), 'x'.repeat(200001)]) {
       expect(() => parseCsv(csv)).toThrow();
     }
+  });
+});
+
+describe('Catalog to chat retrieval', () => {
+  const knowledge = { name: 'ทุนการศึกษา', content: 'ทุนการศึกษา '.repeat(200), url: 'https://www.dpu.ac.th', active: true };
+  it('publishes through the atomic save and produces overlapping chunks', async () => {
+    const { repo, service } = setup();
+    await service.create('knowledge', knowledge);
+    expect(repo.insert).not.toHaveBeenCalled();
+    const [id, entry, chunks] = repo.saveKnowledge.mock.calls[0];
+    expect(id).toBeNull();
+    expect(entry).toMatchObject({ ...knowledge, content: knowledge.content.trim() });
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks[0]).toMatchObject({ content: knowledge.content.trim().slice(0, 1200), model: 'mock-trigram-v1' });
+    expect(chunks[0].embedding).toHaveLength(256);
+    expect(chunks[1].content).toBe(knowledge.content.trim().slice(1000, 2200));
+  });
+  it('updates by stable catalog id, and deactivates without embedding', async () => {
+    const { repo, service } = setup();
+    await service.update('knowledge', ID, { ...knowledge, active: false });
+    expect(repo.saveKnowledge).toHaveBeenCalledWith(ID, expect.objectContaining({ active: false }), []);
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+  it('does not save catalog data if embedding fails', async () => {
+    const { repo } = setup();
+    const provider = new MockChatProvider();
+    vi.spyOn(provider, 'embed').mockRejectedValue(new Error('embedding unavailable'));
+    const service = new CatalogService(repo as unknown as CatalogRepo, provider);
+    await expect(service.create('knowledge', knowledge)).rejects.toThrow('embedding unavailable');
+    expect(repo.saveKnowledge).not.toHaveBeenCalled();
+    expect(repo.insert).not.toHaveBeenCalled();
+  });
+  it('does not report a successful save when the transaction fails', async () => {
+    const { repo, service } = setup();
+    repo.saveKnowledge.mockRejectedValueOnce(new Error('transaction failed'));
+    await expect(service.update('knowledge', ID, knowledge)).rejects.toThrow('transaction failed');
+    expect(repo.update).not.toHaveBeenCalled();
   });
 });

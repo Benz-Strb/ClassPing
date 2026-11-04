@@ -39,7 +39,7 @@ function StatusCounts({ counts }: { counts: AttendanceCounts }) {
   );
 }
 
-export function AttendanceSummarySection() {
+export function AttendanceSummarySection({ mode = "summary" }: { mode?: "summary" | "courses" }) {
   const [data, setData] = useState<StudentAttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -67,7 +67,7 @@ export function AttendanceSummarySection() {
 
   return (
     <View style={styles.section} accessibilityRole="summary">
-      <Text style={styles.heading}>สถิติการเข้าเรียน</Text>
+      <Text style={styles.heading}>{mode === "courses" ? "รายวิชาของฉัน" : "สถิติการเข้าเรียน"}</Text>
 
       {error ? (
         <View style={styles.messageCard}>
@@ -91,16 +91,16 @@ export function AttendanceSummarySection() {
         </View>
       ) : (
         <>
-          <View style={styles.overallCard}>
+          {mode === "summary" && <View style={styles.overallCard}>
             <Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text>
             <Text style={styles.rate}>{data.summary.attendanceRate}%</Text>
             <StatusCounts counts={data.summary.counts} />
             <Text style={styles.muted}>
               รอตรวจยังไม่ใช่ผลยืนยันการเข้าเรียน
             </Text>
-          </View>
+          </View>}
 
-          {data.courses.map(({ course, counts }) => (
+          {mode === "courses" && data.courses.map(({ course, counts }) => (
             <View key={course.id} style={styles.courseCard}>
               <Text style={styles.courseCode}>
                 {course.code}
@@ -148,9 +148,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   overallCard: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#f5f5f5",
     borderWidth: 1,
-    borderColor: "#bfdbfe",
+    borderColor: "#dedede",
     borderRadius: 8,
     padding: 16,
     gap: 8,
@@ -163,14 +163,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardLabel: { color: "#374151", fontSize: 14 },
-  rate: { color: "#1d4ed8", fontSize: 36, fontWeight: "700" },
+  rate: { color: "#111111", fontSize: 36, fontWeight: "700" },
   statsRow: { flexDirection: "row", marginTop: 8 },
   statItem: { flex: 1, alignItems: "center", gap: 2 },
   statNumber: { fontSize: 18, fontWeight: "700" },
   present: { color: "#15803d" },
   late: { color: "#b45309" },
   absent: { color: "#dc2626" },
-  leave: { color: "#2563eb" },
+  leave: { color: "#111111" },
   pending: { color: "#6b7280" },
   statLabel: { color: "#4b5563", fontSize: 12 },
   courseCode: { color: "#111827", fontSize: 16, fontWeight: "600" },
@@ -179,9 +179,9 @@ const styles = StyleSheet.create({
   error: { color: "#dc2626", textAlign: "center" },
   retryButton: {
     borderWidth: 1,
-    borderColor: "#2563eb",
+    borderColor: "#111111",
     borderRadius: 8,
     padding: 8,
   },
-  retryText: { color: "#2563eb", fontWeight: "600" },
+  retryText: { minHeight: 48, textAlignVertical: "center", paddingVertical: 12, color: "#111111", fontWeight: "600" },
 });

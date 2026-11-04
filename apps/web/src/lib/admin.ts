@@ -9,6 +9,7 @@ export interface CatalogEntry {
   url: string | null;
   content: string;
   active: boolean;
+  ragStatus?: "synced" | "pending" | "inactive";
 }
 export interface Camera {
   id: string;

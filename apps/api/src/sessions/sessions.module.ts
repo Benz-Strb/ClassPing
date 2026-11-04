@@ -6,13 +6,16 @@ import { SessionSyncRunner } from './session-sync.runner.js';
 import { SessionsController } from './sessions.controller.js';
 import { SESSIONS_REPO, SupabaseSessionsRepo } from './sessions.repo.js';
 import { SessionsService } from './sessions.service.js';
+import { StudentStudiesController } from './student-studies.controller.js';
+import { StudentStudiesService } from './student-studies.service.js';
 
 // ไม่ import SchedulesModule เพราะจะวนกัน
 @Module({
   imports: [CoursesModule],
-  controllers: [SessionsController],
+  controllers: [SessionsController, StudentStudiesController],
   providers: [
     SessionsService,
+    StudentStudiesService,
     SessionSyncRunner,
     { provide: SESSIONS_REPO, useClass: SupabaseSessionsRepo },
     { provide: SCHEDULES_REPO, useClass: SupabaseSchedulesRepo },

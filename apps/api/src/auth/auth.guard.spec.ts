@@ -276,8 +276,15 @@ describe('RolesGuard', () => {
     );
   });
 
-  it('admin ผ่าน route ที่ต้องการ teacher ได้', () => {
-    const guard = new RolesGuard(reflector({ [ROLES_KEY]: ['teacher'] }));
+  it.each(['teacher', 'student'])('admin ไม่ผ่าน route เฉพาะ %s', (role) => {
+    const guard = new RolesGuard(reflector({ [ROLES_KEY]: [role] }));
+    expect(() => guard.canActivate(context({ user: { ...student, role: 'admin' } }))).toThrow(
+      expect.objectContaining({ code: 'FORBIDDEN' }),
+    );
+  });
+
+  it('admin ผ่าน route ที่ระบุ admin ชัดเจน', () => {
+    const guard = new RolesGuard(reflector({ [ROLES_KEY]: ['teacher', 'admin'] }));
     expect(guard.canActivate(context({ user: { ...student, role: 'admin' } }))).toBe(true);
   });
 

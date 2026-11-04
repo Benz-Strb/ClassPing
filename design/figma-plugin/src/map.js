@@ -1,0 +1,13 @@
+const page=figma.root.children.find(p=>p.name==='01 · System & product map');await figma.setCurrentPageAsync(page);
+if(page.children.some(n=>n.name==='Product map & evidence'))return {existing:true};
+// COMMON
+const f=B(page,'Product map & evidence',1440,'VERTICAL','bg',40,24);f.x=-1600;f.y=0;
+T(f,'ClassPing','Display');T(f,'Product map & UX decisions','Title');T(f,'สำรวจ implementation ณ 2 พฤศจิกายน 2569 · ข้อมูลหน้าจอเป็นตัวอย่างสมมติทั้งหมด','Body','muted',1360);
+T(f,'ข้อเท็จจริงจากโค้ด','Heading');
+for(const text of ['นักศึกษา: Google OAuth → ยินยอม → ภาพบัตรของวันนี้ → หน้า 5 มุม → สรุปเข้าเรียน / ยื่นลา / บัญชี','อาจารย์: รายวิชา → นักศึกษา / ตาราง / คาบสอบ / เกณฑ์ → คาบเรียน → ผลเช็คชื่อ → ตรวจภาพหรือแก้สถานะ → รายงาน CSV/PDF','การลา: นักศึกษาเลือกคาบ + เหตุผล + หลักฐาน → ส่ง → OCR ประกอบการตรวจ → อาจารย์อนุมัติ/ปฏิเสธ → นักศึกษาดูผล','กล้อง: วันที่ → คาบที่มีสิทธิ์ → สด / บันทึกแยกช่วง → ดาวน์โหลดเฉพาะเจ้าของวิชาหรือแอดมิน','แอดมิน: ภาพรวมผู้ใช้/วิชา/ห้อง → เปลี่ยนบทบาท / รีเซ็ตใบหน้า / เพิ่มห้อง; backend มี camera token แต่เว็บยังไม่มีหน้าจัดการ'])T(f,text,'Body','ink',1360);
+T(f,'ข้อเสนอของดีไซน์','Heading');for(const text of ['ใช้ navigation ตามบทบาท และเริ่มรายวิชาที่เช็คชื่อ แทนการเข้ารายชื่อทุกครั้ง','ใช้รายงานสถานะพร้อมคำอธิบาย แยกยังไม่เห็น / รอตรวจ / ขาด; ให้หลักฐานกับการตัดสินใจอยู่ด้วยกัน','แยกหน้าแบบฟอร์มจากหน้ารายการ และแทน browser confirm ด้วย dialog ที่บอกผลกระทบชัดเจน','ใช้ mobile app bar + native pickers + scroll area + bottom actions; คง consent gate และสแกนอัตโนมัติ','หน้า responsive สำหรับอาจารย์เปลี่ยนตารางเป็นแถวข้อมูลแนวตั้ง; ไม่เพิ่มความสามารถใหม่'])T(f,text,'Body','ink',1360);
+T(f,'สิ่งที่ไม่แสดงเป็นฟีเจอร์พร้อมใช้','Heading');T(f,'Classroom sync · chatbot · การเทียบโอน · สถิติเข้าออกประตู · OCR เป็นฟอร์มร่างก่อนส่ง · แก้/ลบห้อง · ระบบแจ้งเตือน · user growth / accuracy claims','Body','muted',1360);
+T(f,'หลักฐานและขอบเขตการตรวจ','Heading');T(f,'อ่าน routes, components, mobile screens, API services, guards และ migrations. เว็บ /login ตอบ HTTP 200; ไม่ได้ทดสอบ flow หลัง OAuth. เครื่องมือ browser ไม่พร้อม, API :3001 ไม่เปิด. ตรวจรูปแบบด้วย Figma render และ native desktop เท่าที่เข้าถึงได้.','Body','muted',1360);
+T(f,'Design system','Heading');T(f,'Campus wayfinding: forest rail / warm paper / mint selection / amber review. IBM Plex Sans Thai. 4px spacing scale, 48px targets, radius 12. สีสื่อความหมายพร้อมข้อความ. Light เป็นฐานสำหรับห้องเรียน; dark theme ยังไม่ใช่ผลส่งมอบที่ตรวจแล้ว.','Body','ink',1360);
+T(f,'ไฟล์และการตรวจความครบถ้วน','Heading');T(f,'ดู DESIGN.md, design/UX-AUDIT.md และ design/SCREEN-COVERAGE.md ใน repository. ไม่แก้ business logic ในรอบนี้. หน้าจอและระบบใหม่ทั้งหมดเป็นข้อเสนอสำหรับ implementation.','Body','muted',1360);
+return {frame:f.id,height:f.height};

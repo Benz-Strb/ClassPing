@@ -40,6 +40,7 @@ def test_load_settings_defaults():
     assert settings.det_size == 640
     assert settings.enroll_min_face_px == 112
     assert settings.max_image_bytes == 5 * 1024 * 1024
+    assert settings.max_card_bytes == 25 * 1024 * 1024
 
 
 def test_unknown_error_is_internal(app, client, auth):
