@@ -42,13 +42,13 @@ class FakeAuth implements CanActivate {
     const req = context
       .switchToHttp()
       .getRequest<{ headers: Record<string, string>; user?: unknown }>();
-    const role = req.headers['x-role'] as 'student' | 'teacher';
+    const role = req.headers['x-role'] as 'student' | 'teacher' | 'admin';
     req.user = {
       id: req.headers['x-user'] ?? `${role}-user`,
       email: `${role}@dpu.ac.th`,
       fullName: role === 'student' ? 'นักศึกษา ทดสอบ' : 'อาจารย์ ทดสอบ',
       role,
-      studentId: role === 'student' ? '66000001' : null,
+      studentId: role === 'student' || role === 'admin' ? '66000001' : null,
       pdpaConsentAt: null,
       identityVerifiedAt: null,
     };
@@ -59,6 +59,10 @@ class FakeAuth implements CanActivate {
 class MemoryLeaveRepo implements LeaveRepo {
   requests: LeaveRequestView[] = [];
   attendance = new Map<string, string>();
+
+  async listStatuses() {
+    return this.requests.map((item) => ({ ...item }));
+  }
 
   async listEligibleSessions() {
     return [SESSION];
@@ -200,6 +204,53 @@ describe('ระบบลา (e2e)', () => {
     await app.close();
   });
 
+  it('แอดมินเห็นเฉพาะสถานะ ไม่มีเหตุผล OCR หมายเหตุ หรือไฟล์แนบ', async () => {
+    const server = app.getHttpServer();
+    await request(server).post('/leave-requests').set('x-role', 'student')
+      .field('sessionId', SESSION.id).field('reason', 'ข้อมูลส่วนตัวที่แอดมินห้ามเห็น')
+      .attach('evidence', PNG, { filename: 'private-evidence.png', contentType: 'image/png' }).expect(201);
+    const requestId = repo.requests[0].id;
+    for (const status of ['pending', 'approved'] as const) {
+      if (status === 'approved') {
+        await request(server).post(`/leave-requests/${requestId}/review`).set('x-role', 'teacher')
+          .send({ decision: 'approved', reviewNote: 'หมายเหตุส่วนตัว' }).expect(200);
+      }
+      const response = await request(server).get('/leave-requests/statuses').set('x-role', 'admin').expect(200);
+      expect(response.body.data).toEqual([{
+        id: requestId, status, createdAt: repo.requests[0].createdAt, reviewedAt: repo.requests[0].reviewedAt,
+      }]);
+      expect(JSON.stringify(response.body)).not.toContain('ข้อมูลส่วนตัว');
+      expect(JSON.stringify(response.body)).not.toContain('private-evidence');
+      await request(server).get(`/leave-requests/${requestId}/evidence`).set('x-role', 'admin').expect(403);
+      await request(server).get('/leave-requests/review').set('x-role', 'admin').expect(403);
+    }
+    for (const role of ['student', 'teacher']) {
+      await request(server).get('/leave-requests/statuses').set('x-role', role).expect(403);
+    }
+  });
+
+  it('รับหลักฐาน 25 MB ทั้งอ่านร่างและยื่นลา', async () => {
+    const evidence = Buffer.alloc(25 * 1024 * 1024);
+    PNG.copy(evidence);
+    for (const path of ['/leave-requests/preview', '/leave-requests']) {
+      await request(app.getHttpServer()).post(path).set('x-role', 'student')
+        .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+        .attach('evidence', evidence, { filename: 'leave.png', contentType: 'image/png' })
+        .expect(path.endsWith('preview') ? 200 : 201);
+    }
+    expect(repo.requests).toHaveLength(1);
+  });
+
+  it('ปฏิเสธหลักฐานเกิน 25 MB ทั้งอ่านร่างและยื่นลา', async () => {
+    for (const path of ['/leave-requests/preview', '/leave-requests']) {
+      await request(app.getHttpServer()).post(path).set('x-role', 'student')
+        .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+        .attach('evidence', Buffer.alloc(25 * 1024 * 1024 + 1), { filename: 'leave.png', contentType: 'image/png' })
+        .expect(413);
+    }
+    expect(repo.requests).toHaveLength(0);
+  });
+
   it('นักศึกษาเลือกคาบ ยื่นหลักฐาน และอาจารย์อนุมัติจน attendance เป็น leave', async () => {
     const server = app.getHttpServer();
     await request(server)
@@ -324,6 +375,20 @@ describe('ระบบลา (e2e)', () => {
       });
 
     expect(repo.attendance.get(attendanceKey)).toBe('absent');
+  });
+
+  it('ปฏิเสธแอดมินที่มีรหัสนักศึกษาจาก API ระบบลา', async () => {
+    const server = app.getHttpServer();
+    for (const path of ['sessions', 'mine', 'review', 'pending']) {
+      await request(server).get(`/leave-requests/${path}`).set('x-role', 'admin').expect(403);
+    }
+    for (const path of ['/leave-requests', '/leave-requests/preview']) {
+      await request(server).post(path).set('x-role', 'admin')
+        .field('sessionId', SESSION.id).field('reason', 'ทดสอบ')
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' }).expect(403);
+    }
+    await request(server).post('/leave-requests/22222222-2222-4222-8222-222222222222/review')
+      .set('x-role', 'admin').send({ decision: 'approved' }).expect(403);
   });
 
   it('ป้องกัน role ผิด, session ที่ไม่ได้ลงทะเบียน และ decision ที่ไม่รองรับ', async () => {

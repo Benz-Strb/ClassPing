@@ -8,8 +8,7 @@ export interface ClassifiedEmail {
 
 const ALLOWED_DOMAIN = 'dpu.ac.th';
 
-// นักศึกษาและอาจารย์ใช้โดเมนเดียวกัน แยกจากส่วนหน้า @
-// เลขล้วน = รหัสนักศึกษา, อย่างอื่น = อาจารย์, แอดมินดูจากรายชื่อใน env
+// บัญชีใหม่เริ่มด้วยสิทธิ์นักศึกษา อาจารย์ต้องได้รับมอบหมายบทบาทจากแอดมิน
 export function classifyEmail(
   rawEmail: string,
   adminEmails: string[],
@@ -29,5 +28,5 @@ export function classifyEmail(
     return { email, role: 'admin', studentId };
   }
 
-  return { email, role: studentId ? 'student' : 'teacher', studentId };
+  return { email, role: 'student', studentId };
 }

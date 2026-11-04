@@ -24,7 +24,7 @@ export function ChatScreen({ authenticated }: { authenticated: boolean }) {
     try {
       const reply = await apiFetch<Reply>(authenticated ? '/chat/student' : '/chat/public', {
         method: 'POST', body: JSON.stringify({ message: question }),
-      });
+      }, 70_000);
       setMessages((items) => [...items.slice(-19), { question, reply }]);
       setText('');
     } catch (e) { setError(e instanceof Error ? e.message : 'ส่งข้อความไม่ได้'); }
