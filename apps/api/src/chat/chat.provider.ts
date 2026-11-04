@@ -5,7 +5,7 @@ export const CHAT_PROVIDER = Symbol('CHAT_PROVIDER');
 export interface ChatProvider {
   readonly model: string;
   readonly mock: boolean;
-  embed(text: string): Promise<number[]>;
+  embed(text: string, purpose?: 'document' | 'query'): Promise<number[]>;
   answer(question: string, sources: ChatSource[]): Promise<string>;
 }
 

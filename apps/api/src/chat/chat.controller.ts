@@ -11,6 +11,7 @@ export class ChatController {
   @HttpCode(200)
   publicAsk(@Body() body: unknown) { return this.chat.ask(body, null); }
   @Post('student')
+  @Roles('student', 'teacher', 'admin')
   @HttpCode(200)
   studentAsk(@CurrentUser() user: AppUser, @Body() body: unknown) { return this.chat.ask(body, user); }
   @Roles('admin')

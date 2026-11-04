@@ -72,3 +72,19 @@ export interface StudentAttendanceSummary {
     attendanceRate: number;
   }[];
 }
+
+export interface StudentStudies {
+  from: string;
+  to: string;
+  courses: { id: string; code: string; name: string; section: string | null }[];
+  sessions: {
+    id: string;
+    courseId: string;
+    kind: 'class' | 'exam';
+    title: string | null;
+    onDate: string;
+    startsAt: string;
+    endsAt: string;
+    roomName: string | null;
+  }[];
+}
