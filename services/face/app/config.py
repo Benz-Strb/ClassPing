@@ -18,6 +18,7 @@ class Settings:
     liveness_model: str = ""
     liveness_min_face_px: int = 40
     max_image_bytes: int = 5 * 1024 * 1024
+    max_card_bytes: int = 25 * 1024 * 1024
     max_json_bytes: int = 8 * 1024 * 1024
 
 
@@ -47,5 +48,6 @@ def load_settings(env: Mapping[str, str]) -> Settings:
         liveness_model=liveness_model,
         liveness_min_face_px=get("LIVENESS_MIN_FACE_PX", defaults.liveness_min_face_px, int),
         max_image_bytes=get("MAX_IMAGE_BYTES", defaults.max_image_bytes, int),
+        max_card_bytes=get("MAX_CARD_BYTES", defaults.max_card_bytes, int),
         max_json_bytes=get("MAX_JSON_BYTES", defaults.max_json_bytes, int),
     )

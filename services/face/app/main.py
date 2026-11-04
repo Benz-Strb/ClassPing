@@ -57,6 +57,8 @@ def check_body_size(request: Request, settings: Settings):
         return error_response(411, "LENGTH_REQUIRED", "ต้องระบุขนาดข้อมูลที่ส่ง")
     is_upload = request.headers.get("content-type", "").startswith("multipart/")
     upload_limit = MAX_DOCUMENT_BYTES if request.url.path == "/leave/ocr" else settings.max_image_bytes
+    if request.url.path == "/cards/read":
+        upload_limit = settings.max_card_bytes
     limit = upload_limit + MULTIPART_OVERHEAD if is_upload else settings.max_json_bytes
     if int(length) > limit:
         return error_response(413, "REQUEST_TOO_LARGE", "ข้อมูลที่ส่งมาใหญ่เกินไป")
@@ -147,7 +149,7 @@ def create_app(
     @app.post("/cards/read")
     def read_card(image: UploadFile):
         frame = decode_image(
-            read_upload(image.file, settings.max_image_bytes), settings.max_image_bytes
+            read_upload(image.file, settings.max_card_bytes), settings.max_card_bytes
         )
         faces = sorted(real_faces(engine.analyze(frame)), key=lambda f: -face_size(f.bbox))
         return {

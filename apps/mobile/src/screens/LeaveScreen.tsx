@@ -20,7 +20,7 @@ import {
 } from "../lib/leave";
 import type { LeaveRequest, LeaveSession } from "../lib/types";
 
-const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
+const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 
 interface Props {
   onBack?: () => void;
@@ -72,7 +72,7 @@ export function LeaveScreen({ onBack }: Props) {
     if (!asset) return;
     if (asset.fileSize && asset.fileSize > MAX_EVIDENCE_BYTES) {
       discardLeaveEvidence(asset.uri);
-      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 10 MB");
+      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
       return;
     }
     discardLeaveEvidence(evidence?.uri ?? null);
@@ -214,7 +214,7 @@ export function LeaveScreen({ onBack }: Props) {
               : "เลือกภาพจากเครื่อง"}
           </Text>
         </Pressable>
-        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 10 MB</Text>
+        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 25 MB</Text>
         <Pressable
           style={styles.secondary}
           onPress={readEvidence}

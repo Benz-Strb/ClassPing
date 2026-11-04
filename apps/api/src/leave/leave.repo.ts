@@ -51,7 +51,15 @@ export interface LeaveRequestView {
   attachments: { fileName: string; mime: string; size: number }[];
 }
 
+export interface LeaveStatusView {
+  id: string;
+  status: LeaveRequestView['status'];
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
 export interface LeaveRepo {
+  listStatuses(): Promise<LeaveStatusView[]>;
   listEligibleSessions(studentId: string): Promise<LeaveSessionOption[]>;
   studentCanRequest(studentId: string, sessionId: string): Promise<boolean>;
   createRequest(input: LeaveRequestInput): Promise<LeaveRequestRecord>;
@@ -297,6 +305,20 @@ export class SupabaseLeaveRepo implements LeaveRepo {
       throw new Error(error.message);
     }
     throw dbError();
+  }
+
+  async listStatuses(): Promise<LeaveStatusView[]> {
+    const { data, error } = await this.db.from('leave_requests')
+      .select('id, status, created_at, reviewed_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw dbError();
+    return (data ?? []).map((row) => ({
+      id: row.id as string,
+      status: row.status as LeaveRequestView['status'],
+      createdAt: row.created_at as string,
+      reviewedAt: row.reviewed_at as string | null,
+    }));
   }
 
   async listByStudent(studentId: string): Promise<LeaveRequestView[]> {
