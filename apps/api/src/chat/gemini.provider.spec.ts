@@ -36,7 +36,7 @@ describe('Gemini provider', () => {
     expect(JSON.parse(fetcher.mock.calls[0][1].body).taskType).toBe('RETRIEVAL_QUERY');
   });
 
-  it.each([[], Array<number>(768).fill(1), Array<number>(256).fill(0), ['wrong']])('rejects invalid embeddings %#', async (values) => {
+  it.each([{ values: [] }, { values: Array<number>(768).fill(1) }, { values: Array<number>(256).fill(0) }, { values: ['wrong'] }])('rejects invalid embeddings %#', async ({ values }) => {
     const { provider } = setup({ embedding: { values } });
     await expect(provider.embed('ทุน')).rejects.toMatchObject({ code: 'GEMINI_EMBEDDING' });
   });
