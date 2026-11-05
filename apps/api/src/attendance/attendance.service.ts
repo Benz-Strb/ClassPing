@@ -5,6 +5,9 @@ import { CLOCK, type Clock } from '../common/clock.js';
 import { parseBody } from '../common/validate.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { RosterService } from '../courses/roster.service.js';
+import { DoorEntries } from '../door/door-entries.js';
+import { DOOR_REPO, type DoorRepo, type StoredTrip } from '../door/door.repo.js';
+import { outOfRoom, tripSeconds, type OutLabel } from '../door/out-of-room.js';
 import type { SessionView } from '../sessions/sessions.service.js';
 import type { AppUser } from '../users/users.service.js';
 import {
@@ -29,12 +32,39 @@ export interface AttendanceView {
   updatedBy: string | null;
   // เหตุที่ต้องรอตรวจ null = ความเหมือนไม่พอ
   reviewReason: 'spoof' | null;
+  outOfRoom: {
+    totalSeconds: number;
+    minutes: number;
+    label: OutLabel | null;
+    trips: TripView[];
+  };
+}
+
+export interface TripView {
+  id: string;
+  outAt: string;
+  backAt: string | null;
+  backBy: 'front' | 'teacher' | null;
+  seconds: number;
+  imageUrl: string | null;
+  // เวลาที่กล้องประตูเห็นเข้าห้องครั้งแรกหลังออก เสนอเป็นเวลากลับ เฉพาะรอบที่ยังไม่กลับ
+  suggestedBackAt: string | null;
 }
 
 export interface SessionAttendance {
-  session: SessionView;
+  session: SessionView & { outOfRoomLimitMin: number };
   rows: AttendanceView[];
   unknown: { imageUrl: string; seenAt: string }[];
+  // รอบนอกห้องที่กล้องไม่แน่ใจว่าใคร รออาจารย์ตรวจ
+  tripReviews: {
+    id: string;
+    guessCode: string;
+    guessName: string | null;
+    score: number | null;
+    outAt: string;
+    imageUrl: string | null;
+  }[];
+  unknownTrips: { id: string; outAt: string; imageUrl: string | null }[];
 }
 
 const SIGNED_URL_SECONDS = 600;
@@ -74,20 +104,42 @@ export class AttendanceService {
     @Inject(ATTENDANCE_ADMIN_REPO) private readonly repo: AttendanceAdminRepo,
     @Inject(CLOCK) private readonly now: Clock,
     private readonly rejected: RejectedGuesses,
+    @Inject(DOOR_REPO) private readonly door: DoorRepo,
+    private readonly doorEntries: DoorEntries,
   ) {}
 
   async view(user: AppUser, sessionId: string): Promise<SessionAttendance> {
     const session = await this.owned(user, sessionId);
-    const [entries, rows, unknown] = await Promise.all([
+    const [entries, rows, unknown, trips, courseRules] = await Promise.all([
       this.roster.entries(session.courseId),
       this.repo.listBySession(sessionId),
       this.repo.recentUnknown(sessionId, UNKNOWN_LIMIT),
+      this.door.listTrips(sessionId),
+      this.repo.rules(session.courseId),
     ]);
     const byUser = new Map(rows.map((r) => [r.userId, r]));
+    const limitMin = rulesFor(session, courseRules).outOfRoomLimitMin;
+
+    const tripsByUser = new Map<string, StoredTrip[]>();
+    for (const t of trips) {
+      if (t.status !== 'confirmed' || !t.userId) continue;
+      tripsByUser.set(t.userId, [...(tripsByUser.get(t.userId) ?? []), t]);
+    }
+    const reviews = trips
+      .filter((t) => t.status === 'pending')
+      .sort((a, b) => b.outAt.getTime() - a.outAt.getTime());
+    const unknownTrips = trips
+      .filter((t) => t.status === 'unknown')
+      .sort((a, b) => b.outAt.getTime() - a.outAt.getTime())
+      .slice(0, UNKNOWN_LIMIT);
+
     const urls = await this.repo.signCaptures(
       [
         ...rows.flatMap((r) => (r.imagePath ? [r.imagePath] : [])),
         ...unknown.map((u) => u.imagePath),
+        ...[...tripsByUser.values(), reviews, unknownTrips].flatMap((list) =>
+          list.flatMap((t) => (t.imagePath ? [t.imagePath] : [])),
+        ),
       ],
       SIGNED_URL_SECONDS,
     );
@@ -104,6 +156,12 @@ export class AttendanceService {
         imageUrl: row?.imagePath ? (urls.get(row.imagePath) ?? null) : null,
         updatedBy: row?.updatedBy ? row.updatedByName : null,
         reviewReason: row?.reviewReason ?? null,
+        outOfRoom: this.outOfRoomView(
+          session,
+          limitMin,
+          (entry.userId && tripsByUser.get(entry.userId)) || [],
+          urls,
+        ),
       };
     });
     // รอตรวจขึ้นก่อน ที่เหลือเรียงตามรหัส
@@ -114,12 +172,55 @@ export class AttendanceService {
     );
 
     return {
-      session: this.sessionView(session),
+      session: { ...this.sessionView(session), outOfRoomLimitMin: limitMin },
       rows: views,
       unknown: unknown.flatMap((u) => {
         const imageUrl = urls.get(u.imagePath);
         return imageUrl ? [{ imageUrl, seenAt: u.seenAt.toISOString() }] : [];
       }),
+      tripReviews: reviews.flatMap((t) => {
+        const guess = entries.find((e) => e.userId === t.userId);
+        if (!guess) return [];
+        return [
+          {
+            id: t.id,
+            guessCode: guess.studentCode,
+            guessName: guess.fullName,
+            score: t.confidence,
+            outAt: t.outAt.toISOString(),
+            imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
+          },
+        ];
+      }),
+      unknownTrips: unknownTrips.map((t) => ({
+        id: t.id,
+        outAt: t.outAt.toISOString(),
+        imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
+      })),
+    };
+  }
+
+  private outOfRoomView(
+    session: SessionInfo,
+    limitMin: number,
+    trips: StoredTrip[],
+    urls: Map<string, string>,
+  ): AttendanceView['outOfRoom'] {
+    const sorted = [...trips].sort((a, b) => a.outAt.getTime() - b.outAt.getTime());
+    return {
+      ...outOfRoom(sorted, session.endsAt, limitMin),
+      trips: sorted.map((t) => ({
+        id: t.id,
+        outAt: t.outAt.toISOString(),
+        backAt: t.backAt?.toISOString() ?? null,
+        backBy: t.backBy,
+        seconds: tripSeconds(t, session.endsAt),
+        imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
+        suggestedBackAt: t.backAt
+          ? null
+          : (this.doorEntries.between(session.id, t.outAt, session.endsAt)[0]?.toISOString() ??
+            null),
+      })),
     };
   }
 
@@ -183,7 +284,7 @@ export class AttendanceService {
   }
 
   // คาบของวิชาคนอื่นตอบเหมือนหาไม่เจอ
-  private async owned(user: AppUser, sessionId: string): Promise<SessionInfo> {
+  async owned(user: AppUser, sessionId: string): Promise<SessionInfo> {
     // id ผิดรูปแบบส่งไปถึง Postgres จะได้ error แทนที่จะเป็น 404
     if (!UUID.test(sessionId)) throw sessionNotFound();
     const session = await this.repo.session(sessionId);

@@ -79,7 +79,9 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
   async sessionContext(sessionId: string): Promise<SessionContext | null> {
     const { data, error } = await this.db
       .from('sessions')
-      .select('course_id, starts_at, ends_at, kind, late_after_min, absent_after_min')
+      .select(
+        'course_id, starts_at, ends_at, kind, late_after_min, absent_after_min, out_of_room_limit_min',
+      )
       .eq('id', sessionId)
       .maybeSingle();
     if (error) throw dbError();
@@ -91,6 +93,7 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
       kind: 'class' | 'exam';
       late_after_min: number | null;
       absent_after_min: number | null;
+      out_of_room_limit_min: number | null;
     };
 
     const { data: rules, error: rulesError } = await this.db
@@ -114,6 +117,7 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
           kind: session.kind,
           lateAfterMin: session.late_after_min,
           absentAfterMin: session.absent_after_min,
+          outOfRoomLimitMin: session.out_of_room_limit_min,
         },
         r
           ? {
