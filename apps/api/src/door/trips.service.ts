@@ -44,6 +44,8 @@ const reviewSchema = z.discriminatedUnion(
         .string({ error: 'กรุณาเลือกนักศึกษา' })
         .trim()
         .min(1, { error: 'กรุณาเลือกนักศึกษา' }),
+      // อาจารย์กรอกเวลากลับพร้อมระบุตัว (รอบที่กล้องไม่เห็นตอนกลับ)
+      backAt: z.iso.datetime({ offset: true, error: 'เวลากลับไม่ถูกต้อง' }).optional(),
     }),
   ],
   { error: 'คำสั่งไม่ถูกต้อง' },
@@ -139,11 +141,11 @@ export class TripsService {
     if (input.action === 'reject') {
       await this.drop(sessionId, trip);
     } else if (input.action === 'confirm') {
-      if (!(await this.door.identify(sessionId, tripId, trip.userId!, false))) {
+      if (!(await this.door.identify(sessionId, tripId, trip.userId!, 'keep'))) {
         throw new AppError(409, 'TRIP_NOT_REVIEWABLE', 'รอบนี้ไม่ได้รอตรวจแล้ว');
       }
     } else {
-      await this.reassign(session, trip, others, input.toCode);
+      await this.reassign(user, session, trip, others, input);
     }
     return this.attendance.view(user, sessionId);
   }
@@ -189,22 +191,28 @@ export class TripsService {
   }
 
   private async reassign(
+    user: AppUser,
     session: SessionInfo,
     trip: StoredTrip,
     others: StoredTrip[],
-    toCode: string,
+    input: { toCode: string; backAt?: string },
   ): Promise<void> {
-    const toUserId = await this.account(session.courseId, toCode);
-    // เวลากลับที่กล้องหน้าห้องจับได้เป็นของคนที่จำผิด จึงล้างทิ้ง
-    const clearBack = trip.backBy === 'front';
-    const span = { outAt: trip.outAt, backAt: clearBack ? null : trip.backAt };
+    const toUserId = await this.account(session.courseId, input.toCode);
+    const backAt = input.backAt ? new Date(input.backAt) : null;
+    if (backAt && (backAt <= trip.outAt || backAt > session.endsAt)) {
+      throw new AppError(400, 'BAD_BACK_TIME', 'เวลากลับต้องอยู่หลังเวลาออกและไม่เกินหมดคาบ');
+    }
+    // เวลากลับที่กล้องหน้าห้องจับได้เป็นของคนที่จำผิด จึงล้างทิ้ง (คนเดิมที่เดาไว้ไม่ต้อง)
+    const clear = !backAt && trip.backBy === 'front' && toUserId !== trip.userId;
+    const span = { outAt: trip.outAt, backAt: backAt ?? (clear ? null : trip.backAt) };
     const target = others.filter((o) => o.userId === toUserId);
     if (span.backAt === null && target.some((o) => o.backAt === null)) {
       throw this.tripOpen();
     }
     this.checkOverlap(span, target, toUserId);
 
-    if (!(await this.door.identify(session.id, trip.id, toUserId, clearBack))) {
+    const back = backAt ? { at: backAt, by: user.id } : clear ? 'clear' : 'keep';
+    if (!(await this.door.identify(session.id, trip.id, toUserId, back))) {
       throw new AppError(409, 'TRIP_NOT_REVIEWABLE', 'รอบนี้ไม่ได้รอตรวจแล้ว');
     }
     if (trip.backAt === null && trip.userId) await this.openTrips.remove(session.id, trip.userId);

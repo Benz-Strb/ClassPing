@@ -5,7 +5,7 @@ import { AppError } from '../common/app-error.js';
 import type { CoursesService } from '../courses/courses.service.js';
 import type { RosterService } from '../courses/roster.service.js';
 import type { AppUser } from '../users/users.service.js';
-import type { CourseTrip, DoorRepo, StoredTrip } from './door.repo.js';
+import type { BackChange, CourseTrip, DoorRepo, StoredTrip } from './door.repo.js';
 import { OpenTrips } from './open-trips.js';
 import { TripsService } from './trips.service.js';
 
@@ -102,16 +102,19 @@ class FakeDoorRepo implements DoorRepo {
     this.trips = this.trips.filter((x) => x.id !== tripId);
     return this.trips.length < before;
   }
-  async identify(sessionId: string, tripId: string, userId: string, clearBack: boolean) {
-    this.calls.push(['identify', sessionId, tripId, userId, clearBack]);
+  async identify(sessionId: string, tripId: string, userId: string, back: BackChange) {
+    this.calls.push(['identify', sessionId, tripId, userId, back]);
     if (this.collide) throw new AppError(409, 'TRIP_OPEN', 'x');
     const t = this.trips.find((x) => x.id === tripId && x.status !== 'confirmed');
     if (!t) return false;
     t.userId = userId;
     t.status = 'confirmed';
-    if (clearBack) {
+    if (back === 'clear') {
       t.backAt = null;
       t.backBy = null;
+    } else if (typeof back === 'object') {
+      t.backAt = back.at;
+      t.backBy = 'teacher';
     }
     return true;
   }
@@ -346,7 +349,7 @@ describe('TripsService.review', () => {
     door.trips = [trip({ id: TRIP_ID, status: 'pending' })];
     expect(await openUsers()).toEqual(['u1']);
     await service.review(teacher, SESSION_ID, TRIP_ID, { action: 'confirm' });
-    expect(door.calls).toContainEqual(['identify', SESSION_ID, TRIP_ID, 'u1', false]);
+    expect(door.calls).toContainEqual(['identify', SESSION_ID, TRIP_ID, 'u1', 'keep']);
     expect(door.trips[0]).toMatchObject({ status: 'confirmed', userId: 'u1', backAt: null });
     expect(await openUsers()).toEqual(['u1']);
     expect(await dbOpenUsers()).toEqual(['u1']);
@@ -434,19 +437,101 @@ describe('TripsService.review', () => {
     door.trips = [trip({ id: TRIP_ID, status: 'pending', backAt: at(20), backBy: 'front' })];
     expect(await openUsers()).toEqual([]);
     await service.review(teacher, SESSION_ID, TRIP_ID, { action: 'reassign', toCode: '66000002' });
-    expect(door.calls).toContainEqual(['identify', SESSION_ID, TRIP_ID, 'u2', true]);
+    expect(door.calls).toContainEqual(['identify', SESSION_ID, TRIP_ID, 'u2', 'clear']);
     expect(door.trips[0]).toMatchObject({ userId: 'u2', backAt: null, backBy: null });
     expect(await openUsers()).toEqual(['u2']);
     expect(await dbOpenUsers()).toEqual(['u2']);
   });
 
-  it('reassign รอบที่อาจารย์ใส่เวลากลับให้ เก็บเวลาไว้', async () => {
-    const { service, door, openUsers } = setup();
-    door.trips = [trip({ id: TRIP_ID, status: 'pending', backAt: at(20), backBy: 'teacher' })];
-    await service.review(teacher, SESSION_ID, TRIP_ID, { action: 'reassign', toCode: '66000002' });
-    expect(door.calls).toContainEqual(['identify', SESSION_ID, TRIP_ID, 'u2', false]);
-    expect(door.trips[0]).toMatchObject({ userId: 'u2', backAt: at(20), backBy: 'teacher' });
-    expect(await openUsers()).toEqual([]);
+  it('reassign ให้คนเดิมที่เดาไว้ ไม่ล้างเวลากลับที่กล้องจับได้', async () => {
+    const { service, door } = setup();
+    door.trips = [
+      trip({ id: TRIP_ID, status: 'pending', userId: 'u1', backAt: at(20), backBy: 'front' }),
+    ];
+    await service.review(teacher, SESSION_ID, TRIP_ID, { action: 'reassign', toCode: '66000001' });
+    expect(door.calls).toContainEqual(['identify', SESSION_ID, TRIP_ID, 'u1', 'keep']);
+    expect(door.trips[0]).toMatchObject({ status: 'confirmed', backAt: at(20), backBy: 'front' });
+  });
+
+  describe('reassign พร้อม backAt', () => {
+    // ออก 10:00 ไม่เห็นหน้า (unknown) กลับโดยไม่ถูกเห็น แล้วออกอีกรอบ ถูกจำได้ กลับแล้ว
+    const scenario = () => [
+      trip({ id: TRIP_ID, status: 'unknown', userId: null, outAt: at(10) }),
+      trip({ id: OTHER_ID, userId: 'u2', outAt: at(30), backAt: at(40), backBy: 'front' }),
+    ];
+    const body = (backAt?: string) => ({ action: 'reassign', toCode: '66000002', backAt });
+
+    it('ไม่มี backAt ชนรอบหลังของคนนั้น 409 TRIP_OVERLAP', async () => {
+      const { service, door } = setup();
+      door.trips = scenario();
+      await expect(service.review(teacher, SESSION_ID, TRIP_ID, body())).rejects.toMatchObject({
+        status: 409,
+        code: 'TRIP_OVERLAP',
+      });
+    });
+
+    it('มี backAt ก่อนรอบหลัง ระบุตัวสำเร็จ ปิดรอบ ตั้ง back_by teacher และไม่เพิ่ม OpenTrips', async () => {
+      const { service, door, openUsers, dbOpenUsers } = setup();
+      door.trips = scenario();
+      expect(await openUsers()).toEqual([]);
+      await service.review(teacher, SESSION_ID, TRIP_ID, body(at(20).toISOString()));
+      expect(door.calls).toContainEqual([
+        'identify',
+        SESSION_ID,
+        TRIP_ID,
+        'u2',
+        { at: at(20), by: 't1' },
+      ]);
+      expect(door.trips[0]).toMatchObject({
+        status: 'confirmed',
+        userId: 'u2',
+        backAt: at(20),
+        backBy: 'teacher',
+      });
+      expect(await openUsers()).toEqual([]);
+      expect(await dbOpenUsers()).toEqual([]);
+    });
+
+    it('มี backAt แล้วคนนั้นมีรอบเปิดที่ออกทีหลังอยู่ ไม่ชนถ้าเวลาไม่ทับ', async () => {
+      const { service, door, openUsers } = setup();
+      door.trips = [
+        trip({ id: TRIP_ID, status: 'unknown', userId: null, outAt: at(10) }),
+        trip({ id: OTHER_ID, userId: 'u2', outAt: at(30) }),
+      ];
+      expect(await openUsers()).toEqual(['u2']);
+      await service.review(teacher, SESSION_ID, TRIP_ID, body(at(20).toISOString()));
+      expect(door.trips[0]).toMatchObject({ userId: 'u2', backAt: at(20) });
+      expect(await openUsers()).toEqual(['u2']);
+    });
+
+    it('มี backAt แต่ทับรอบหลัง 409 TRIP_OVERLAP', async () => {
+      const { service, door } = setup();
+      door.trips = scenario();
+      await expect(
+        service.review(teacher, SESSION_ID, TRIP_ID, body(at(35).toISOString())),
+      ).rejects.toMatchObject({ status: 409, code: 'TRIP_OVERLAP' });
+      expect(door.trips[0].status).toBe('unknown');
+    });
+
+    it.each([
+      ['เท่ากับเวลาออก', () => at(10)],
+      ['ก่อนเวลาออก', () => at(5)],
+      ['หลังหมดคาบ', () => new Date(ENDS.getTime() + 1000)],
+    ])('backAt %s ได้ 400 BAD_BACK_TIME', async (_n, when) => {
+      const { service, door } = setup();
+      door.trips = scenario();
+      await expect(
+        service.review(teacher, SESSION_ID, TRIP_ID, body(when().toISOString())),
+      ).rejects.toMatchObject({ status: 400, code: 'BAD_BACK_TIME' });
+      expect(door.calls.some((c) => c[0] === 'identify')).toBe(false);
+    });
+
+    it('รอบ pending ที่กล้องหน้าห้องปิดไว้ ถ้าส่ง backAt ใช้เวลาของอาจารย์แทน', async () => {
+      const { service, door } = setup();
+      door.trips = [trip({ id: TRIP_ID, status: 'pending', backAt: at(20), backBy: 'front' })];
+      await service.review(teacher, SESSION_ID, TRIP_ID, body(at(25).toISOString()));
+      expect(door.trips[0]).toMatchObject({ userId: 'u2', backAt: at(25), backBy: 'teacher' });
+    });
   });
 
   it('reassign ให้คนที่มีรอบเปิดอยู่แล้ว 409 TRIP_OPEN และไม่เปลี่ยนอะไร', async () => {
@@ -492,7 +577,7 @@ describe('TripsService.review', () => {
     ).rejects.toMatchObject({ status: 409, code: 'TRIP_OVERLAP' });
   });
 
-  it('reassign รอบเปิด ที่ออกก่อนรอบปิดของคนใหม่ ทับกัน 409 TRIP_OVERLAP', async () => {
+  it('reassign รอบเปิด ที่ออกก่อนรอบปิดของคนใหม่ ทับกัน 409 TRIP_OVERLAP (ต้องกรอก backAt)', async () => {
     const { service, door } = setup();
     door.trips = [
       trip({ id: TRIP_ID, status: 'unknown', userId: null, outAt: at(10) }),
