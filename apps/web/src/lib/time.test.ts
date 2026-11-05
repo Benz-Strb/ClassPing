@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bangkokTimeToIso, formatTime } from "./time.ts";
+import { bangkokTimeToIso, chooseBackAt, formatTime } from "./time.ts";
 
 test("เวลาในคาบปกติเป็นวันเดียวกันตามเวลาไทย", () => {
   const iso = bangkokTimeToIso(
@@ -30,4 +30,26 @@ test("เวลาก่อนเริ่มคาบในคาบปกต�
     "2026-10-05T05:00:00Z",
   );
   assert.equal(iso, "2026-10-05T00:00:00.000Z");
+});
+
+const SESSION = {
+  onDate: "2026-10-05",
+  startsAt: "2026-10-05T02:00:00Z",
+  endsAt: "2026-10-05T05:00:00Z",
+};
+
+test("ไม่แก้เวลากลับ ส่งค่าเดิมทั้งวินาที", () => {
+  const original = "2026-10-05T03:16:20.000Z"; // 10:16 ไทย
+  assert.equal(chooseBackAt(original, "10:16", SESSION), original);
+});
+
+test("เวลาที่กล้องประตูเสนอแล้วรับไว้ตามเดิม ยังมีวินาที", () => {
+  const suggested = "2026-10-05T03:05:45.000Z";
+  assert.equal(chooseBackAt(suggested, formatTime(suggested), SESSION), suggested);
+});
+
+test("แก้เวลากลับ แปลงจาก HH:mm", () => {
+  const original = "2026-10-05T03:16:20.000Z";
+  assert.equal(chooseBackAt(original, "10:20", SESSION), "2026-10-05T03:20:00.000Z");
+  assert.equal(chooseBackAt(null, "10:20", SESSION), "2026-10-05T03:20:00.000Z");
 });
