@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:reports": "node --test src/lib/reports.test.ts"
+    "test:reports": "node --test src/lib/reports.test.ts src/lib/time.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
