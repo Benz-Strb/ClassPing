@@ -36,3 +36,13 @@ export function bangkokTimeToIso(
   if (bangkokDate(new Date(endsAt)) > onDate && ms < Date.parse(startsAt)) ms += DAY_MS;
   return new Date(ms).toISOString();
 }
+
+// เวลากลับที่จะส่ง: ไม่ได้แก้เวลา (HH:mm ตรงกับค่าเดิม) ใช้ค่าเดิมทั้งวินาที แก้แล้วค่อยแปลงจาก HH:mm
+export function chooseBackAt(
+  original: string | null,
+  hhmm: string,
+  session: { onDate: string; startsAt: string; endsAt: string },
+): string {
+  if (original && formatTime(original) === hhmm) return original;
+  return bangkokTimeToIso(session.onDate, hhmm, session.startsAt, session.endsAt);
+}

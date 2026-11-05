@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { bangkokTimeToIso, formatTime } from "@/lib/time";
+import { chooseBackAt, formatTime } from "@/lib/time";
 import type { SessionView, TripView } from "@/lib/types";
 import { Photo } from "./photo";
 
@@ -31,10 +31,9 @@ export function TripDialog({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [backTime, setBackTime] = useState(() => {
-    const start = trip.backAt ?? trip.suggestedBackAt;
-    return start ? formatTime(start) : "";
-  });
+  // เวลาเดิมจากระบบ (เก็บครั้งเดียว) ใช้ส่งต่อทั้งวินาทีถ้าอาจารย์ไม่ได้แก้
+  const [original] = useState(() => trip.backAt ?? trip.suggestedBackAt);
+  const [backTime, setBackTime] = useState(() => (original ? formatTime(original) : ""));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,9 +50,7 @@ export function TripDialog({
 
   function save() {
     if (!backTime) return;
-    return finish(
-      onSave(bangkokTimeToIso(session.onDate, backTime, session.startsAt, session.endsAt)),
-    );
+    return finish(onSave(chooseBackAt(original, backTime, session)));
   }
 
   function remove() {
