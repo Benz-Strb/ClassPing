@@ -2,7 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseDoorRepo, type NewTrip } from './door.repo.js';
 
 // ของปลอมที่จดทุกการเรียก แล้วคืนผลที่กำหนดตอน await
-function recordingDb(result: { data?: unknown; error?: unknown } = {}) {
+function recordingDb(
+  result: { data?: unknown; error?: unknown } = {},
+  // ถ้ามี ใช้ตอบทีละหน้าแทน result.data
+  pages?: unknown[][],
+) {
   const calls: [string, unknown[]][] = [];
   const q: Record<string, unknown> = {};
   for (const name of [
@@ -16,13 +20,19 @@ function recordingDb(result: { data?: unknown; error?: unknown } = {}) {
     'lt',
     'gte',
     'lte',
+    'order',
+    'range',
     'in',
     'limit',
   ]) {
     q[name] = (...args: unknown[]) => (calls.push([name, args]), q);
   }
+  let page = 0;
   q.then = (resolve: (v: unknown) => void) =>
-    resolve({ data: result.data ?? [], error: result.error ?? null });
+    resolve({
+      data: pages ? (pages[page++] ?? []) : (result.data ?? []),
+      error: result.error ?? null,
+    });
   return { db: { from: () => q } as unknown as SupabaseClient, calls };
 }
 
@@ -211,40 +221,60 @@ describe('SupabaseDoorRepo.deleteTrip', () => {
 describe('SupabaseDoorRepo.identify', () => {
   it('ระบุตัวเฉพาะรอบ pending หรือ unknown ของคาบนี้ และไม่แตะ updated_by', async () => {
     const { db, calls } = recordingDb({ data: [{ id: 't1' }] });
-    await expect(new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', false)).resolves.toBe(true);
+    await expect(new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', 'keep')).resolves.toBe(true);
     expect(calls).toContainEqual(['update', [{ student_id: 'u2', status: 'confirmed' }]]);
     expect(calls).toContainEqual(['eq', ['session_id', 's1']]);
     expect(calls).toContainEqual(['eq', ['id', 't1']]);
     expect(calls).toContainEqual(['in', ['status', ['pending', 'unknown']]]);
   });
 
-  it('clearBack ล้างเวลากลับกับคนที่ให้เวลา', async () => {
+  it('clear ล้างเวลากลับกับคนที่ให้เวลา', async () => {
     const { db, calls } = recordingDb({ data: [{ id: 't1' }] });
-    await new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', true);
+    await new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', 'clear');
     expect(calls).toContainEqual([
       'update',
       [{ student_id: 'u2', status: 'confirmed', back_at: null, back_by: null }],
     ]);
   });
 
+  it('ส่ง backAt มาด้วย ตั้งเวลากลับ back_by teacher และ updated_by ในคำสั่งเดียว', async () => {
+    const { db, calls } = recordingDb({ data: [{ id: 't1' }] });
+    const at = new Date('2026-10-23T03:30:00Z');
+    await new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', { at, by: 'teacher1' });
+    expect(calls).toContainEqual([
+      'update',
+      [
+        {
+          student_id: 'u2',
+          status: 'confirmed',
+          back_at: at.toISOString(),
+          back_by: 'teacher',
+          updated_by: 'teacher1',
+        },
+      ],
+    ]);
+  });
+
   it('ชน unique index (23505) เป็น 409 TRIP_OPEN', async () => {
     const { db } = recordingDb({ error: { code: '23505' } });
-    await expect(new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', false)).rejects.toMatchObject({
-      status: 409,
-      code: 'TRIP_OPEN',
-    });
+    await expect(new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', 'keep')).rejects.toMatchObject(
+      {
+        status: 409,
+        code: 'TRIP_OPEN',
+      },
+    );
   });
 
   it('ไม่มีแถวที่เข้าเงื่อนไข คืน false', async () => {
     const { db } = recordingDb({ data: [] });
-    await expect(new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', false)).resolves.toBe(false);
+    await expect(new SupabaseDoorRepo(db).identify('s1', 't1', 'u2', 'keep')).resolves.toBe(false);
   });
 });
 
 describe('SupabaseDoorRepo.courseTrips', () => {
   it('อ่านเฉพาะรอบ confirmed ของวิชาในช่วงวัน และข้ามแถวที่ไม่มีรหัส', async () => {
-    const { db, calls } = recordingDb({
-      data: [
+    const { db, calls } = recordingDb({}, [
+      [
         {
           session_id: 's1',
           out_at: '2026-10-23T03:05:00Z',
@@ -274,7 +304,8 @@ describe('SupabaseDoorRepo.courseTrips', () => {
           },
         },
       ],
-    });
+      [],
+    ]);
     const rows = await new SupabaseDoorRepo(db).courseTrips('c1', '2026-10-01', '2026-10-31');
     expect(calls).toContainEqual(['eq', ['status', 'confirmed']]);
     expect(calls).toContainEqual(['eq', ['sessions.course_id', 'c1']]);
@@ -294,5 +325,37 @@ describe('SupabaseDoorRepo.courseTrips', () => {
         backAt: null,
       },
     ]);
+  });
+});
+
+describe('SupabaseDoorRepo.courseTrips หลายหน้า', () => {
+  const row = (id: number) => ({
+    id: `t${id}`,
+    session_id: 's1',
+    out_at: '2026-10-23T03:05:00Z',
+    back_at: '2026-10-23T03:10:00Z',
+    student: { student_id: '66000001' },
+    sessions: {
+      on_date: '2026-10-23',
+      kind: 'class',
+      ends_at: '2026-10-23T05:00:00Z',
+      late_after_min: null,
+      absent_after_min: null,
+      out_of_room_limit_min: null,
+    },
+  });
+
+  it('ไล่ทีละ 1000 แถวเรียงตาม id จนหน้าว่าง ไม่ตัดแถวทิ้ง', async () => {
+    const first = Array.from({ length: 1000 }, (_, i) => row(i));
+    const second = [row(1000), row(1001)];
+    const { db, calls } = recordingDb({}, [first, second, []]);
+    const rows = await new SupabaseDoorRepo(db).courseTrips('c1', '2026-10-01', '2026-10-31');
+    expect(rows).toHaveLength(1002);
+    expect(calls.filter(([n]) => n === 'range').map(([, a]) => a)).toEqual([
+      [0, 999],
+      [1000, 1999],
+      [1002, 2001],
+    ]);
+    expect(calls).toContainEqual(['order', ['id']]);
   });
 });
