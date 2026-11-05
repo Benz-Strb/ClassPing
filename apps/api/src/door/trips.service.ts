@@ -9,13 +9,14 @@ import { ATTENDANCE_REPO, type AttendanceRepo } from '../attendance/attendance.r
 import { AttendanceService, type SessionAttendance } from '../attendance/attendance.service.js';
 import { rulesFor } from '../attendance/decide.js';
 import { AppError } from '../common/app-error.js';
+import { CLOCK, type Clock } from '../common/clock.js';
 import { parseBody } from '../common/validate.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { RosterService } from '../courses/roster.service.js';
 import type { AppUser } from '../users/users.service.js';
 import { DOOR_REPO, type DoorRepo, type StoredTrip } from './door.repo.js';
 import { OpenTrips } from './open-trips.js';
-import { outOfRoom, type OutLabel } from './out-of-room.js';
+import { inSession, outOfRoom, type OutLabel } from './out-of-room.js';
 
 export interface OutOfRoomReportRow {
   sessionId: string;
@@ -91,6 +92,7 @@ export class TripsService {
     @Inject(ATTENDANCE_REPO) private readonly captures: AttendanceRepo,
     @Inject(DOOR_REPO) private readonly door: DoorRepo,
     private readonly openTrips: OpenTrips,
+    @Inject(CLOCK) private readonly now: Clock,
   ) {}
 
   async setBack(
@@ -106,9 +108,7 @@ export class TripsService {
       throw new AppError(409, 'TRIP_NOT_CONFIRMED', 'แก้เวลากลับได้เฉพาะรอบที่ระบุตัวแล้ว');
     }
     const backAt = new Date(raw);
-    if (backAt <= trip.outAt || backAt > session.endsAt) {
-      throw new AppError(400, 'BAD_BACK_TIME', 'เวลากลับต้องอยู่หลังเวลาออกและไม่เกินหมดคาบ');
-    }
+    this.checkBackAt(backAt, trip, session);
     this.checkOverlap({ outAt: trip.outAt, backAt }, others, trip.userId);
 
     if (!(await this.door.setBack(sessionId, tripId, backAt, user.id))) {
@@ -141,6 +141,14 @@ export class TripsService {
     if (input.action === 'reject') {
       await this.drop(sessionId, trip);
     } else if (input.action === 'confirm') {
+      const roster = await this.roster.entries(session.courseId);
+      if (!roster.some((e) => e.userId === trip.userId)) {
+        throw new AppError(
+          400,
+          'STUDENT_NOT_IN_COURSE',
+          'นักศึกษาคนนี้ออกจากรายชื่อวิชาแล้ว ยืนยันไม่ได้ เลือกคนอื่นหรือปฏิเสธรอบนี้',
+        );
+      }
       if (!(await this.door.identify(sessionId, tripId, trip.userId!, 'keep'))) {
         throw new AppError(409, 'TRIP_NOT_REVIEWABLE', 'รอบนี้ไม่ได้รอตรวจแล้ว');
       }
@@ -158,17 +166,23 @@ export class TripsService {
       this.admin.rules(courseId),
     ]);
 
+    // คนที่ออกจากรายชื่อแล้วไม่อยู่ในรายงาน เหมือนรายงานเช็คชื่อที่ไล่ตามรายชื่อปัจจุบัน
+    const onRoster = new Set((await this.roster.entries(courseId)).map((e) => e.studentCode));
     const groups = new Map<string, typeof rows>();
     for (const row of rows) {
+      if (!onRoster.has(row.studentCode)) continue;
       const key = `${row.sessionId}|${row.studentCode}`;
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     return [...groups.values()]
+      .filter((group) => inSession(group, group[0].startsAt).length > 0)
       .map((group): OutOfRoomReportRow => {
         const first = group[0];
-        const trips = [...group].sort((a, b) => a.outAt.getTime() - b.outAt.getTime());
+        const trips = inSession(group, first.startsAt).sort(
+          (a, b) => a.outAt.getTime() - b.outAt.getTime(),
+        );
         const limit = rulesFor(first, courseRules).outOfRoomLimitMin;
-        const result = outOfRoom(trips, first.endsAt, limit);
+        const result = outOfRoom(trips, first.startsAt, first.endsAt, limit);
         return {
           sessionId: first.sessionId,
           onDate: first.onDate,
@@ -199,9 +213,7 @@ export class TripsService {
   ): Promise<void> {
     const toUserId = await this.account(session.courseId, input.toCode);
     const backAt = input.backAt ? new Date(input.backAt) : null;
-    if (backAt && (backAt <= trip.outAt || backAt > session.endsAt)) {
-      throw new AppError(400, 'BAD_BACK_TIME', 'เวลากลับต้องอยู่หลังเวลาออกและไม่เกินหมดคาบ');
-    }
+    if (backAt) this.checkBackAt(backAt, trip, session);
     // เวลากลับที่กล้องหน้าห้องจับได้เป็นของคนที่จำผิด จึงล้างทิ้ง (คนเดิมที่เดาไว้ไม่ต้อง)
     const clear = !backAt && trip.backBy === 'front' && toUserId !== trip.userId;
     const span = { outAt: trip.outAt, backAt: backAt ?? (clear ? null : trip.backAt) };
@@ -241,6 +253,16 @@ export class TripsService {
   private checkOverlap(span: Span, others: StoredTrip[], userId: string | null): void {
     if (others.some((o) => o.userId === userId && overlaps(span, o))) {
       throw new AppError(409, 'TRIP_OVERLAP', 'ช่วงเวลานี้ทับกับรอบอื่นของนักศึกษาคนเดียวกัน');
+    }
+  }
+
+  // เวลากลับต้องหลังเวลาออก ไม่เกินหมดคาบ และยังไม่ถึง (เท่ากับตอนนี้ได้)
+  private checkBackAt(backAt: Date, trip: StoredTrip, session: SessionInfo): void {
+    if (backAt <= trip.outAt || backAt > session.endsAt) {
+      throw new AppError(400, 'BAD_BACK_TIME', 'เวลากลับต้องอยู่หลังเวลาออกและไม่เกินหมดคาบ');
+    }
+    if (backAt > this.now()) {
+      throw new AppError(400, 'BAD_BACK_TIME', 'เวลากลับต้องไม่อยู่ในอนาคต');
     }
   }
 
