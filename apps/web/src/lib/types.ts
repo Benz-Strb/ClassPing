@@ -173,10 +173,38 @@ export interface AttendanceRow {
   updatedBy: string | null;
   // เหตุที่ต้องรอตรวจ
   reviewReason: "spoof" | null;
+  outOfRoom: {
+    totalSeconds: number;
+    minutes: number;
+    // ป้ายที่ API ตัดสินแล้ว หน้าเว็บไม่คิดเกณฑ์ซ้ำ
+    label: "out" | "gone" | "gone_no_return" | null;
+    trips: TripView[];
+  };
+}
+
+export interface TripView {
+  id: string;
+  outAt: string;
+  backAt: string | null;
+  backBy: "front" | "teacher" | null;
+  seconds: number;
+  imageUrl: string | null;
+  // เวลาที่กล้องประตูเห็นเข้าห้องหลังออก ใช้เป็นค่าเริ่มต้นของเวลากลับ
+  suggestedBackAt: string | null;
 }
 
 export interface SessionAttendance {
-  session: SessionView;
+  session: SessionView & { outOfRoomLimitMin: number };
   rows: AttendanceRow[];
   unknown: { imageUrl: string; seenAt: string }[];
+  // รอบนอกห้องที่กล้องไม่แน่ใจว่าใคร
+  tripReviews: {
+    id: string;
+    guessCode: string;
+    guessName: string | null;
+    score: number | null;
+    outAt: string;
+    imageUrl: string | null;
+  }[];
+  unknownTrips: { id: string; outAt: string; imageUrl: string | null }[];
 }

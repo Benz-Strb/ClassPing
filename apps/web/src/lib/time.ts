@@ -24,3 +24,15 @@ export function formatDate(date: string): string {
 export function formatTime(iso: string): string {
   return new Date(new Date(iso).getTime() + OFFSET_MS).toISOString().slice(11, 16);
 }
+
+// เวลา HH:mm (เวลาไทย) ของคาบ -> ISO มี offset คาบที่ข้ามเที่ยงคืนและเวลาน้อยกว่าเวลาเริ่ม = วันถัดไป
+export function bangkokTimeToIso(
+  onDate: string,
+  hhmm: string,
+  startsAt: string,
+  endsAt: string,
+): string {
+  let ms = Date.parse(`${onDate}T${hhmm}:00+07:00`);
+  if (bangkokDate(new Date(endsAt)) > onDate && ms < Date.parse(startsAt)) ms += DAY_MS;
+  return new Date(ms).toISOString();
+}
