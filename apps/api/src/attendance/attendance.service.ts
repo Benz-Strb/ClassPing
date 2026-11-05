@@ -7,7 +7,7 @@ import { CoursesService } from '../courses/courses.service.js';
 import { RosterService } from '../courses/roster.service.js';
 import { DoorEntries } from '../door/door-entries.js';
 import { DOOR_REPO, type DoorRepo, type StoredTrip } from '../door/door.repo.js';
-import { outOfRoom, tripSeconds, type OutLabel } from '../door/out-of-room.js';
+import { inSession, outOfRoom, tripSeconds, type OutLabel } from '../door/out-of-room.js';
 import type { SessionView } from '../sessions/sessions.service.js';
 import type { AppUser } from '../users/users.service.js';
 import {
@@ -128,6 +128,14 @@ export class AttendanceService {
     const reviews = trips
       .filter((t) => t.status === 'pending')
       .sort((a, b) => b.outAt.getTime() - a.outAt.getTime());
+    // คนที่ออกจากรายชื่อไปแล้วแต่ยังมีรอบรอตรวจ ต้องยังเห็นและจัดการได้
+    const rosterIds = new Set(entries.flatMap((e) => (e.userId ? [e.userId] : [])));
+    const goneIds = [
+      ...new Set(reviews.flatMap((t) => (t.userId && !rosterIds.has(t.userId) ? [t.userId] : []))),
+    ];
+    const gone = new Map(
+      (goneIds.length ? await this.repo.usersByIds(goneIds) : []).map((u) => [u.id, u]),
+    );
     const unknownTrips = trips
       .filter((t) => t.status === 'unknown')
       .sort((a, b) => b.outAt.getTime() - a.outAt.getTime())
@@ -180,12 +188,13 @@ export class AttendanceService {
       }),
       tripReviews: reviews.flatMap((t) => {
         const guess = entries.find((e) => e.userId === t.userId);
-        if (!guess) return [];
+        const left = t.userId ? gone.get(t.userId) : undefined;
+        if (!guess && !left) return [];
         return [
           {
             id: t.id,
-            guessCode: guess.studentCode,
-            guessName: guess.fullName,
+            guessCode: guess ? guess.studentCode : (left?.studentCode ?? ''),
+            guessName: guess ? guess.fullName : (left?.fullName ?? null),
             score: t.confidence,
             outAt: t.outAt.toISOString(),
             imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
@@ -206,15 +215,18 @@ export class AttendanceService {
     trips: StoredTrip[],
     urls: Map<string, string>,
   ): AttendanceView['outOfRoom'] {
-    const sorted = [...trips].sort((a, b) => a.outAt.getTime() - b.outAt.getTime());
+    // รอบที่จบก่อนคาบเริ่มอยู่นอกคาบ ไม่แสดงและไม่นับ
+    const sorted = inSession(trips, session.startsAt).sort(
+      (a, b) => a.outAt.getTime() - b.outAt.getTime(),
+    );
     return {
-      ...outOfRoom(sorted, session.endsAt, limitMin),
+      ...outOfRoom(sorted, session.startsAt, session.endsAt, limitMin),
       trips: sorted.map((t) => ({
         id: t.id,
         outAt: t.outAt.toISOString(),
         backAt: t.backAt?.toISOString() ?? null,
         backBy: t.backBy,
-        seconds: tripSeconds(t, session.endsAt),
+        seconds: tripSeconds(t, session.startsAt, session.endsAt),
         imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
         suggestedBackAt: t.backAt
           ? null
