@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { AppError } from '../common/app-error.js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 
@@ -14,6 +15,31 @@ export interface NewTrip {
   imagePath: string | null;
 }
 
+export interface StoredTrip {
+  id: string;
+  userId: string | null;
+  status: TripStatus;
+  outAt: Date;
+  backAt: Date | null;
+  backBy: 'front' | 'teacher' | null;
+  confidence: number | null;
+  imagePath: string | null;
+}
+
+// รอบที่รู้ว่าใคร พร้อมข้อมูลคาบที่ใช้คิดเกณฑ์
+export interface CourseTrip {
+  sessionId: string;
+  onDate: string;
+  kind: 'class' | 'exam';
+  endsAt: Date;
+  lateAfterMin: number | null;
+  absentAfterMin: number | null;
+  outOfRoomLimitMin: number | null;
+  studentCode: string;
+  outAt: Date;
+  backAt: Date | null;
+}
+
 export interface DoorRepo {
   // ชน unique index (คนนี้มีรอบที่ยังไม่กลับอยู่แล้ว) = false
   insertTrip(trip: NewTrip): Promise<boolean>;
@@ -23,12 +49,46 @@ export interface DoorRepo {
   closeTrip(sessionId: string, userId: string, backAt: Date, by: 'front'): Promise<boolean>;
   unknownTripsBefore(before: Date): Promise<{ id: string; imagePath: string | null }[]>;
   deleteTrips(ids: string[]): Promise<void>;
+  listTrips(sessionId: string): Promise<StoredTrip[]>;
+  // อาจารย์ตั้งเวลากลับ (เฉพาะรอบ confirmed) false = ไม่มีรอบที่เข้าเงื่อนไข
+  setBack(sessionId: string, tripId: string, backAt: Date, teacherId: string): Promise<boolean>;
+  deleteTrip(sessionId: string, tripId: string): Promise<boolean>;
+  // pending/unknown -> confirmed ให้คนนี้ ไม่ตั้ง updated_by เพื่อให้กล้องหน้าห้องปิดรอบต่อได้
+  // clearBack ล้างเวลากลับด้วย ชน unique index = 409 TRIP_OPEN
+  identify(sessionId: string, tripId: string, userId: string, clearBack: boolean): Promise<boolean>;
+  courseTrips(courseId: string, from: string, to: string): Promise<CourseTrip[]>;
 }
 
 export const DOOR_REPO = Symbol('DOOR_REPO');
 
 const UNIQUE_VIOLATION = '23505';
 const BATCH = 50;
+
+interface TripRow {
+  id: string;
+  student_id: string | null;
+  status: TripStatus;
+  out_at: string;
+  back_at: string | null;
+  back_by: 'front' | 'teacher' | null;
+  confidence: number | null;
+  image_path: string | null;
+}
+
+interface CourseRow {
+  session_id: string;
+  out_at: string;
+  back_at: string | null;
+  student: { student_id: string | null } | null;
+  sessions: {
+    on_date: string;
+    kind: 'class' | 'exam';
+    ends_at: string;
+    late_after_min: number | null;
+    absent_after_min: number | null;
+    out_of_room_limit_min: number | null;
+  };
+}
 
 @Injectable()
 export class SupabaseDoorRepo implements DoorRepo {
@@ -95,5 +155,108 @@ export class SupabaseDoorRepo implements DoorRepo {
         .in('id', ids.slice(i, i + BATCH));
       if (error) throw dbError();
     }
+  }
+
+  async listTrips(sessionId: string): Promise<StoredTrip[]> {
+    const { data, error } = await this.db
+      .from('door_trips')
+      .select('id, student_id, status, out_at, back_at, back_by, confidence, image_path')
+      .eq('session_id', sessionId);
+    if (error) throw dbError();
+    return (data as TripRow[]).map((r) => ({
+      id: r.id,
+      userId: r.student_id,
+      status: r.status,
+      outAt: new Date(r.out_at),
+      backAt: r.back_at ? new Date(r.back_at) : null,
+      backBy: r.back_by,
+      confidence: r.confidence,
+      imagePath: r.image_path,
+    }));
+  }
+
+  async setBack(
+    sessionId: string,
+    tripId: string,
+    backAt: Date,
+    teacherId: string,
+  ): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('door_trips')
+      .update({ back_at: backAt.toISOString(), back_by: 'teacher', updated_by: teacherId })
+      .eq('session_id', sessionId)
+      .eq('id', tripId)
+      .eq('status', 'confirmed')
+      .select('id');
+    if (error) throw dbError();
+    return data.length > 0;
+  }
+
+  async deleteTrip(sessionId: string, tripId: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('door_trips')
+      .delete()
+      .eq('session_id', sessionId)
+      .eq('id', tripId)
+      .select('id');
+    if (error) throw dbError();
+    return data.length > 0;
+  }
+
+  async identify(
+    sessionId: string,
+    tripId: string,
+    userId: string,
+    clearBack: boolean,
+  ): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('door_trips')
+      .update({
+        student_id: userId,
+        status: 'confirmed',
+        ...(clearBack ? { back_at: null, back_by: null } : {}),
+      })
+      .eq('session_id', sessionId)
+      .eq('id', tripId)
+      .in('status', ['pending', 'unknown'])
+      .select('id');
+    if (error?.code === UNIQUE_VIOLATION) {
+      throw new AppError(409, 'TRIP_OPEN', 'นักศึกษาคนนี้มีรอบที่ยังไม่กลับอยู่แล้ว');
+    }
+    if (error) throw dbError();
+    return data.length > 0;
+  }
+
+  async courseTrips(courseId: string, from: string, to: string): Promise<CourseTrip[]> {
+    const { data, error } = await this.db
+      .from('door_trips')
+      .select(
+        'session_id, out_at, back_at, ' +
+          'student:users!door_trips_student_id_fkey(student_id), ' +
+          'sessions!inner(on_date, kind, ends_at, late_after_min, absent_after_min, out_of_room_limit_min)',
+      )
+      .eq('status', 'confirmed')
+      .eq('sessions.course_id', courseId)
+      .gte('sessions.on_date', from)
+      .lte('sessions.on_date', to);
+    if (error) throw dbError();
+    return (data as unknown as CourseRow[]).flatMap((r) =>
+      r.student?.student_id
+        ? [
+            {
+              sessionId: r.session_id,
+              onDate: r.sessions.on_date,
+              kind: r.sessions.kind,
+              endsAt: new Date(r.sessions.ends_at),
+              lateAfterMin: r.sessions.late_after_min,
+              absentAfterMin: r.sessions.absent_after_min,
+              outOfRoomLimitMin: r.sessions.out_of_room_limit_min,
+              studentCode: r.student.student_id,
+              outAt: new Date(r.out_at),
+              backAt: r.back_at ? new Date(r.back_at) : null,
+            },
+          ]
+        : [],
+    );
   }
 }

@@ -23,10 +23,14 @@ describe('DoorEntries', () => {
     expect(entries.between('s2', t('02:00'), t('04:00'))).toEqual([]);
   });
 
-  it('คาบที่จบแล้วถูกลืม', () => {
+  it('คาบที่จบแล้วยังอยู่ถึง 24 ชั่วโมง แล้วถูกลืม', () => {
     const { entries, setNow } = setup();
     entries.add('s1', t('02:10'), t('05:00'));
     setNow(t('05:00'));
+    expect(entries.between('s1', t('02:00'), t('06:00'))).toEqual([t('02:10')]);
+    setNow(new Date(t('05:00').getTime() + 24 * 60 * 60 * 1000 - 1));
+    expect(entries.between('s1', t('02:00'), t('06:00'))).toEqual([t('02:10')]);
+    setNow(new Date(t('05:00').getTime() + 24 * 60 * 60 * 1000));
     expect(entries.between('s1', t('02:00'), t('06:00'))).toEqual([]);
   });
 });
