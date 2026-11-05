@@ -196,7 +196,7 @@ export function CheckinView() {
               }`}
               rejectLabel="ไม่ใช่ ลบรอบนี้"
               rejectMessage="ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง"
-              candidates={unseen}
+              candidates={rows}
               busy={busy}
               backAtFor={backAtFor}
               onReview={(action) => reviewTrip(t.id, action)}
@@ -247,7 +247,7 @@ export function CheckinView() {
             <UnknownTripCard
               key={t.id}
               trip={t}
-              candidates={unseen}
+              candidates={rows}
               busy={busy}
               backAtFor={backAtFor}
               onReview={(action) => reviewTrip(t.id, action)}
