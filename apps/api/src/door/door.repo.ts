@@ -40,6 +40,8 @@ export interface CourseTrip {
   backAt: Date | null;
 }
 
+export type BackChange = 'keep' | 'clear' | { at: Date; by: string };
+
 export interface DoorRepo {
   // ชน unique index (คนนี้มีรอบที่ยังไม่กลับอยู่แล้ว) = false
   insertTrip(trip: NewTrip): Promise<boolean>;
@@ -54,8 +56,9 @@ export interface DoorRepo {
   setBack(sessionId: string, tripId: string, backAt: Date, teacherId: string): Promise<boolean>;
   deleteTrip(sessionId: string, tripId: string): Promise<boolean>;
   // pending/unknown -> confirmed ให้คนนี้ ไม่ตั้ง updated_by เพื่อให้กล้องหน้าห้องปิดรอบต่อได้
-  // clearBack ล้างเวลากลับด้วย ชน unique index = 409 TRIP_OPEN
-  identify(sessionId: string, tripId: string, userId: string, clearBack: boolean): Promise<boolean>;
+  // back: keep = เวลากลับเดิม · clear = ล้าง · {at, by} = อาจารย์กรอก (ตั้ง back_by teacher และ updated_by)
+  // ชน unique index = 409 TRIP_OPEN
+  identify(sessionId: string, tripId: string, userId: string, back: BackChange): Promise<boolean>;
   courseTrips(courseId: string, from: string, to: string): Promise<CourseTrip[]>;
 }
 
@@ -63,6 +66,7 @@ export const DOOR_REPO = Symbol('DOOR_REPO');
 
 const UNIQUE_VIOLATION = '23505';
 const BATCH = 50;
+const PAGE = 1000;
 
 interface TripRow {
   id: string;
@@ -207,14 +211,17 @@ export class SupabaseDoorRepo implements DoorRepo {
     sessionId: string,
     tripId: string,
     userId: string,
-    clearBack: boolean,
+    back: BackChange,
   ): Promise<boolean> {
     const { data, error } = await this.db
       .from('door_trips')
       .update({
         student_id: userId,
         status: 'confirmed',
-        ...(clearBack ? { back_at: null, back_by: null } : {}),
+        ...(back === 'clear' ? { back_at: null, back_by: null } : {}),
+        ...(typeof back === 'object'
+          ? { back_at: back.at.toISOString(), back_by: 'teacher', updated_by: back.by }
+          : {}),
       })
       .eq('session_id', sessionId)
       .eq('id', tripId)
@@ -228,19 +235,28 @@ export class SupabaseDoorRepo implements DoorRepo {
   }
 
   async courseTrips(courseId: string, from: string, to: string): Promise<CourseTrip[]> {
-    const { data, error } = await this.db
-      .from('door_trips')
-      .select(
-        'session_id, out_at, back_at, ' +
-          'student:users!door_trips_student_id_fkey(student_id), ' +
-          'sessions!inner(on_date, kind, ends_at, late_after_min, absent_after_min, out_of_room_limit_min)',
-      )
-      .eq('status', 'confirmed')
-      .eq('sessions.course_id', courseId)
-      .gte('sessions.on_date', from)
-      .lte('sessions.on_date', to);
-    if (error) throw dbError();
-    return (data as unknown as CourseRow[]).flatMap((r) =>
+    // Supabase ตอบไม่เกิน 1000 แถวต่อครั้ง ต้องไล่ทีละหน้า
+    const data: CourseRow[] = [];
+    while (true) {
+      const { data: page, error } = await this.db
+        .from('door_trips')
+        .select(
+          'id, session_id, out_at, back_at, ' +
+            'student:users!door_trips_student_id_fkey(student_id), ' +
+            'sessions!inner(on_date, kind, ends_at, late_after_min, absent_after_min, out_of_room_limit_min)',
+        )
+        .eq('status', 'confirmed')
+        .eq('sessions.course_id', courseId)
+        .gte('sessions.on_date', from)
+        .lte('sessions.on_date', to)
+        .order('id')
+        .range(data.length, data.length + PAGE - 1);
+      if (error) throw dbError();
+      const rows = page as unknown as CourseRow[];
+      data.push(...rows);
+      if (!rows.length) break;
+    }
+    return data.flatMap((r) =>
       r.student?.student_id
         ? [
             {
