@@ -5,10 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
-import { formatDate, formatTime } from "@/lib/time";
+import { bangkokTimeToIso, formatDate, formatTime } from "@/lib/time";
 import type { AttendanceRow, AttendanceStatus, SessionAttendance } from "@/lib/types";
 import { Photo } from "./photo";
-import { ReviewCard, type ReviewAction } from "./review-card";
+import { ReassignForm, ReviewCard, type ReviewAction } from "./review-card";
+import { TripChip } from "./trip-chip";
+import { TripDialog, type TripResult } from "./trip-dialog";
 import { ExamBadge } from "./exam-badge";
 
 const POLL_MS = 5000;
@@ -23,6 +25,12 @@ const STATUS_LABEL: Record<AttendanceStatus, { label: string; className: string 
 
 const EDITABLE = ["present", "late", "absent"] as const;
 
+const OUT_LABEL = {
+  out: { text: (n: number) => `ออก ${n} นาที`, className: "bg-gray-100 text-gray-700" },
+  gone: { text: (n: number) => `หาย ${n} นาที`, className: "bg-red-100 text-red-700" },
+  gone_no_return: { text: () => "หาย · ไม่กลับ", className: "bg-red-100 text-red-700" },
+};
+
 export function CheckinView() {
   const { id, sessionId } = useParams<{ id: string; sessionId: string }>();
   const router = useRouter();
@@ -31,23 +39,21 @@ export function CheckinView() {
   const [busy, setBusy] = useState(false);
   // นับครั้งที่อาจารย์กดแก้ ผลจากรอบดึงข้อมูลที่เริ่มก่อนการแก้จะไม่ถูกใช้
   const edits = useRef(0);
+  const [openTrip, setOpenTrip] = useState<{ code: string; tripId: string } | null>(null);
   const base = `/sessions/${sessionId}/attendance`;
 
-  const load = useCallback(
-    () => {
-      const startedAt = edits.current;
-      return apiFetch<SessionAttendance>(base)
-        .then((next) => {
-          if (edits.current === startedAt) setData(next);
-          return next;
-        })
-        .catch(async (e: unknown) => {
-          setError(await handleApiError(e, router));
-          return null;
-        });
-    },
-    [base, router],
-  );
+  const load = useCallback(() => {
+    const startedAt = edits.current;
+    return apiFetch<SessionAttendance>(base)
+      .then((next) => {
+        if (edits.current === startedAt) setData(next);
+        return next;
+      })
+      .catch(async (e: unknown) => {
+        setError(await handleApiError(e, router));
+        return null;
+      });
+  }, [base, router]);
 
   // ดึงใหม่เรื่อย ๆ จนคาบจบ (กล้องเริ่มก่อนเวลาคาบ) แท็บที่ซ่อนอยู่ข้ามรอบนั้นไป
   useEffect(() => {
@@ -68,17 +74,35 @@ export function CheckinView() {
     };
   }, [load]);
 
-  async function send(path: string, method: string, body: unknown) {
+  // คืนข้อความ error ให้ผู้เรียกเลือกที่แสดงเอง (ออกจากระบบแล้ว error เป็น null)
+  async function run(path: string, method: string, body?: unknown): Promise<TripResult> {
     edits.current += 1;
     setBusy(true);
-    setError(null);
     try {
-      setData(await apiFetch<SessionAttendance>(path, { method, body: JSON.stringify(body) }));
+      const init = body === undefined ? { method } : { method, body: JSON.stringify(body) };
+      setData(await apiFetch<SessionAttendance>(path, init));
+      return { ok: true, error: null };
     } catch (e) {
-      setError(await handleApiError(e, router));
+      return { ok: false, error: await handleApiError(e, router) };
     } finally {
       setBusy(false);
     }
+  }
+
+  async function send(path: string, method: string, body?: unknown) {
+    setError(null);
+    const result = await run(path, method, body);
+    if (!result.ok) setError(result.error);
+  }
+
+  const tripBase = `/sessions/${sessionId}/trips`;
+
+  function reviewTrip(tripId: string, action: ReviewAction) {
+    return send(`${tripBase}/${tripId}/review`, "POST", action);
+  }
+
+  function reviewTripResult(tripId: string, action: ReviewAction) {
+    return run(`${tripBase}/${tripId}/review`, "POST", action);
   }
 
   function review(code: string, action: ReviewAction) {
@@ -91,9 +115,17 @@ export function CheckinView() {
 
   if (!data) return error ? <p className="text-red-600">{error}</p> : <p>กำลังโหลด...</p>;
 
-  const { session, rows, unknown } = data;
+  const { session, rows, unknown, tripReviews, unknownTrips } = data;
   const pending = rows.filter((r) => r.status === "pending");
   const unseen = rows.filter((r) => r.status === null);
+  const backAtFor = (hhmm: string) =>
+    bangkokTimeToIso(session.onDate, hhmm, session.startsAt, session.endsAt);
+  const selected = openTrip
+    ? rows
+        .find((r) => r.studentCode === openTrip.code)
+        ?.outOfRoom.trips.find((t) => t.id === openTrip.tripId)
+    : undefined;
+  const selectedRow = openTrip ? rows.find((r) => r.studentCode === openTrip.code) : undefined;
   const count = (status: AttendanceStatus) => rows.filter((r) => r.status === status).length;
 
   return (
@@ -103,8 +135,8 @@ export function CheckinView() {
           คาบทั้งหมด
         </Link>
         <h2 className="font-medium">
-          {formatDate(session.onDate)} {formatTime(session.startsAt)}-{formatTime(session.endsAt)}{" "}
-          · {session.roomName}
+          {formatDate(session.onDate)} {formatTime(session.startsAt)}-{formatTime(session.endsAt)} ·{" "}
+          {session.roomName}
           {session.kind === "exam" && (
             <span className="ml-2">
               <ExamBadge title={session.title} />
@@ -129,17 +161,46 @@ export function CheckinView() {
 
       {error && <p className="text-red-600">{error}</p>}
 
-      {pending.length > 0 && (
+      {(pending.length > 0 || tripReviews.length > 0) && (
         <div className="space-y-3">
           <h3 className="font-medium">รอตรวจ</h3>
           <p className="text-sm text-gray-600">ระบบไม่แน่ใจว่าเป็นคนนี้ ดูรูปแล้วเลือก</p>
           {pending.map((row) => (
             <ReviewCard
               key={row.studentCode}
-              row={row}
+              imageUrl={row.imageUrl}
+              code={row.studentCode}
+              name={row.fullName}
+              spoof={row.reviewReason === "spoof"}
+              detail={`เห็นตอน ${row.firstSeenAt ? formatTime(row.firstSeenAt) : "-"}${
+                row.confidence !== null ? ` · ความเหมือน ${Math.round(row.confidence * 100)}%` : ""
+              }`}
+              rejectLabel="ไม่ใช่นักศึกษาวิชานี้"
+              rejectMessage={
+                row.reviewReason === "spoof"
+                  ? "ไม่นับรูปนี้ใช่ไหม ถ้าตัวจริงเข้ามา กล้องจะเช็คให้ใหม่"
+                  : `ไม่ใช่นักศึกษาวิชานี้ใช่ไหม รูปนี้จะไม่ถูกนับเป็นของ ${row.studentCode}`
+              }
               candidates={unseen}
               busy={busy}
               onReview={(action) => review(row.studentCode, action)}
+            />
+          ))}
+          {tripReviews.map((t) => (
+            <ReviewCard
+              key={t.id}
+              imageUrl={t.imageUrl}
+              code={t.guessCode}
+              name={t.guessName}
+              detail={`ออกตอน ${formatTime(t.outAt)}${
+                t.score !== null ? ` · ความเหมือน ${Math.round(t.score * 100)}%` : ""
+              }`}
+              rejectLabel="ไม่ใช่ ลบรอบนี้"
+              rejectMessage="ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง"
+              candidates={rows}
+              busy={busy}
+              backAtFor={backAtFor}
+              onReview={(action) => reviewTrip(t.id, action)}
             />
           ))}
         </div>
@@ -153,6 +214,7 @@ export function CheckinView() {
               <th className="px-4 py-2">นักศึกษา</th>
               <th className="px-4 py-2">เห็นตอน</th>
               <th className="px-4 py-2">สถานะ</th>
+              <th className="px-4 py-2">นอกห้อง</th>
               <th className="px-4 py-2">แก้</th>
             </tr>
           </thead>
@@ -163,13 +225,14 @@ export function CheckinView() {
                 row={row}
                 busy={busy}
                 onChange={(status) => setStatus(row.studentCode, status)}
+                onOpenTrip={(tripId) => setOpenTrip({ code: row.studentCode, tripId })}
               />
             ))}
           </tbody>
         </table>
       </div>
 
-      {unknown.length > 0 && (
+      {(unknown.length > 0 || unknownTrips.length > 0) && (
         <div className="space-y-2">
           <h3 className="font-medium">หน้าที่ไม่ตรงกับใครในวิชา</h3>
           <p className="text-sm text-gray-600">เก็บไว้ 7 วันแล้วลบเอง</p>
@@ -181,7 +244,31 @@ export function CheckinView() {
               </figure>
             ))}
           </div>
+          {unknownTrips.map((t) => (
+            <UnknownTripCard
+              key={t.id}
+              trip={t}
+              candidates={rows}
+              busy={busy}
+              backAtFor={backAtFor}
+              onReview={(action) => reviewTripResult(t.id, action)}
+            />
+          ))}
         </div>
+      )}
+
+      {openTrip && selected && selectedRow && (
+        <TripDialog
+          key={openTrip.tripId}
+          studentCode={selectedRow.studentCode}
+          fullName={selectedRow.fullName}
+          trip={selected}
+          session={session}
+          busy={busy}
+          onSave={(backAt) => run(`${tripBase}/${openTrip.tripId}`, "PATCH", { backAt })}
+          onDelete={() => run(`${tripBase}/${openTrip.tripId}`, "DELETE")}
+          onClose={() => setOpenTrip(null)}
+        />
       )}
     </section>
   );
@@ -191,16 +278,22 @@ function StudentRow({
   row,
   busy,
   onChange,
+  onOpenTrip,
 }: {
   row: AttendanceRow;
   busy: boolean;
   onChange: (status: string) => void;
+  onOpenTrip: (tripId: string) => void;
 }) {
   const editable = EDITABLE.find((s) => s === row.status);
   return (
     <tr>
       <td className="px-4 py-2">
-        {row.imageUrl ? <Photo src={row.imageUrl} size="h-12 w-12" /> : <div className="h-12 w-12" />}
+        {row.imageUrl ? (
+          <Photo src={row.imageUrl} size="h-12 w-12" />
+        ) : (
+          <div className="h-12 w-12" />
+        )}
       </td>
       <td className="px-4 py-2">
         <div className="font-mono">{row.studentCode}</div>
@@ -210,13 +303,29 @@ function StudentRow({
       <td className="px-4 py-2">{row.firstSeenAt ? formatTime(row.firstSeenAt) : "-"}</td>
       <td className="px-4 py-2">
         {row.status ? (
-          <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[row.status].className}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[row.status].className}`}
+          >
             {STATUS_LABEL[row.status].label}
           </span>
         ) : (
           <span className="text-gray-500">ยังไม่เห็น</span>
         )}
+        {row.outOfRoom.label && (
+          <span
+            className={`ml-1 rounded-full px-2 py-0.5 text-xs ${OUT_LABEL[row.outOfRoom.label].className}`}
+          >
+            {OUT_LABEL[row.outOfRoom.label].text(row.outOfRoom.minutes)}
+          </span>
+        )}
         {row.updatedBy && <div className="text-xs text-gray-500">แก้โดย {row.updatedBy}</div>}
+      </td>
+      <td className="px-4 py-2">
+        <div className="flex flex-wrap gap-1">
+          {row.outOfRoom.trips.map((trip) => (
+            <TripChip key={trip.id} trip={trip} onClick={() => onOpenTrip(trip.id)} />
+          ))}
+        </div>
       </td>
       <td className="px-4 py-2">
         {row.status !== "pending" && (
@@ -238,5 +347,74 @@ function StudentRow({
         )}
       </td>
     </tr>
+  );
+}
+
+// รอบที่กล้องไม่รู้ว่าใคร อาจารย์ระบุตัวหรือลบทิ้ง
+function UnknownTripCard({
+  trip,
+  candidates,
+  busy,
+  backAtFor,
+  onReview,
+}: {
+  trip: { id: string; outAt: string; imageUrl: string | null };
+  candidates: AttendanceRow[];
+  busy: boolean;
+  backAtFor: (hhmm: string) => string;
+  onReview: (action: ReviewAction) => Promise<TripResult>;
+}) {
+  const [choosing, setChoosing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(action: ReviewAction) {
+    setError(null);
+    const result = await onReview(action);
+    if (!result.ok) setError(result.error);
+  }
+
+  function reject() {
+    if (!window.confirm("ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง")) return;
+    void submit({ action: "reject" });
+  }
+
+  return (
+    <div className="flex flex-wrap gap-4 rounded-lg border p-4">
+      {trip.imageUrl ? (
+        <Photo src={trip.imageUrl} size="h-20 w-20" />
+      ) : (
+        <div className="h-20 w-20" />
+      )}
+      <div className="flex-1 space-y-2">
+        <p className="text-sm">ออกตอน {formatTime(trip.outAt)}</p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {choosing ? (
+          <ReassignForm
+            candidates={candidates}
+            busy={busy}
+            backAtFor={backAtFor}
+            onSubmit={(action) => void submit(action)}
+            onCancel={() => setChoosing(false)}
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              disabled={busy || candidates.length === 0}
+              onClick={() => setChoosing(true)}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+            >
+              ระบุตัว
+            </button>
+            <button
+              disabled={busy}
+              onClick={reject}
+              className="rounded-lg border px-4 py-2 text-red-600 disabled:opacity-50"
+            >
+              ลบรอบนี้
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

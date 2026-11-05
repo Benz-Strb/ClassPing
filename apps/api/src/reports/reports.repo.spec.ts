@@ -29,6 +29,7 @@ describe('SupabaseReportsRepo', () => {
             ends_at: '2026-11-01T05:00:00Z',
             late_after_min: 5,
             absent_after_min: null,
+            out_of_room_limit_min: null,
           },
           {
             id: 'class',
@@ -182,6 +183,7 @@ describe('SupabaseReportsRepo', () => {
           title: null,
           late_after_min: null,
           absent_after_min: null,
+          out_of_room_limit_min: null,
           rooms: { name: 'LAB 1' },
         },
       ],
@@ -299,6 +301,7 @@ describe('SupabaseReportsRepo', () => {
                           title: null,
                           late_after_min: null,
                           absent_after_min: null,
+                          out_of_room_limit_min: null,
                           rooms: { name: 'LAB 1' },
                         },
                         {
@@ -311,6 +314,7 @@ describe('SupabaseReportsRepo', () => {
                           title: 'Midterm',
                           late_after_min: 10,
                           absent_after_min: null,
+                          out_of_room_limit_min: null,
                           rooms: { name: 'HALL' },
                         },
                         {
@@ -323,6 +327,7 @@ describe('SupabaseReportsRepo', () => {
                           title: null,
                           late_after_min: null,
                           absent_after_min: null,
+                          out_of_room_limit_min: null,
                           rooms: { name: 'LAB 1' },
                         },
                       ].slice(from, to + 1),

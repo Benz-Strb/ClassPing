@@ -49,6 +49,7 @@ export interface ExamView {
   room: { id: string; name: string };
   lateAfterMin: number;
   absentAfterMin: number | null;
+  outOfRoomLimitMin: number;
   proctors: Person[];
   // กล้องเปิดแล้ว แก้ได้แค่คนคุมสอบ
   locked: boolean;
@@ -77,6 +78,7 @@ const examSchema = z
     roomId,
     lateAfterMin: minutes('เวลาตัดสาย', 0),
     absentAfterMin: minutes('เวลาตัดขาด', 1).nullable(),
+    outOfRoomLimitMin: minutes('เวลานอกห้อง', 1),
     proctorIds: z
       .array(z.string(), { error: 'ข้อมูลคนคุมสอบไม่ถูกต้อง' })
       .max(MAX_PROCTORS, { error: `คนคุมสอบได้ไม่เกิน ${MAX_PROCTORS} คน` })
@@ -155,7 +157,8 @@ export class ExamsService {
         next.startsAt.getTime() === current.startsAt.getTime() &&
         next.endsAt.getTime() === current.endsAt.getTime() &&
         next.lateAfterMin === current.lateAfterMin &&
-        next.absentAfterMin === current.absentAfterMin;
+        next.absentAfterMin === current.absentAfterMin &&
+        next.outOfRoomLimitMin === current.outOfRoomLimitMin;
       if (!same) throw sessionStarted();
       await this.repo.setProctors(examId, await this.checkProctors(input.proctorIds));
     } else {
@@ -290,6 +293,7 @@ export class ExamsService {
       roomId: input.roomId,
       lateAfterMin: input.lateAfterMin,
       absentAfterMin: input.absentAfterMin,
+      outOfRoomLimitMin: input.outOfRoomLimitMin,
     };
   }
 
@@ -309,6 +313,7 @@ export class ExamsService {
       room: { id: exam.roomId, name: exam.roomName },
       lateAfterMin: exam.lateAfterMin,
       absentAfterMin: exam.absentAfterMin,
+      outOfRoomLimitMin: exam.outOfRoomLimitMin,
       proctors: exam.proctors,
       locked: this.locked(exam),
     };

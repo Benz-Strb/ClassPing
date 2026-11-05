@@ -163,6 +163,7 @@ function setup(openBeforeMin = 20) {
     roomId: roomB,
     lateAfterMin: 10,
     absentAfterMin: 30,
+    outOfRoomLimitMin: 15,
     proctorIds: [proctor.id],
     ...patch,
   });
@@ -213,6 +214,7 @@ describe('ExamsService สร้างและดูคาบสอบ', () => 
       room: { id: roomB, name: 'ห้อง B' },
       lateAfterMin: 10,
       absentAfterMin: 30,
+      outOfRoomLimitMin: 15,
       proctors: [{ id: proctor.id, name: 'อ.คุมสอบ' }],
       locked: false,
     });
@@ -235,8 +237,25 @@ describe('ExamsService สร้างและดูคาบสอบ', () => 
     expect(await code({ start: '06:00' })).toBe('BAD_REQUEST');
     expect(await code({ lateAfterMin: -1 })).toBe('BAD_REQUEST');
     expect(await code({ absentAfterMin: 10 })).toBe('BAD_REQUEST');
+    expect(await code({ outOfRoomLimitMin: 0 })).toBe('BAD_REQUEST');
+    expect(await code({ outOfRoomLimitMin: 241 })).toBe('BAD_REQUEST');
     expect(await code({ title: '  ' })).toBe('BAD_REQUEST');
     expect(await code({ date: '26-10-2026' })).toBe('BAD_REQUEST');
+  });
+
+  it('ไม่ส่งเวลานอกห้อง ได้ 400', async () => {
+    const { owner, cs101, service, body } = setup();
+    const { outOfRoomLimitMin: _omit, ...rest } = body();
+    expect((await rejection(service.create(owner, cs101.id, rest))).code).toBe('BAD_REQUEST');
+  });
+
+  it('เวลานอกห้องบันทึกแล้วอ่านคืนได้ ทั้งตอนสร้างและแก้', async () => {
+    const { owner, cs101, service, body } = setup();
+    const exam = await service.create(owner, cs101.id, body({ outOfRoomLimitMin: 20 }));
+    expect(exam.outOfRoomLimitMin).toBe(20);
+    const updated = await service.update(owner, exam.id, body({ outOfRoomLimitMin: 5 }));
+    expect(updated.outOfRoomLimitMin).toBe(5);
+    expect((await service.list(owner, cs101.id))[0].outOfRoomLimitMin).toBe(5);
   });
 
   it('ไม่ตั้งเวลาตัดขาด = นับขาดตอนหมดคาบ', async () => {
@@ -415,6 +434,21 @@ describe('ExamsService หลังกล้องเปิด', () => {
     const updated = await service.update(owner, exam.id, today({ proctorIds: [] }));
     expect(updated.proctors).toEqual([]);
     expect(updated.locked).toBe(true);
+  });
+
+  it('กล้องเปิดแล้วแก้เวลานอกห้องไม่ได้', async () => {
+    const { owner, cs101, service, config, body } = setup(0);
+    const today = (patch: Record<string, unknown> = {}) =>
+      body({ date: TODAY, start: '10:15', ...patch });
+    const exam = await service.create(owner, cs101.id, today());
+    config.cameraOpenBeforeMin = 20;
+    expect(
+      (await rejection(service.update(owner, exam.id, today({ outOfRoomLimitMin: 30 })))).code,
+    ).toBe('SESSION_STARTED');
+    // ค่าเดิมกับคนคุมสอบที่เปลี่ยน ผ่าน
+    await expect(service.update(owner, exam.id, today({ proctorIds: [] }))).resolves.toMatchObject({
+      outOfRoomLimitMin: 15,
+    });
   });
 
   it('สร้างคาบสอบที่กล้องควรเปิดไปแล้วไม่ได้', async () => {

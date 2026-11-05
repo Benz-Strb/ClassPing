@@ -1,4 +1,6 @@
 import { AppError } from '../common/app-error.js';
+import { DoorEntries } from '../door/door-entries.js';
+import type { DoorRepo, StoredTrip } from '../door/door.repo.js';
 import type { CoursesService } from '../courses/courses.service.js';
 import type { RosterService } from '../courses/roster.service.js';
 import type { AppUser } from '../users/users.service.js';
@@ -31,6 +33,7 @@ const session: SessionInfo = {
   title: null,
   lateAfterMin: null,
   absentAfterMin: null,
+  outOfRoomLimitMin: null,
   courseId: 'c1',
   scheduleId: 'sch1',
   roomId: 'r1',
@@ -144,7 +147,18 @@ function setup() {
   } as unknown as CoursesService;
   const rosterService = { entries: async () => roster } as unknown as RosterService;
   const rejected = new RejectedGuesses(() => at(30));
-  const service = new AttendanceService(courses, rosterService, repo, () => at(30), rejected);
+  const doorTrips: { list: StoredTrip[] } = { list: [] };
+  const door = { listTrips: async () => doorTrips.list } as unknown as DoorRepo;
+  const doorEntries = new DoorEntries(() => at(30));
+  const service = new AttendanceService(
+    courses,
+    rosterService,
+    repo,
+    () => at(30),
+    rejected,
+    door,
+    doorEntries,
+  );
   const pending = (userId: string, minute = 5, reviewReason: 'spoof' | null = null) =>
     repo.rows.set(userId, {
       userId,
@@ -156,7 +170,7 @@ function setup() {
       updatedByName: null,
       reviewReason,
     });
-  return { repo, service, pending, rejected };
+  return { repo, service, pending, rejected, doorTrips, doorEntries };
 }
 
 describe('AttendanceService.view', () => {
@@ -348,5 +362,173 @@ describe('AttendanceService.review', () => {
   it('นักศึกษาเรียกไม่ได้ (ไม่ใช่เจ้าของวิชา) ได้ 404', async () => {
     const { service } = setup();
     await expect(service.view(student, SESSION_ID)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('AttendanceService.view รอบนอกห้อง', () => {
+  const trip = (over: Partial<StoredTrip> & { id: string }): StoredTrip => ({
+    userId: 'u1',
+    status: 'confirmed',
+    outAt: at(10),
+    backAt: null,
+    backBy: null,
+    confidence: 0.8,
+    imagePath: `${SESSION_ID}/door/${over.id}.jpg`,
+    ...over,
+  });
+
+  it('คนที่ไม่มีรอบได้ outOfRoom ว่าง', async () => {
+    const { service } = setup();
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.rows[0].outOfRoom).toEqual({
+      totalSeconds: 0,
+      minutes: 0,
+      label: null,
+      trips: [],
+    });
+  });
+
+  it('แถวมี outOfRoom ตามเกณฑ์ของวิชา: เกินเกณฑ์เป็น gone ไม่เกินเป็น out', async () => {
+    const { service, doorTrips } = setup();
+    doorTrips.list = [
+      // u1 รวม 16 นาที (เกณฑ์ 15)
+      trip({ id: 'a', outAt: at(5), backAt: at(13), backBy: 'front' }),
+      trip({ id: 'b', outAt: at(20), backAt: at(28), backBy: 'teacher' }),
+      // u2 รวม 10 นาที
+      trip({ id: 'c', userId: 'u2', outAt: at(5), backAt: at(15), backBy: 'front' }),
+    ];
+    const view = await service.view(teacher, SESSION_ID);
+    const u1 = view.rows.find((r) => r.studentCode === '66000001')!;
+    const u2 = view.rows.find((r) => r.studentCode === '66000002')!;
+    expect(u1.outOfRoom).toMatchObject({ totalSeconds: 960, minutes: 16, label: 'gone' });
+    expect(u1.outOfRoom.trips).toEqual([
+      {
+        id: 'a',
+        outAt: at(5).toISOString(),
+        backAt: at(13).toISOString(),
+        backBy: 'front',
+        seconds: 480,
+        imageUrl: `https://signed/${SESSION_ID}/door/a.jpg`,
+        suggestedBackAt: null,
+      },
+      expect.objectContaining({ id: 'b', backBy: 'teacher', seconds: 480 }),
+    ]);
+    expect(u2.outOfRoom).toMatchObject({ totalSeconds: 600, minutes: 10, label: 'out' });
+  });
+
+  it('รอบที่ยังไม่กลับนับถึงหมดคาบ ป้าย gone_no_return และเสนอเวลาเข้าแรกหลังออก', async () => {
+    const { service, doorTrips, doorEntries } = setup();
+    doorTrips.list = [trip({ id: 'a', outAt: at(100) })];
+    doorEntries.add(SESSION_ID, at(90), session.endsAt);
+    doorEntries.add(SESSION_ID, at(120), session.endsAt);
+    doorEntries.add(SESSION_ID, at(110), session.endsAt);
+    const view = await service.view(teacher, SESSION_ID);
+    const out = view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom;
+    expect(out).toMatchObject({ totalSeconds: 80 * 60, label: 'gone_no_return' });
+    expect(out.trips[0]).toMatchObject({
+      backAt: null,
+      backBy: null,
+      seconds: 80 * 60,
+      suggestedBackAt: at(110).toISOString(),
+    });
+  });
+
+  it('รอบที่กลับแล้วไม่เสนอเวลา และรอบเปิดที่ยังไม่มีเวลาเข้า suggestedBackAt เป็น null', async () => {
+    const { service, doorTrips, doorEntries } = setup();
+    doorEntries.add(SESSION_ID, at(12), session.endsAt);
+    doorTrips.list = [
+      trip({ id: 'a', outAt: at(5), backAt: at(13), backBy: 'front' }),
+      trip({ id: 'b', userId: 'u2', outAt: at(20) }),
+    ];
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom.trips[0]).toMatchObject({
+      suggestedBackAt: null,
+    });
+    expect(view.rows.find((r) => r.studentCode === '66000002')!.outOfRoom.trips[0]).toMatchObject({
+      suggestedBackAt: null,
+    });
+  });
+
+  it('คาบสอบใช้เกณฑ์ของคาบ และ session บอกเกณฑ์ที่ใช้', async () => {
+    const { service, doorTrips, repo } = setup();
+    const original = repo.session.bind(repo);
+    repo.session = async (id: string) => {
+      const s = await original(id);
+      return s && { ...s, kind: 'exam' as const, outOfRoomLimitMin: 5 };
+    };
+    doorTrips.list = [trip({ id: 'a', outAt: at(5), backAt: at(13), backBy: 'front' })];
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.outOfRoomLimitMin).toBe(5);
+    expect(view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom.label).toBe('gone');
+  });
+
+  it('คาบเรียนที่ไม่ตั้งเกณฑ์ใช้ของวิชา', async () => {
+    const { service } = setup();
+    expect((await service.view(teacher, SESSION_ID)).session.outOfRoomLimitMin).toBe(15);
+  });
+
+  it('pending อยู่ใน tripReviews ไม่อยู่ในแถว', async () => {
+    const { service, doorTrips } = setup();
+    doorTrips.list = [
+      trip({ id: 'p1', status: 'pending', userId: 'u2', confidence: 0.42, outAt: at(7) }),
+      trip({ id: 'ok', outAt: at(5), backAt: at(6), backBy: 'front' }),
+    ];
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.tripReviews).toEqual([
+      {
+        id: 'p1',
+        guessCode: '66000002',
+        guessName: 'สอง',
+        score: 0.42,
+        outAt: at(7).toISOString(),
+        imageUrl: `https://signed/${SESSION_ID}/door/p1.jpg`,
+      },
+    ]);
+    expect(view.rows.find((r) => r.studentCode === '66000002')!.outOfRoom.trips).toEqual([]);
+    expect(view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom.trips).toHaveLength(1);
+  });
+
+  it('unknown ล่าสุด 20 รอบ เรียงใหม่ไปเก่า และไม่อยู่ในแถว', async () => {
+    const { service, doorTrips } = setup();
+    doorTrips.list = Array.from({ length: 25 }, (_, i) =>
+      trip({ id: `k${i}`, status: 'unknown', userId: null, outAt: at(i) }),
+    );
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.unknownTrips).toHaveLength(20);
+    expect(view.unknownTrips[0]).toEqual({
+      id: 'k24',
+      outAt: at(24).toISOString(),
+      imageUrl: `https://signed/${SESSION_ID}/door/k24.jpg`,
+    });
+    expect(view.unknownTrips[19].id).toBe('k5');
+    expect(view.rows.every((r) => r.outOfRoom.trips.length === 0)).toBe(true);
+  });
+
+  it('เซ็นรูปรวดเดียวทั้งรูปเช็คชื่อและรูปรอบนอกห้อง', async () => {
+    const { service, doorTrips, pending, repo } = setup();
+    pending('u1');
+    doorTrips.list = [
+      trip({ id: 'a', userId: 'u2', outAt: at(5), backAt: at(6), backBy: 'front' }),
+      trip({ id: 'p', status: 'pending', userId: 'u3' }),
+      trip({ id: 'k', status: 'unknown', userId: null }),
+      trip({
+        id: 'n',
+        userId: 'u2',
+        outAt: at(8),
+        backAt: at(9),
+        backBy: 'front',
+        imagePath: null,
+      }),
+    ];
+    await service.view(teacher, SESSION_ID);
+    expect(repo.signed).toHaveLength(1);
+    expect(repo.signed[0].sort()).toEqual(
+      [
+        `${SESSION_ID}/u1-x.jpg`,
+        `${SESSION_ID}/door/a.jpg`,
+        `${SESSION_ID}/door/p.jpg`,
+        `${SESSION_ID}/door/k.jpg`,
+      ].sort(),
+    );
   });
 });
