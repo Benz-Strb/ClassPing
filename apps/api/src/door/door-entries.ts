@@ -2,7 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
 
 // เวลาที่กล้องประตูเห็นคนเดินเข้าห้อง ไว้เสนอเป็นเวลากลับให้อาจารย์
-// เก็บในหน่วยความจำ หายตอน restart ได้ และลืมคาบที่จบแล้ว
+// เก็บในหน่วยความจำ หายตอน restart ได้ และลืมคาบที่จบแล้ว 24 ชั่วโมง
+// (อาจารย์อาจมาระบุรอบหลังเลิกคาบ แล้วใช้เวลาเข้าเป็นค่าเริ่มต้น)
+const KEEP_AFTER_END_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class DoorEntries {
   private readonly sessions = new Map<string, { endsAt: Date; times: Date[] }>();
@@ -25,9 +28,9 @@ export class DoorEntries {
   }
 
   private forgetEnded() {
-    const now = this.now();
+    const now = this.now().getTime();
     for (const [sessionId, entry] of this.sessions) {
-      if (entry.endsAt <= now) this.sessions.delete(sessionId);
+      if (entry.endsAt.getTime() + KEEP_AFTER_END_MS <= now) this.sessions.delete(sessionId);
     }
   }
 }

@@ -3,6 +3,9 @@ import { CLOCK } from '../common/clock.js';
 import { CoursesModule } from '../courses/courses.module.js';
 import { RosterService } from '../courses/roster.service.js';
 import { DoorModule } from '../door/door.module.js';
+import { OutOfRoomController } from '../door/out-of-room.controller.js';
+import { TripsController } from '../door/trips.controller.js';
+import { TripsService } from '../door/trips.service.js';
 import { FaceClient } from '../face/face.client.js';
 import { ATTENDANCE_ADMIN_REPO, SupabaseAttendanceAdminRepo } from './attendance-admin.repo.js';
 import { AttendanceController } from './attendance.controller.js';
@@ -17,9 +20,10 @@ import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
 
 @Module({
   imports: [CoursesModule, DoorModule],
-  controllers: [AttendanceController],
+  controllers: [AttendanceController, TripsController, OutOfRoomController],
   providers: [
     AttendanceService,
+    TripsService,
     FrameProcessor,
     FrameWorker,
     RejectedGuesses,
