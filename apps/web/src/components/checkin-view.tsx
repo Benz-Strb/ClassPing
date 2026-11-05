@@ -42,21 +42,18 @@ export function CheckinView() {
   const [openTrip, setOpenTrip] = useState<{ code: string; tripId: string } | null>(null);
   const base = `/sessions/${sessionId}/attendance`;
 
-  const load = useCallback(
-    () => {
-      const startedAt = edits.current;
-      return apiFetch<SessionAttendance>(base)
-        .then((next) => {
-          if (edits.current === startedAt) setData(next);
-          return next;
-        })
-        .catch(async (e: unknown) => {
-          setError(await handleApiError(e, router));
-          return null;
-        });
-    },
-    [base, router],
-  );
+  const load = useCallback(() => {
+    const startedAt = edits.current;
+    return apiFetch<SessionAttendance>(base)
+      .then((next) => {
+        if (edits.current === startedAt) setData(next);
+        return next;
+      })
+      .catch(async (e: unknown) => {
+        setError(await handleApiError(e, router));
+        return null;
+      });
+  }, [base, router]);
 
   // ดึงใหม่เรื่อย ๆ จนคาบจบ (กล้องเริ่มก่อนเวลาคาบ) แท็บที่ซ่อนอยู่ข้ามรอบนั้นไป
   useEffect(() => {
@@ -104,6 +101,10 @@ export function CheckinView() {
     return send(`${tripBase}/${tripId}/review`, "POST", action);
   }
 
+  function reviewTripResult(tripId: string, action: ReviewAction) {
+    return run(`${tripBase}/${tripId}/review`, "POST", action);
+  }
+
   function review(code: string, action: ReviewAction) {
     return send(`${base}/${code}/review`, "POST", action);
   }
@@ -134,8 +135,8 @@ export function CheckinView() {
           คาบทั้งหมด
         </Link>
         <h2 className="font-medium">
-          {formatDate(session.onDate)} {formatTime(session.startsAt)}-{formatTime(session.endsAt)}{" "}
-          · {session.roomName}
+          {formatDate(session.onDate)} {formatTime(session.startsAt)}-{formatTime(session.endsAt)} ·{" "}
+          {session.roomName}
           {session.kind === "exam" && (
             <span className="ml-2">
               <ExamBadge title={session.title} />
@@ -250,7 +251,7 @@ export function CheckinView() {
               candidates={rows}
               busy={busy}
               backAtFor={backAtFor}
-              onReview={(action) => reviewTrip(t.id, action)}
+              onReview={(action) => reviewTripResult(t.id, action)}
             />
           ))}
         </div>
@@ -288,7 +289,11 @@ function StudentRow({
   return (
     <tr>
       <td className="px-4 py-2">
-        {row.imageUrl ? <Photo src={row.imageUrl} size="h-12 w-12" /> : <div className="h-12 w-12" />}
+        {row.imageUrl ? (
+          <Photo src={row.imageUrl} size="h-12 w-12" />
+        ) : (
+          <div className="h-12 w-12" />
+        )}
       </td>
       <td className="px-4 py-2">
         <div className="font-mono">{row.studentCode}</div>
@@ -298,7 +303,9 @@ function StudentRow({
       <td className="px-4 py-2">{row.firstSeenAt ? formatTime(row.firstSeenAt) : "-"}</td>
       <td className="px-4 py-2">
         {row.status ? (
-          <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[row.status].className}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[row.status].className}`}
+          >
             {STATUS_LABEL[row.status].label}
           </span>
         ) : (
@@ -355,13 +362,20 @@ function UnknownTripCard({
   candidates: AttendanceRow[];
   busy: boolean;
   backAtFor: (hhmm: string) => string;
-  onReview: (action: ReviewAction) => void;
+  onReview: (action: ReviewAction) => Promise<TripResult>;
 }) {
   const [choosing, setChoosing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(action: ReviewAction) {
+    setError(null);
+    const result = await onReview(action);
+    if (!result.ok) setError(result.error);
+  }
 
   function reject() {
     if (!window.confirm("ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง")) return;
-    onReview({ action: "reject" });
+    void submit({ action: "reject" });
   }
 
   return (
@@ -373,12 +387,13 @@ function UnknownTripCard({
       )}
       <div className="flex-1 space-y-2">
         <p className="text-sm">ออกตอน {formatTime(trip.outAt)}</p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
         {choosing ? (
           <ReassignForm
             candidates={candidates}
             busy={busy}
             backAtFor={backAtFor}
-            onSubmit={onReview}
+            onSubmit={(action) => void submit(action)}
             onCancel={() => setChoosing(false)}
           />
         ) : (
