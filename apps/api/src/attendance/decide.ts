@@ -40,15 +40,17 @@ export interface SessionRules {
   kind: 'class' | 'exam';
   lateAfterMin: number | null;
   absentAfterMin: number | null;
+  outOfRoomLimitMin: number | null;
 }
 
-// คาบสอบตั้งเกณฑ์สาย/ขาดเองในแถวคาบ ส่วนคาบเรียนใช้เกณฑ์ของวิชา
+// คาบสอบตั้งเกณฑ์สาย/ขาด/เวลานอกห้องเองในแถวคาบ ส่วนคาบเรียนใช้เกณฑ์ของวิชา
 export function rulesFor(session: SessionRules, course: Rules): Rules {
-  if (session.kind !== 'exam') return course;
+  const outOfRoomLimitMin = session.outOfRoomLimitMin ?? course.outOfRoomLimitMin;
+  if (session.kind !== 'exam') return { ...course, outOfRoomLimitMin };
   return {
     lateAfterMin: session.lateAfterMin ?? course.lateAfterMin,
     absentAfterMin: session.absentAfterMin,
-    outOfRoomLimitMin: course.outOfRoomLimitMin,
+    outOfRoomLimitMin,
   };
 }
 

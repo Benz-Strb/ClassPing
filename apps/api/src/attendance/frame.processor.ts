@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
-import { cosine, isComplete } from '../enrollment/pose-check.js';
+import { cosine } from '../enrollment/pose-check.js';
+import { DOOR_REPO, type DoorRepo } from '../door/door.repo.js';
+import { OpenTrips } from '../door/open-trips.js';
 import type { DetectedFace, DetectResult } from '../face/face.client.js';
 import {
   ATTENDANCE_REPO,
@@ -19,7 +21,7 @@ import {
   type Verdict,
 } from './decide.js';
 import type { FrameJob } from './frame-queue.js';
-import { bestTwo, type GalleryEntry } from './gallery.js';
+import { bestTwo, loadCourseGallery, type GalleryEntry } from './gallery.js';
 import { LiveFaces, type LiveFace } from './live-faces.js';
 import { LiveStreaks } from './live-streaks.js';
 import { RejectedGuesses } from './rejected-guesses.js';
@@ -63,6 +65,8 @@ export class FrameProcessor {
     private readonly rejected: RejectedGuesses,
     private readonly liveFaces: LiveFaces,
     private readonly streaks: LiveStreaks,
+    private readonly openTrips: OpenTrips,
+    @Inject(DOOR_REPO) private readonly door: DoorRepo,
   ) {}
 
   async process(job: FrameJob): Promise<FrameOutcome> {
@@ -87,7 +91,7 @@ export class FrameProcessor {
     }
 
     const gallery = await this.cached(this.galleries, context.courseId, () =>
-      this.loadGallery(context.courseId),
+      loadCourseGallery(this.repo, this.deps, context.courseId),
     );
     const thresholds = {
       acceptMin: this.config.matchAcceptMin,
@@ -121,12 +125,28 @@ export class FrameProcessor {
         await this.saveUnknown(job.sessionId, context.endsAt, face, seenAt);
         outcome.unknown++;
       } else {
+        if (verdict.kind === 'match' && liveness !== 'spoof') {
+          await this.closeTripIfOut(job.sessionId, verdict.userId, seenAt);
+        }
         await this.record(job.sessionId, context, verdict, face, seenAt, liveness);
         outcome[verdict.kind === 'match' ? 'matched' : 'review']++;
       }
     }
     this.liveFaces.set(job.sessionId, seenAt, live);
     return outcome;
+  }
+
+  // เห็นคนที่ออกนอกห้องอยู่ด้วยความมั่นใจ ปิดรอบ ถ้า repo ไม่ปิดให้ก็ปล่อยไว้
+  // พังตรงนี้ไม่กระทบการเช็คชื่อ
+  private async closeTripIfOut(sessionId: string, userId: string, seenAt: Date) {
+    try {
+      if (!(await this.openTrips.has(sessionId, userId))) return;
+      if (await this.door.closeTrip(sessionId, userId, seenAt, 'front')) {
+        await this.openTrips.remove(sessionId, userId);
+      }
+    } catch (error) {
+      this.logger.warn(`ปิดรอบนอกห้องของ ${userId} ไม่สำเร็จ: ${String(error)}`);
+    }
   }
 
   private async record(
@@ -222,24 +242,6 @@ export class FrameProcessor {
     await this.repo.removeCaptures([path]).catch((error: unknown) => {
       this.logger.warn(`ลบรูป ${path} ไม่สำเร็จ: ${String(error)}`);
     });
-  }
-
-  // เทียบเฉพาะคนในวิชาที่ลงทะเบียนครบทุกท่า ด้วยโมเดลเดียวกับที่ service ใช้อยู่
-  private async loadGallery(courseId: string): Promise<GalleryEntry[]> {
-    const userIds = await this.deps.enrolledUserIds(courseId);
-    if (!userIds.length) return [];
-    const rows = await this.repo.faceEmbeddings(userIds, await this.deps.model());
-
-    const byUser = new Map<string, { poses: string[]; embeddings: number[][] }>();
-    for (const row of rows) {
-      const entry = byUser.get(row.userId) ?? { poses: [], embeddings: [] };
-      entry.poses.push(row.pose);
-      entry.embeddings.push(row.embedding);
-      byUser.set(row.userId, entry);
-    }
-    return [...byUser]
-      .filter(([, entry]) => isComplete(entry.poses))
-      .map(([userId, entry]) => ({ userId, embeddings: entry.embeddings }));
   }
 
   private async cached<T>(

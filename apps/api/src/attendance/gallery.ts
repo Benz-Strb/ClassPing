@@ -1,4 +1,5 @@
-import { cosine } from '../enrollment/pose-check.js';
+import { cosine, isComplete } from '../enrollment/pose-check.js';
+import type { FaceEmbedding } from './attendance.repo.js';
 
 // ค่าใบหน้าทุกท่าของนักศึกษาหนึ่งคน
 export interface GalleryEntry {
@@ -30,4 +31,36 @@ export function bestTwo(probe: number[], gallery: GalleryEntry[]): BestTwo {
     secondId: second?.userId ?? null,
     secondScore: second?.score ?? null,
   };
+}
+
+export interface GalleryLoader {
+  faceEmbeddings(userIds: string[], model: string): Promise<FaceEmbedding[]>;
+}
+
+export interface GalleryDeps {
+  model(): Promise<string>;
+  enrolledUserIds(courseId: string): Promise<string[]>;
+}
+
+// เทียบเฉพาะคนในวิชาที่ลงทะเบียนครบทุกท่า ด้วยโมเดลเดียวกับที่ service ใช้อยู่
+// กล้องหน้าห้องและกล้องประตูใช้ตัวนี้ร่วมกัน เพื่อให้เทียบกับรายชื่อชุดเดียวกัน
+export async function loadCourseGallery(
+  repo: GalleryLoader,
+  deps: GalleryDeps,
+  courseId: string,
+): Promise<GalleryEntry[]> {
+  const userIds = await deps.enrolledUserIds(courseId);
+  if (!userIds.length) return [];
+  const rows = await repo.faceEmbeddings(userIds, await deps.model());
+
+  const byUser = new Map<string, { poses: string[]; embeddings: number[][] }>();
+  for (const row of rows) {
+    const entry = byUser.get(row.userId) ?? { poses: [], embeddings: [] };
+    entry.poses.push(row.pose);
+    entry.embeddings.push(row.embedding);
+    byUser.set(row.userId, entry);
+  }
+  return [...byUser]
+    .filter(([, entry]) => isComplete(entry.poses))
+    .map(([userId, entry]) => ({ userId, embeddings: entry.embeddings }));
 }
