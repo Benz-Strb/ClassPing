@@ -100,6 +100,7 @@ export interface Exam {
   lateAfterMin: number;
   // null = นับขาดตอนหมดคาบ
   absentAfterMin: number | null;
+  outOfRoomLimitMin: number;
   proctors: Person[];
   // กล้องเปิดแล้ว แก้ได้แค่คนคุมสอบ
   locked: boolean;
