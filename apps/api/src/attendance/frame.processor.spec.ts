@@ -132,6 +132,11 @@ function setup(
       closes.push({ userId, backAt, by });
       return closeResult;
     },
+    listTrips: async () => [],
+    setBack: async () => false,
+    deleteTrip: async () => false,
+    identify: async () => false,
+    courseTrips: async () => [],
   };
   const clock = () => new Date(START.getTime() + 3_600_000);
   const openTrips = new OpenTrips(door, clock);
