@@ -83,7 +83,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     const { data, error } = await this.db
       .from('sessions')
       .select(
-        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, rooms(name)',
+        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name)',
       )
       .eq('id', sessionId)
       .maybeSingle();
@@ -101,6 +101,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       title: string | null;
       late_after_min: number | null;
       absent_after_min: number | null;
+      out_of_room_limit_min: number | null;
       rooms: { name: string } | null;
     };
     return {
@@ -109,6 +110,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       title: row.title,
       lateAfterMin: row.late_after_min,
       absentAfterMin: row.absent_after_min,
+      outOfRoomLimitMin: row.out_of_room_limit_min,
       courseId: row.course_id,
       scheduleId: row.schedule_id,
       roomId: row.room_id,

@@ -1,11 +1,16 @@
 // ใส่กล้องหน้าห้องไว้เดโม แล้วเขียน token ลง services/camera/.env (รันซ้ำ = ออก token ใหม่)
 // ใช้: npm run db:seed:camera -- "ห้องทดลอง 1"
+// ใส่ --door = กล้องประตูของห้อง เขียน DOOR_CAMERA_TOKEN แทน (ไม่แตะ CAMERA_TOKEN)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { hashToken, newToken } from '../src/camera/camera-token.js';
 
-const roomName = process.argv[2]?.trim() || 'ห้องทดลอง 1';
+const args = process.argv.slice(2);
+const isDoor = args.includes('--door');
+const kind = isDoor ? 'door' : 'front';
+const tokenName = isDoor ? 'DOOR_CAMERA_TOKEN' : 'CAMERA_TOKEN';
+const roomName = args.find((arg) => arg !== '--door')?.trim() || 'ห้องทดลอง 1';
 const envPath = resolve(import.meta.dirname, '../../../services/camera/.env');
 
 const url = process.env.SUPABASE_URL;
@@ -35,26 +40,25 @@ const { data: existing, error: findError } = await db
   .from('cameras')
   .select('id')
   .eq('room_id', room!.id)
-  .eq('kind', 'front')
+  .eq('kind', kind)
   .limit(1)
   .maybeSingle();
 if (findError) fail(`อ่านกล้องไม่สำเร็จ: ${findError.message}`);
 
 const { error: saveError } = existing
-  ? await db.from('cameras').update({ token_hash: hashToken(token) }).eq('id', existing.id)
-  : await db
+  ? await db
       .from('cameras')
-      .insert({ room_id: room!.id, kind: 'front', token_hash: hashToken(token) });
+      .update({ token_hash: hashToken(token) })
+      .eq('id', existing.id)
+  : await db.from('cameras').insert({ room_id: room!.id, kind, token_hash: hashToken(token) });
 if (saveError) fail(`บันทึกกล้องไม่สำเร็จ: ${saveError.message}`);
 
 // แทนเฉพาะบรรทัดของเรา ค่าอื่นในไฟล์คงไว้
 const values: Record<string, string> = {
-  CAMERA_TOKEN: token,
+  [tokenName]: token,
   API_URL: 'http://127.0.0.1:3001',
 };
-const lines = existsSync(envPath)
-  ? readFileSync(envPath, 'utf8').split('\n').filter(Boolean)
-  : [];
+const lines = existsSync(envPath) ? readFileSync(envPath, 'utf8').split('\n').filter(Boolean) : [];
 for (const [name, value] of Object.entries(values)) {
   const index = lines.findIndex((line) => line.startsWith(`${name}=`));
   // API_URL ที่ตั้งไว้เองแล้วไม่ทับ
@@ -65,4 +69,4 @@ for (const [name, value] of Object.entries(values)) {
 mkdirSync(dirname(envPath), { recursive: true });
 writeFileSync(envPath, `${lines.join('\n')}\n`, { mode: 0o600 });
 
-console.log(`บันทึก token กล้องของ ${roomName} แล้ว`);
+console.log(`บันทึก token กล้อง${isDoor ? 'ประตู' : ''}ของ ${roomName} แล้ว`);
