@@ -18,6 +18,15 @@ export const PLAYBACK_CLIENT = Symbol('PLAYBACK_CLIENT');
 const unavailable = () =>
   new AppError(503, 'RECORDING_UNAVAILABLE', 'ตอนนี้เปิดไฟล์อัดไม่ได้ ลองใหม่อีกครั้ง');
 
+// MediaMTX บอกเวลาถึงไมโครวินาที แต่ Date ตัดเหลือมิลลิวินาที เวลาจะเร็วกว่าไฟล์เริ่มจริง
+// ถ้าเอาไปขอไฟล์จะได้ 404 จึงปัดขึ้นแล้วลดความยาวลงเท่ากัน
+function toSegment(item: { start: string; duration: number }): Segment {
+  const ms = Date.parse(item.start);
+  return /\.\d{3}\d*[1-9]/.test(item.start)
+    ? { start: new Date(ms + 1), duration: item.duration - 0.001 }
+    : { start: new Date(ms), duration: item.duration };
+}
+
 // playback server ของ MediaMTX (compose ผูกพอร์ตไว้กับ 127.0.0.1) ส่ง secret เป็น Bearer
 @Injectable()
 export class HttpPlaybackClient implements PlaybackClient {
@@ -33,7 +42,7 @@ export class HttpPlaybackClient implements PlaybackClient {
     if (res.status === 400 || res.status === 404) return [];
     if (!res.ok) throw unavailable();
     const items = (await res.json()) as { start: string; duration: number }[];
-    return items.map((i) => ({ start: new Date(i.start), duration: i.duration }));
+    return items.map(toSegment);
   }
 
   // mp4 สำหรับดาวน์โหลด (ไฟล์บอกความยาวครบ) fmp4 สำหรับท่อน HLS

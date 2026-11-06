@@ -124,7 +124,7 @@ class FakeDoorRepo implements DoorRepo {
   }
 }
 
-function setup() {
+function setup(now: Date = at(60)) {
   const door = new FakeDoorRepo();
   const removed: string[][] = [];
   const signed: string[][] = [];
@@ -163,6 +163,7 @@ function setup() {
     captures,
     door,
     openTrips,
+    () => now,
   );
   // โหลดแคช OpenTrips ก่อนแก้ จะได้เห็นว่าหลังแก้ตรงกับฐานหรือไม่
   const openUsers = async () => {
@@ -197,11 +198,22 @@ describe('TripsService.setBack (PATCH)', () => {
     expect(door.calls.some((c) => c[0] === 'setBack')).toBe(false);
   });
 
-  it('backAt เท่ากับเวลาหมดคาบได้', async () => {
-    const { service, door } = setup();
+  it('backAt เท่ากับเวลาหมดคาบได้ เมื่อตอนนี้ถึงหมดคาบแล้ว', async () => {
+    const { service, door } = setup(ENDS);
     door.trips = [trip({ id: TRIP_ID })];
     await service.setBack(teacher, SESSION_ID, TRIP_ID, { backAt: ENDS.toISOString() });
     expect(door.trips[0].backAt).toEqual(ENDS);
+  });
+
+  it('backAt ในอนาคต 400 BAD_BACK_TIME แต่เท่ากับตอนนี้พอดีได้', async () => {
+    const { service, door } = setup(at(60));
+    door.trips = [trip({ id: TRIP_ID })];
+    await expect(
+      service.setBack(teacher, SESSION_ID, TRIP_ID, { backAt: at(61).toISOString() }),
+    ).rejects.toMatchObject({ status: 400, code: 'BAD_BACK_TIME' });
+    expect(door.calls.some((c) => c[0] === 'setBack')).toBe(false);
+    await service.setBack(teacher, SESSION_ID, TRIP_ID, { backAt: at(60).toISOString() });
+    expect(door.trips[0].backAt).toEqual(at(60));
   });
 
   it('ไม่ใช่เวลา ISO ได้ 400', async () => {
@@ -517,13 +529,21 @@ describe('TripsService.review', () => {
       ['เท่ากับเวลาออก', () => at(10)],
       ['ก่อนเวลาออก', () => at(5)],
       ['หลังหมดคาบ', () => new Date(ENDS.getTime() + 1000)],
+      ['ในอนาคต', () => at(61)],
     ])('backAt %s ได้ 400 BAD_BACK_TIME', async (_n, when) => {
-      const { service, door } = setup();
+      const { service, door } = setup(at(60));
       door.trips = scenario();
       await expect(
         service.review(teacher, SESSION_ID, TRIP_ID, body(when().toISOString())),
       ).rejects.toMatchObject({ status: 400, code: 'BAD_BACK_TIME' });
       expect(door.calls.some((c) => c[0] === 'identify')).toBe(false);
+    });
+
+    it('backAt เท่ากับตอนนี้พอดีได้', async () => {
+      const { service, door } = setup(at(60));
+      door.trips = [trip({ id: TRIP_ID, status: 'unknown', userId: null, outAt: at(10) })];
+      await service.review(teacher, SESSION_ID, TRIP_ID, body(at(60).toISOString()));
+      expect(door.trips[0]).toMatchObject({ userId: 'u2', backAt: at(60) });
     });
 
     it('รอบ pending ที่กล้องหน้าห้องปิดไว้ ถ้าส่ง backAt ใช้เวลาของอาจารย์แทน', async () => {
@@ -612,6 +632,37 @@ describe('TripsService.review', () => {
     expect(door.calls.some((c) => c[0] === 'setBack')).toBe(false);
   });
 
+  describe('เดาว่าเป็นคนที่ออกจากรายชื่อแล้ว', () => {
+    const gone = () => [trip({ id: TRIP_ID, status: 'pending', userId: 'u9' })];
+
+    it('confirm ได้ 400 STUDENT_NOT_IN_COURSE และไม่แตะรอบ', async () => {
+      const { service, door } = setup();
+      door.trips = gone();
+      await expect(
+        service.review(teacher, SESSION_ID, TRIP_ID, { action: 'confirm' }),
+      ).rejects.toMatchObject({ status: 400, code: 'STUDENT_NOT_IN_COURSE' });
+      expect(door.calls.some((c) => c[0] === 'identify')).toBe(false);
+      expect(door.trips[0].status).toBe('pending');
+    });
+
+    it('reject ยังได้', async () => {
+      const { service, door } = setup();
+      door.trips = gone();
+      await service.review(teacher, SESSION_ID, TRIP_ID, { action: 'reject' });
+      expect(door.trips).toEqual([]);
+    });
+
+    it('reassign ไปคนในรายชื่อยังได้', async () => {
+      const { service, door } = setup();
+      door.trips = gone();
+      await service.review(teacher, SESSION_ID, TRIP_ID, {
+        action: 'reassign',
+        toCode: '66000002',
+      });
+      expect(door.trips[0]).toMatchObject({ userId: 'u2', status: 'confirmed' });
+    });
+  });
+
   it('ไม่มีรอบนี้ 404 TRIP_NOT_FOUND', async () => {
     const { service } = setup();
     await expect(
@@ -625,6 +676,7 @@ describe('TripsService.report', () => {
     sessionId: 's1',
     onDate: '2026-10-23',
     kind: 'class',
+    startsAt: START,
     endsAt: ENDS,
     lateAfterMin: null,
     absentAfterMin: null,
@@ -718,5 +770,44 @@ describe('TripsService.report', () => {
     door.course = [row({ kind: 'exam', outOfRoomLimitMin: 5, outAt: at(10), backAt: at(17) })];
     const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
     expect(out[0]).toMatchObject({ kind: 'exam', totalSeconds: 420, label: 'gone' });
+  });
+
+  it('นับเฉพาะส่วนในคาบ: ออกก่อนคาบ กลับในคาบ นับจากเริ่มคาบ แต่เวลารอบที่ส่งคือเวลาจริง', async () => {
+    const { service, door } = setup();
+    door.course = [row({ outAt: at(-5), backAt: at(10) })];
+    const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ totalSeconds: 600, label: 'out' });
+    expect(out[0].trips).toEqual([{ outAt: at(-5).toISOString(), backAt: at(10).toISOString() }]);
+  });
+
+  it('ออกก่อนคาบไม่กลับ นับถึงหมดคาบ ป้ายไม่กลับ', async () => {
+    const { service, door } = setup();
+    door.course = [row({ outAt: at(-30), backAt: null })];
+    const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
+    expect(out[0]).toMatchObject({ totalSeconds: 180 * 60, label: 'gone_no_return' });
+  });
+
+  it('ออกและกลับก่อนคาบ ไม่อยู่ในรายงาน และไม่ทำให้คนที่มีรอบในคาบเปลี่ยน', async () => {
+    const { service, door } = setup();
+    door.course = [
+      row({ studentCode: '66000001', outAt: at(-20), backAt: at(-10) }),
+      row({ studentCode: '66000002', outAt: at(-20), backAt: at(-10) }),
+      row({ studentCode: '66000002', outAt: at(10), backAt: at(15) }),
+    ];
+    const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
+    expect(out.map((r) => r.studentCode)).toEqual(['66000002']);
+    expect(out[0]).toMatchObject({ totalSeconds: 300, label: 'out' });
+    expect(out[0].trips).toEqual([{ outAt: at(10).toISOString(), backAt: at(15).toISOString() }]);
+  });
+
+  it('นักศึกษาที่ออกจากรายชื่อแล้วไม่อยู่ในรายงาน (เหมือนรายงานเช็คชื่อ)', async () => {
+    const { service, door } = setup();
+    door.course = [
+      row({ studentCode: '66000001' }),
+      row({ studentCode: '66000099', outAt: at(10), backAt: at(40) }),
+    ];
+    const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
+    expect(out.map((r) => r.studentCode)).toEqual(['66000001']);
   });
 });
