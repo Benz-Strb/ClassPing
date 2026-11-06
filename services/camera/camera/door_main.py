@@ -29,6 +29,7 @@ WINDOW = "door camera (q = quit)"
 NO_SESSION_WAIT_SECONDS = 1
 # log ความเร็วที่ประมวลผลได้ทุกเท่านี้ จะได้เห็นถ้าช้าลง
 FPS_LOG_SECONDS = 30
+MIN_FRAME_SECONDS = 1 / 15
 
 
 def _cross(o, a, b) -> float:
@@ -352,6 +353,7 @@ def main() -> int:
     log.info("รอคาบจาก %s (กล้องประตูหมายเลข %d)", api_url, index)
     try:
         while True:
+            started = time.monotonic()
             try:
                 wait = loop.tick()
             except BadToken:
@@ -359,7 +361,8 @@ def main() -> int:
             except Exception:
                 log.exception("เกิดข้อผิดพลาด ลองใหม่ใน %d วิ", RETRY_SECONDS)
                 wait = RETRY_SECONDS
-            _wait(wait, preview)
+            # ไม่ประมวลผลเร็วเกิน 15 ภาพ/วินาที ที่วัดความแม่นยำไว้ เครื่องจะได้ไม่ร้อนเกินจำเป็น
+            _wait(max(wait, MIN_FRAME_SECONDS - (time.monotonic() - started)), preview)
     except BadToken as error:
         log.error("%s", error)
         return 1
