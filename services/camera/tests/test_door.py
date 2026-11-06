@@ -142,3 +142,39 @@ def test_writes_no_files(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     run(walk(1, [ROOM, MID, EXIT]))
     assert list(tmp_path.iterdir()) == []
+
+
+def test_empty_or_oversized_image_is_dropped_but_crossing_is_sent(monkeypatch):
+    from camera import door
+
+    monkeypatch.setattr(door, "MAX_IMAGE_BYTES", 10)
+    crossings, _ = run(walk(1, [ROOM, 60, MID, 140, EXIT]))
+    assert [c.direction for c in crossings] == ["out"]
+    assert crossings[0].images == []
+
+
+def test_failed_encode_is_dropped(monkeypatch):
+    monkeypatch.setattr(cv2, "imencode", lambda *a, **k: (False, None))
+    crossings, _ = run(walk(1, [ROOM, 60, MID, 140, EXIT]))
+    assert [c.direction for c in crossings] == ["out"]
+    assert crossings[0].images == []
+
+
+def test_real_bytetrack_with_counter_on_a_synthetic_walk():
+    from camera.person import ByteTrack
+
+    class Walker:
+        def __init__(self):
+            self.i = 0
+
+        def detect(self, frame):
+            y = 10 + self.i * 6
+            self.i += 1
+            return [foot(y)]
+
+    counter = DoorCounter(Walker(), ByteTrack(), QUAD)
+    crossings = []
+    for _ in range(32):
+        crossings += counter.feed(frame())
+    assert [c.direction for c in crossings] == ["out"]
+    assert crossings[0].images
