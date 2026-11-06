@@ -4,6 +4,8 @@ from datetime import datetime
 import httpx
 
 TIMEOUT_SECONDS = 10
+# กล้องประตูให้ API ตรวจหน้าได้สูงสุด 3 รูป ใช้เวลานานกว่าปกติ ไม่ให้หมดเวลาแล้วส่งซ้ำ
+DOOR_TIMEOUT_SECONDS = 30
 
 
 class BadToken(Exception):
@@ -75,9 +77,12 @@ class CameraApi:
             "/camera/door",
             data={"direction": direction},
             files=[("images", ("crop.jpg", image, "image/jpeg")) for image in images],
+            timeout=DOOR_TIMEOUT_SECONDS,
         )
         if res.status_code == 409:
             return None
+        if res.status_code == 429:
+            raise ApiDown("API ตอบว่ายุ่งอยู่")
         return res.json()["data"]["trip"]
 
     def _request(self, method: str, path: str, **kwargs) -> httpx.Response:

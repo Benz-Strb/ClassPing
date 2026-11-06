@@ -189,6 +189,7 @@ dependencies = [
     { name = "httpx" },
     { name = "onnxruntime" },
     { name = "opencv-python" },
+    { name = "supervision" },
     { name = "trackers" },
 ]
 
@@ -203,6 +204,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "onnxruntime", specifier = ">=1.31.1" },
     { name = "opencv-python", specifier = ">=5.0.0.93" },
+    { name = "supervision", specifier = ">=0.31.5" },
     { name = "trackers", specifier = ">=2.7.0" },
 ]
 
