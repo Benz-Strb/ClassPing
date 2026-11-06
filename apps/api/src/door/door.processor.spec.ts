@@ -40,7 +40,12 @@ const face = (embedding: number[], crop: string | null = 'Y3JvcA=='): DetectedFa
 const image = (name: string) => Buffer.from(name);
 
 function setup(
-  opts: { detect?: (call: number) => DetectedFace[] | Error; collide?: boolean } = {},
+  opts: {
+    detect?: (call: number) => DetectedFace[] | Error;
+    collide?: boolean;
+    uploadFails?: boolean;
+    insertFails?: boolean;
+  } = {},
 ) {
   const uploads: { path: string; bytes: string }[] = [];
   const removed: string[] = [];
@@ -61,6 +66,7 @@ function setup(
     sessionContext: async () => context,
     faceEmbeddings: async (ids: string[]) => embeddings.filter((e) => ids.includes(e.userId)),
     uploadCapture: async (path: string, bytes: Buffer) => {
+      if (opts.uploadFails) throw new Error('storage down');
       uploads.push({ path, bytes: bytes.toString() });
     },
     removeCaptures: async (paths: string[]) => void removed.push(...paths),
@@ -71,6 +77,7 @@ function setup(
       return [...open];
     },
     insertTrip: async (trip: NewTrip) => {
+      if (opts.insertFails) throw new Error('db down');
       if (opts.collide) return false;
       trips.push(trip);
       return true;
@@ -218,5 +225,53 @@ describe('DoorProcessor.handleOut', () => {
     expect(trips[0]).toMatchObject({ userId: null, status: 'unknown' });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  describe('อัปโหลดรูปไม่สำเร็จ ต้องไม่ทำให้รอบหาย', () => {
+    const cases = [
+      ['confirmed', A, 'confirmed'],
+      ['pending', mid, 'pending'],
+      ['unknown', stranger, 'unknown'],
+    ] as const;
+
+    it.each(cases)('%s: จดรอบโดยไม่มีรูป และเตือนใน log', async (_n, vector, status) => {
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const { processor, trips, removed, openTrips } = setup({
+        detect: () => [face(vector)],
+        uploadFails: true,
+      });
+      await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe(status);
+      expect(trips).toHaveLength(1);
+      expect(trips[0]).toMatchObject({ status, imagePath: null, outAt: OUT_AT });
+      expect(removed).toEqual([]);
+      expect(warn).toHaveBeenCalled();
+      if (status !== 'unknown') expect(await openTrips.has('s1', 'a')).toBe(true);
+      warn.mockRestore();
+    });
+
+    it('ชน unique index ยังได้ duplicate และไม่มีรูปให้ลบ', async () => {
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const { processor, removed, trips } = setup({
+        detect: () => [face(A)],
+        uploadFails: true,
+        collide: true,
+      });
+      await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe('duplicate');
+      expect(removed).toEqual([]);
+      expect(trips).toEqual([]);
+      warn.mockRestore();
+    });
+
+    it('เขียนแถวไม่สำเร็จยัง throw', async () => {
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const { processor, removed } = setup({
+        detect: () => [face(A)],
+        uploadFails: true,
+        insertFails: true,
+      });
+      await expect(processor.handleOut('s1', [image('full')], OUT_AT)).rejects.toThrow('db down');
+      expect(removed).toEqual([]);
+      warn.mockRestore();
+    });
   });
 });
