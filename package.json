@@ -29,6 +29,7 @@
     "test:face": "cd services/face && uv run pytest",
     "test:face:model": "cd services/face && uv run pytest -m model",
     "dev:camera": "cd services/camera && uv run --env-file .env python -m camera.main",
+    "dev:door": "cd services/camera && uv run --env-file .env python -m camera.door_main",
     "test:camera": "cd services/camera && uv run pytest"
   },
   "overrides": {
