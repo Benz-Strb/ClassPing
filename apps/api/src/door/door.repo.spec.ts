@@ -283,6 +283,7 @@ describe('SupabaseDoorRepo.courseTrips', () => {
           sessions: {
             on_date: '2026-10-23',
             kind: 'exam',
+            starts_at: '2026-10-23T02:00:00Z',
             ends_at: '2026-10-23T05:00:00Z',
             late_after_min: 5,
             absent_after_min: 30,
@@ -316,6 +317,7 @@ describe('SupabaseDoorRepo.courseTrips', () => {
         sessionId: 's1',
         onDate: '2026-10-23',
         kind: 'exam',
+        startsAt: new Date('2026-10-23T02:00:00Z'),
         endsAt: new Date('2026-10-23T05:00:00Z'),
         lateAfterMin: 5,
         absentAfterMin: 30,
@@ -338,6 +340,7 @@ describe('SupabaseDoorRepo.courseTrips หลายหน้า', () => {
     sessions: {
       on_date: '2026-10-23',
       kind: 'class',
+      starts_at: '2026-10-23T02:00:00Z',
       ends_at: '2026-10-23T05:00:00Z',
       late_after_min: null,
       absent_after_min: null,

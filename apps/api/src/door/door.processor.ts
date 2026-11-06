@@ -136,10 +136,16 @@ export class DoorProcessor {
     return inserted;
   }
 
+  // อัปโหลดไม่สำเร็จก็ยังต้องจดรอบ (คนเดินผ่านประตูครั้งเดียว) จึงคืน null แทนการ throw
   private async upload(prefix: string, bytes: Buffer | undefined): Promise<string | null> {
     if (!bytes) return null;
     const path = `${prefix}-${randomUUID()}.jpg`;
-    await this.attendance.uploadCapture(path, bytes);
+    try {
+      await this.attendance.uploadCapture(path, bytes);
+    } catch (error) {
+      this.logger.warn(`อัปโหลดรูปที่ประตูไม่สำเร็จ จดรอบโดยไม่มีรูป: ${String(error)}`);
+      return null;
+    }
     return path;
   }
 
