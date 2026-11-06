@@ -68,6 +68,18 @@ class CameraApi:
         )
         return {409: "no_session", 429: "busy"}.get(res.status_code, "queued")
 
+    def door(self, direction: str, images: list[bytes]) -> str | None:
+        """ส่งการข้ามเส้นที่ประตู คืนผลรอบนอกห้อง (trip) หรือ None ถ้าไม่มีคาบ/ทิศเข้า"""
+        res = self._request(
+            "POST",
+            "/camera/door",
+            data={"direction": direction},
+            files=[("images", ("crop.jpg", image, "image/jpeg")) for image in images],
+        )
+        if res.status_code == 409:
+            return None
+        return res.json()["data"]["trip"]
+
     def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         try:
             res = self._client.request(method, path, **kwargs)
