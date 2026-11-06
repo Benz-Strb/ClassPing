@@ -147,3 +147,19 @@ def test_door_no_session_is_none_and_bad_token_raises():
     assert api_with(lambda r: httpx.Response(409, json={})).door("out", []) is None
     with pytest.raises(BadToken):
         api_with(lambda r: httpx.Response(401, json={})).door("out", [])
+
+
+def test_door_429_is_api_down_not_crash():
+    with pytest.raises(ApiDown):
+        api_with(lambda r: httpx.Response(429, json={})).door("out", [])
+
+
+def test_door_uses_longer_timeout():
+    seen = {}
+
+    def handler(request: httpx.Request):
+        seen.update(request.extensions["timeout"])
+        return httpx.Response(201, json={"data": {"trip": None}})
+
+    api_with(handler).door("in", [])
+    assert seen["read"] == 30
