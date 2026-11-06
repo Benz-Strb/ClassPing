@@ -12,6 +12,8 @@ log = logging.getLogger("camera")
 JPEG_QUALITY = 85
 # กรอบคนเล็กกว่านี้ (พิกเซล) ไม่เก็บเป็นรูป ใช้หน้าไม่ได้
 MIN_CROP = 20
+# API รับรูปไม่เกินนี้ต่อรูป รูปที่ใหญ่กว่านี้ทิ้ง แต่ยังส่งการข้ามเส้น
+MAX_IMAGE_BYTES = 1024 * 1024
 # track ที่หายไปนานกว่านี้ ลืมทั้งรูปและตำแหน่ง
 STALE_SECONDS = 60
 
@@ -142,7 +144,10 @@ class DoorCounter:
                 crossings.append(Crossing("in", []))
             elif direction == "out":
                 crops = self._crops.pop(tid, [])
-                crossings.append(Crossing("out", [self._jpeg(image) for _, image in crops]))
+                images = [self._jpeg(image) for _, image in crops]
+                crossings.append(
+                    Crossing("out", [i for i in images if 0 < len(i) <= MAX_IMAGE_BYTES])
+                )
         self._drop_stale(now)
         return crossings
 
