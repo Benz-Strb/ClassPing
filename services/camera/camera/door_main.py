@@ -366,8 +366,9 @@ def main() -> int:
     except KeyboardInterrupt:
         return 0
     finally:
-        poller.stop()
+        # ปล่อยกล้องก่อน การรอ API ตอบต้องไม่ทำให้กล้องเปิดค้าง
         camera.close()
+        poller.stop()
         sender.stop()
         cv2.destroyAllWindows()
 
