@@ -31,6 +31,7 @@ export interface CourseTrip {
   sessionId: string;
   onDate: string;
   kind: 'class' | 'exam';
+  startsAt: Date;
   endsAt: Date;
   lateAfterMin: number | null;
   absentAfterMin: number | null;
@@ -87,6 +88,7 @@ interface CourseRow {
   sessions: {
     on_date: string;
     kind: 'class' | 'exam';
+    starts_at: string;
     ends_at: string;
     late_after_min: number | null;
     absent_after_min: number | null;
@@ -243,7 +245,7 @@ export class SupabaseDoorRepo implements DoorRepo {
         .select(
           'id, session_id, out_at, back_at, ' +
             'student:users!door_trips_student_id_fkey(student_id), ' +
-            'sessions!inner(on_date, kind, ends_at, late_after_min, absent_after_min, out_of_room_limit_min)',
+            'sessions!inner(on_date, kind, starts_at, ends_at, late_after_min, absent_after_min, out_of_room_limit_min)',
         )
         .eq('status', 'confirmed')
         .eq('sessions.course_id', courseId)
@@ -263,6 +265,7 @@ export class SupabaseDoorRepo implements DoorRepo {
               sessionId: r.session_id,
               onDate: r.sessions.on_date,
               kind: r.sessions.kind,
+              startsAt: new Date(r.sessions.starts_at),
               endsAt: new Date(r.sessions.ends_at),
               lateAfterMin: r.sessions.late_after_min,
               absentAfterMin: r.sessions.absent_after_min,

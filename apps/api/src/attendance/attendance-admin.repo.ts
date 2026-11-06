@@ -57,6 +57,10 @@ export interface AttendanceAdminRepo {
     teacherId: string,
   ): Promise<void>;
   deleteRow(sessionId: string, userId: string): Promise<void>;
+  // บัญชีตาม id ไม่ดูรายชื่อวิชา ใช้หาคนที่ออกจากรายชื่อไปแล้ว
+  usersByIds(
+    ids: string[],
+  ): Promise<{ id: string; studentCode: string | null; fullName: string | null }[]>;
   insertUnknown(sessionId: string, imagePath: string, seenAt: Date): Promise<void>;
 }
 
@@ -240,6 +244,20 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       .eq('session_id', sessionId)
       .eq('student_id', userId);
     if (error) throw dbError();
+  }
+
+  async usersByIds(
+    ids: string[],
+  ): Promise<{ id: string; studentCode: string | null; fullName: string | null }[]> {
+    if (!ids.length) return [];
+    const { data, error } = await this.db
+      .from('users')
+      .select('id, student_id, full_name')
+      .in('id', ids);
+    if (error) throw dbError();
+    return (data as { id: string; student_id: string | null; full_name: string | null }[]).map(
+      (r) => ({ id: r.id, studentCode: r.student_id, fullName: r.full_name }),
+    );
   }
 
   async insertUnknown(sessionId: string, imagePath: string, seenAt: Date): Promise<void> {
