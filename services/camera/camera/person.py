@@ -14,13 +14,17 @@ CONFIDENCE = 0.4
 NMS_IOU = 0.45
 # เฟรมต่อวินาทีที่ ByteTrack ใช้คำนวณเวลาที่ track หายได้
 TRACK_FPS = 15
+# วัดแล้ว 3 thread เร็วเท่าค่าเดิม แต่ใช้ CPU ราวครึ่งเดียว
+THREADS = 3
 
 
 class YoloxDetector:
     """YOLOX-s: ย่อแบบ letterbox (เติม 114) ภาพ BGR 0-255 ผลดิบต้องถอด grid เอง แล้วทำ NMS"""
 
     def __init__(self, model_path: str):
-        self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = THREADS
+        self.session = ort.InferenceSession(model_path, options, providers=["CPUExecutionProvider"])
         grids, strides = [], []
         for stride in (8, 16, 32):
             n = SIZE // stride
