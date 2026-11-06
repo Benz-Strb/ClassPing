@@ -4,7 +4,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { hashToken, newToken } from '../src/camera/camera-token.js';
+// @ts-expect-error node รันไฟล์ .ts ตรง ๆ จึงต้องชี้นามสกุลจริง
+import { hashToken, newToken } from '../src/camera/camera-token.ts';
 
 const args = process.argv.slice(2);
 const isDoor = args.includes('--door');
