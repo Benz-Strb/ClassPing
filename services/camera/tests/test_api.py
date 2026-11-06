@@ -125,3 +125,41 @@ def test_session_without_stream_field_is_none():
 
     current = api_with(handler).session()
     assert current is not None and current.stream is None
+
+
+def test_door_sends_direction_and_images():
+    def handler(request: httpx.Request):
+        body = request.read()
+        assert request.url.path == "/camera/door"
+        assert b'name="direction"' in body and b"out" in body
+        assert body.count(b'name="images"') == 2
+        return httpx.Response(201, json={"data": {"trip": "matched"}})
+
+    assert api_with(handler).door("out", [b"\xff\xd8a", b"\xff\xd8b"]) == "matched"
+
+
+def test_door_in_without_images_has_no_trip():
+    api = api_with(lambda r: httpx.Response(201, json={"data": {"trip": None}}))
+    assert api.door("in", []) is None
+
+
+def test_door_no_session_is_none_and_bad_token_raises():
+    assert api_with(lambda r: httpx.Response(409, json={})).door("out", []) is None
+    with pytest.raises(BadToken):
+        api_with(lambda r: httpx.Response(401, json={})).door("out", [])
+
+
+def test_door_429_is_api_down_not_crash():
+    with pytest.raises(ApiDown):
+        api_with(lambda r: httpx.Response(429, json={})).door("out", [])
+
+
+def test_door_uses_longer_timeout():
+    seen = {}
+
+    def handler(request: httpx.Request):
+        seen.update(request.extensions["timeout"])
+        return httpx.Response(201, json={"data": {"trip": None}})
+
+    api_with(handler).door("in", [])
+    assert seen["read"] == 30

@@ -74,7 +74,14 @@ class FakeRepo implements AttendanceAdminRepo {
   rows = new Map<string, StoredAttendance>();
   unknown: UnknownFace[] = [];
   signed: string[][] = [];
+  // บัญชีนอกรายชื่อวิชา ไว้ให้ tripReviews หาชื่อคนที่ออกจากรายชื่อแล้ว
+  users = new Map<string, { id: string; studentCode: string | null; fullName: string | null }>();
+  userLookups: string[][] = [];
 
+  async usersByIds(ids: string[]) {
+    this.userLookups.push(ids);
+    return ids.flatMap((id) => this.users.get(id) ?? []);
+  }
   async session(id: string) {
     return id === SESSION_ID ? session : null;
   }
@@ -486,6 +493,77 @@ describe('AttendanceService.view รอบนอกห้อง', () => {
     ]);
     expect(view.rows.find((r) => r.studentCode === '66000002')!.outOfRoom.trips).toEqual([]);
     expect(view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom.trips).toHaveLength(1);
+  });
+
+  it('pending ของคนที่ออกจากรายชื่อแล้วยังขึ้น tripReviews ด้วยรหัสและชื่อจากบัญชี', async () => {
+    const { service, doorTrips, repo } = setup();
+    repo.users.set('u9', { id: 'u9', studentCode: '66000099', fullName: 'เก้า' });
+    doorTrips.list = [
+      trip({ id: 'p9', status: 'pending', userId: 'u9', confidence: 0.4, outAt: at(8) }),
+      trip({ id: 'p2', status: 'pending', userId: 'u2', outAt: at(7) }),
+    ];
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.tripReviews.map((r) => [r.id, r.guessCode, r.guessName])).toEqual([
+      ['p9', '66000099', 'เก้า'],
+      ['p2', '66000002', 'สอง'],
+    ]);
+    expect(repo.userLookups).toEqual([['u9']]);
+  });
+
+  it('ไม่มี pending นอกรายชื่อ ไม่ถามบัญชีเพิ่ม', async () => {
+    const { service, doorTrips, repo } = setup();
+    doorTrips.list = [trip({ id: 'p2', status: 'pending', userId: 'u2' })];
+    await service.view(teacher, SESSION_ID);
+    expect(repo.userLookups).toEqual([]);
+  });
+
+  it('pending ที่หาบัญชีไม่เจอเลย (ไม่มีรหัส) ข้ามไป ไม่ทำให้หน้าพัง', async () => {
+    const { service, doorTrips } = setup();
+    doorTrips.list = [trip({ id: 'p9', status: 'pending', userId: 'u9' })];
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.tripReviews).toEqual([]);
+  });
+
+  describe('นับเฉพาะเวลาในคาบ', () => {
+    const rowOf = async (list: StoredTrip[], code = '66000001') => {
+      const { service, doorTrips } = setup();
+      doorTrips.list = list;
+      const view = await service.view(teacher, SESSION_ID);
+      return view.rows.find((r) => r.studentCode === code)!.outOfRoom;
+    };
+
+    it('ออกก่อนคาบ กลับในคาบ: seconds นับจากเริ่มคาบ เวลาที่แสดงเป็นเวลาจริง', async () => {
+      const out = await rowOf([trip({ id: 'a', outAt: at(-5), backAt: at(10), backBy: 'front' })]);
+      expect(out).toMatchObject({ totalSeconds: 600, minutes: 10, label: 'out' });
+      expect(out.trips).toHaveLength(1);
+      expect(out.trips[0]).toMatchObject({
+        outAt: at(-5).toISOString(),
+        backAt: at(10).toISOString(),
+        seconds: 600,
+      });
+    });
+
+    it('ออกก่อนคาบ ไม่กลับ: gone_no_return นับจากเริ่มคาบถึงหมดคาบ', async () => {
+      const out = await rowOf([trip({ id: 'a', outAt: at(-30) })]);
+      expect(out).toMatchObject({ totalSeconds: 180 * 60, label: 'gone_no_return' });
+      expect(out.trips[0].seconds).toBe(180 * 60);
+    });
+
+    it('ออกและกลับก่อนคาบ: ไม่มีป้าย ไม่แสดงรอบ', async () => {
+      const out = await rowOf([
+        trip({ id: 'a', outAt: at(-20), backAt: at(-10), backBy: 'front' }),
+      ]);
+      expect(out).toEqual({ totalSeconds: 0, minutes: 0, label: null, trips: [] });
+    });
+
+    it('รอบนอกคาบไม่ปนกับรอบในคาบ', async () => {
+      const out = await rowOf([
+        trip({ id: 'old', outAt: at(-20), backAt: at(-10), backBy: 'front' }),
+        trip({ id: 'in', outAt: at(10), backAt: at(16), backBy: 'front' }),
+      ]);
+      expect(out.trips.map((t) => t.id)).toEqual(['in']);
+      expect(out).toMatchObject({ totalSeconds: 360, label: 'out' });
+    });
   });
 
   it('unknown ล่าสุด 20 รอบ เรียงใหม่ไปเก่า และไม่อยู่ในแถว', async () => {

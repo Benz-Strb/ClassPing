@@ -18,8 +18,9 @@ class Webcam:
     ภาพอยู่ในหน่วยความจำเท่านั้น ไม่บันทึกลงดิสก์
     """
 
-    def __init__(self, index: int, max_width: int):
+    def __init__(self, index: int, max_width: int, size: tuple[int, int] = (1920, 1080)):
         self.index = index
+        self.size = size
         self.max_width = max_width
         self._cap: cv2.VideoCapture | None = None
         self._frame = None
@@ -32,8 +33,8 @@ class Webcam:
         cap = cv2.VideoCapture(self.index, backend)
         if not cap.isOpened():
             raise RuntimeError(f"เปิดกล้องหมายเลข {self.index} ไม่ได้")
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.size[0])
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.size[1])
         self._cap = cap
         self._running = True
         self._thread = threading.Thread(target=self._grab, daemon=True)
