@@ -5,7 +5,9 @@ description = "ClassPing โปรแกรมกล้องหน้าห้�
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
+    "onnxruntime>=1.31.1",
     "opencv-python>=5.0.0.93",
+    "trackers>=2.7.0",
 ]
 
 [dependency-groups]
