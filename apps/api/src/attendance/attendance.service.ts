@@ -284,11 +284,12 @@ export class AttendanceService {
     }
 
     if (input.action === 'reject') {
+      // ลบก่อน ถ้าแถวไม่ได้ pending แล้วจะได้ไม่เก็บรูปไว้ซ้ำ
+      await this.repo.deleteRow(sessionId, userId);
       // รูปยังเก็บไว้ในหน้าที่ไม่รู้จัก แล้วลบเองตามรอบ
       if (row.imagePath) {
         await this.repo.insertUnknown(sessionId, row.imagePath, row.firstSeenAt ?? this.now());
       }
-      await this.repo.deleteRow(sessionId, userId);
       // แถว spoof ไม่ล็อกคนนี้ ถ้าตัวจริงเข้ามากล้องจะบันทึกให้ใหม่
       if (row.reviewReason !== 'spoof') this.rejected.reject(sessionId, userId, session.endsAt);
       return this.view(user, sessionId);
@@ -303,6 +304,8 @@ export class AttendanceService {
         throw new AppError(409, 'ALREADY_RECORDED', 'นักศึกษาคนนี้มีผลเช็คชื่อในคาบนี้แล้ว');
       }
       await this.repo.moveRow(sessionId, userId, toUserId, status, user.id);
+      // คนที่กล้องเดาผิดจะไม่กลับมารอตรวจในชื่อเดิมทันที เหมือนกด "ไม่ใช่"
+      if (row.reviewReason !== 'spoof') this.rejected.reject(sessionId, userId, session.endsAt);
     }
     return this.view(user, sessionId);
   }

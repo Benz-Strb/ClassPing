@@ -356,6 +356,26 @@ describe('AttendanceService.review', () => {
     expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(true);
   });
 
+  it('เปลี่ยนคน: กล้องจำว่าคนเดิมถูกปฏิเสธ ไม่เดาซ้ำ', async () => {
+    const { service, pending, rejected } = setup();
+    pending('u1', 5);
+    await service.review(teacher, SESSION_ID, '66000001', {
+      action: 'reassign',
+      toCode: '66000003',
+    });
+    expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(true);
+  });
+
+  it('เปลี่ยนคนแถว spoof: ไม่จำว่าปฏิเสธ', async () => {
+    const { service, pending, rejected } = setup();
+    pending('u2', 5, 'spoof');
+    await service.review(teacher, SESSION_ID, '66000002', {
+      action: 'reassign',
+      toCode: '66000003',
+    });
+    expect(rejected.isRejected(SESSION_ID, 'u2')).toBe(false);
+  });
+
   it('ไม่ใช่แถว spoof: ลบแถว เก็บรูป แต่ไม่จำว่าปฏิเสธ กล้องเห็นตัวจริงทีหลังบันทึกได้', async () => {
     const { service, repo, pending, rejected } = setup();
     pending('u1', 5, 'spoof');

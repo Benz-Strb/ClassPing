@@ -80,6 +80,8 @@ interface Row {
   editor: { full_name: string | null; email: string } | null;
 }
 
+const notPending = () => new AppError(409, 'NOT_PENDING', 'รายการนี้ไม่ได้รอตรวจแล้ว');
+
 @Injectable()
 export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
@@ -222,7 +224,8 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     teacherId: string,
   ): Promise<void> {
     // เปลี่ยน student_id ในแถวเดิม รูปกับเวลาที่เห็นย้ายตามไปด้วยในคำสั่งเดียว
-    const { error } = await this.db
+    // เฉพาะแถวที่ยัง pending ถ้ากล้องเพิ่งเปลี่ยนเป็นผลมั่นใจแล้วต้องไม่แตะ
+    const { data, error } = await this.db
       .from('attendance')
       .update({
         student_id: toUserId,
@@ -232,21 +235,27 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
         updated_at: new Date().toISOString(),
       })
       .eq('session_id', sessionId)
-      .eq('student_id', fromUserId);
+      .eq('student_id', fromUserId)
+      .eq('status', 'pending')
+      .select('student_id');
     // กล้องเพิ่งบันทึกคนใหม่คนนี้พอดี
     if (error?.code === '23505') {
       throw new AppError(409, 'ALREADY_RECORDED', 'นักศึกษาคนนี้มีผลเช็คชื่อในคาบนี้แล้ว');
     }
     if (error) throw dbError();
+    if (!data?.length) throw notPending();
   }
 
   async deleteRow(sessionId: string, userId: string): Promise<void> {
-    const { error } = await this.db
+    const { data, error } = await this.db
       .from('attendance')
       .delete()
       .eq('session_id', sessionId)
-      .eq('student_id', userId);
+      .eq('student_id', userId)
+      .eq('status', 'pending')
+      .select('student_id');
     if (error) throw dbError();
+    if (!data?.length) throw notPending();
   }
 
   async usersByIds(
