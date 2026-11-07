@@ -63,6 +63,30 @@ describe('sweepBucket', () => {
     expect(removed).toEqual([{ bucket: 'faces', paths: [`${LIVE}/stray.jpg`] }]);
   });
 
+  it('รูปประตู <คาบ>/door/ ที่ไม่มีแถว (เก่าแล้ว) ถูกลบ ที่มีแถว door_trips ถูกเก็บ', async () => {
+    const kept = `${LIVE}/door/kept.jpg`;
+    const stray = `${LIVE}/door/stray.jpg`;
+    const { repo, removed } = fakeRepo(
+      {
+        [LIVE]: [
+          { path: kept, createdAt: OLD },
+          { path: stray, createdAt: OLD },
+        ],
+      },
+      { refs: { [LIVE]: [kept] } },
+    );
+    expect(await sweepBucket(repo, 'captures', NOW)).toBe(1);
+    expect(removed).toEqual([{ bucket: 'captures', paths: [stray] }]);
+  });
+
+  it('คาบถูกลบไปแล้ว รูปประตูของคาบนั้นถูกลบด้วย', async () => {
+    const { repo, removed } = fakeRepo({
+      [GONE]: [{ path: `${GONE}/door/x.jpg`, createdAt: OLD }],
+    });
+    expect(await sweepBucket(repo, 'captures', NOW)).toBe(1);
+    expect(removed).toEqual([{ bucket: 'captures', paths: [`${GONE}/door/x.jpg`] }]);
+  });
+
   it('ไฟล์ที่เพิ่งอัปโหลดยังไม่ลบ แม้ยังไม่มีแถว', async () => {
     const { repo, removed } = fakeRepo({
       [LIVE]: [{ path: `${LIVE}/new.jpg`, createdAt: FRESH }],

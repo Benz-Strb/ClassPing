@@ -20,6 +20,7 @@ export interface NewExam {
   roomId: string;
   lateAfterMin: number;
   absentAfterMin: number | null;
+  outOfRoomLimitMin: number;
 }
 
 export interface ExamRow extends NewExam {
@@ -42,7 +43,7 @@ export interface ExamsRepo {
 export const EXAMS_REPO = Symbol('EXAMS_REPO');
 
 const COLUMNS =
-  'id, course_id, title, on_date, starts_at, ends_at, room_id, late_after_min, absent_after_min, rooms(name), session_proctors(users(id, full_name, email))';
+  'id, course_id, title, on_date, starts_at, ends_at, room_id, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name), session_proctors(users(id, full_name, email))';
 
 interface Row {
   id: string;
@@ -54,6 +55,7 @@ interface Row {
   room_id: string;
   late_after_min: number;
   absent_after_min: number | null;
+  out_of_room_limit_min: number;
   rooms: { name: string } | null;
   session_proctors: { users: { id: string; full_name: string | null; email: string } | null }[];
 }
@@ -69,6 +71,7 @@ const toExam = (row: Row): ExamRow => ({
   roomName: row.rooms?.name ?? '',
   lateAfterMin: row.late_after_min,
   absentAfterMin: row.absent_after_min,
+  outOfRoomLimitMin: row.out_of_room_limit_min,
   proctors: row.session_proctors
     .flatMap((p) => (p.users ? [p.users] : []))
     .map((u) => ({ id: u.id, name: u.full_name, email: u.email })),
@@ -82,6 +85,7 @@ const toColumns = (exam: Omit<NewExam, 'courseId'>) => ({
   room_id: exam.roomId,
   late_after_min: exam.lateAfterMin,
   absent_after_min: exam.absentAfterMin,
+  out_of_room_limit_min: exam.outOfRoomLimitMin,
 });
 
 @Injectable()

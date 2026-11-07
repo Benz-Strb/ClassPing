@@ -57,6 +57,10 @@ export interface AttendanceAdminRepo {
     teacherId: string,
   ): Promise<void>;
   deleteRow(sessionId: string, userId: string): Promise<void>;
+  // บัญชีตาม id ไม่ดูรายชื่อวิชา ใช้หาคนที่ออกจากรายชื่อไปแล้ว
+  usersByIds(
+    ids: string[],
+  ): Promise<{ id: string; studentCode: string | null; fullName: string | null }[]>;
   insertUnknown(sessionId: string, imagePath: string, seenAt: Date): Promise<void>;
 }
 
@@ -83,7 +87,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     const { data, error } = await this.db
       .from('sessions')
       .select(
-        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, rooms(name)',
+        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name)',
       )
       .eq('id', sessionId)
       .maybeSingle();
@@ -101,6 +105,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       title: string | null;
       late_after_min: number | null;
       absent_after_min: number | null;
+      out_of_room_limit_min: number | null;
       rooms: { name: string } | null;
     };
     return {
@@ -109,6 +114,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       title: row.title,
       lateAfterMin: row.late_after_min,
       absentAfterMin: row.absent_after_min,
+      outOfRoomLimitMin: row.out_of_room_limit_min,
       courseId: row.course_id,
       scheduleId: row.schedule_id,
       roomId: row.room_id,
@@ -238,6 +244,20 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       .eq('session_id', sessionId)
       .eq('student_id', userId);
     if (error) throw dbError();
+  }
+
+  async usersByIds(
+    ids: string[],
+  ): Promise<{ id: string; studentCode: string | null; fullName: string | null }[]> {
+    if (!ids.length) return [];
+    const { data, error } = await this.db
+      .from('users')
+      .select('id, student_id, full_name')
+      .in('id', ids);
+    if (error) throw dbError();
+    return (data as { id: string; student_id: string | null; full_name: string | null }[]).map(
+      (r) => ({ id: r.id, studentCode: r.student_id, fullName: r.full_name }),
+    );
   }
 
   async insertUnknown(sessionId: string, imagePath: string, seenAt: Date): Promise<void> {
