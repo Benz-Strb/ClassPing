@@ -52,7 +52,9 @@ function setup(
   const trips: NewTrip[] = [];
   let detectCalls = 0;
   let openLoads = 0;
+  const demoted: string[] = [];
   const open = new Set<string>();
+  const pendingOpen = new Set<string>();
 
   const embeddings: FaceEmbedding[] = [];
   for (const [userId, vector] of [
@@ -75,6 +77,12 @@ function setup(
     openTripUserIds: async () => {
       openLoads++;
       return [...open];
+    },
+    demotePendingTrip: async (_s: string, userId: string) => {
+      demoted.push(userId);
+      if (!pendingOpen.delete(userId)) return false;
+      open.delete(userId);
+      return true;
     },
     insertTrip: async (trip: NewTrip) => {
       if (opts.insertFails) throw new Error('db down');
@@ -102,6 +110,8 @@ function setup(
     removed,
     trips,
     open,
+    pendingOpen,
+    demoted,
     detectCalls: () => detectCalls,
     openLoads: () => openLoads,
   };
@@ -197,6 +207,24 @@ describe('DoorProcessor.handleOut', () => {
     expect(trips).toEqual([]);
   });
 
+  it('รอบ pending ของคนนี้ถูกเปลี่ยนเป็น unknown แล้วบันทึกรอบ confirmed', async () => {
+    const { processor, trips, open, pendingOpen, demoted } = setup({ detect: () => [face(A)] });
+    open.add('a');
+    pendingOpen.add('a');
+    await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe('confirmed');
+    expect(demoted).toEqual(['a']);
+    expect(trips).toHaveLength(1);
+    expect(trips[0]).toMatchObject({ userId: 'a', status: 'confirmed' });
+  });
+
+  it('ผลไม่มั่นใจ (pending) ไม่ไปแตะรอบ pending เดิม', async () => {
+    const { processor, open, pendingOpen, demoted } = setup({ detect: () => [face(mid)] });
+    open.add('a');
+    pendingOpen.add('a');
+    await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe('duplicate');
+    expect(demoted).toEqual([]);
+  });
+
   it('คนที่เป็น pending อยู่แล้วก็ไม่เปิดรอบซ้ำ', async () => {
     const { processor, trips } = setup({ detect: () => [face(mid)] });
     await processor.handleOut('s1', [image('full')], OUT_AT);
@@ -225,6 +253,16 @@ describe('DoorProcessor.handleOut', () => {
     expect(trips[0]).toMatchObject({ userId: null, status: 'unknown' });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('รูปหนึ่งตรวจพัง ยังใช้ผลจากรูปอื่น', async () => {
+    const { processor, trips } = setup({
+      detect: (call) => (call === 1 ? new Error('timeout') : [face(A)]),
+    });
+    await expect(
+      processor.handleOut('s1', [image('1'), image('2'), image('3')], OUT_AT),
+    ).resolves.toBe('confirmed');
+    expect(trips[0]).toMatchObject({ userId: 'a', status: 'confirmed' });
   });
 
   describe('อัปโหลดรูปไม่สำเร็จ ต้องไม่ทำให้รอบหาย', () => {
