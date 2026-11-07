@@ -80,6 +80,8 @@ export interface SessionView {
   startsAt: string;
   endsAt: string;
   status: "upcoming" | "live" | "ended";
+  // ถูกลบคาบแล้ว รายงานไม่นับ
+  cancelled: boolean;
 }
 
 export interface Person {

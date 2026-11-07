@@ -30,6 +30,8 @@ export interface SessionView {
   startsAt: string;
   endsAt: string;
   status: 'upcoming' | 'live' | 'ended';
+  // ถูกลบคาบแล้ว รายงานไม่นับ
+  cancelled: boolean;
 }
 
 const WINDOW_DAYS = 7;
@@ -70,14 +72,22 @@ export class SessionsService implements SessionSyncer {
   ): Promise<void> {
     return this.enqueue(courseId, async () => {
       const rows = await this.repo.listByCourse(courseId, slot.onDate, slot.onDate);
-      const hit = rows.filter((r) => r.kind === 'class' && overlaps(r, slot));
+      const hit = rows.filter((r) => r.kind === 'class' && !r.cancelledAt && overlaps(r, slot));
       const now = this.now();
       if (hit.some((r) => cameraOpened(r.startsAt, now, this.config?.cameraOpenBeforeMin))) {
         throw new AppError(400, 'SESSION_STARTED', 'คาบเรียนที่ทับเริ่มเช็คชื่อแล้ว แก้ไม่ได้');
       }
-      await this.repo.remove(hit.map((r) => r.id));
+      await this.removeKeepingLeave(hit.map((r) => r.id), now);
       await save();
     });
+  }
+
+  // คาบที่มีใบลาลบจริงไม่ได้ ใบลากับหลักฐานจะหายตาม จึงทำเครื่องหมายแทน
+  private async removeKeepingLeave(ids: string[], now: Date): Promise<void> {
+    const keep = new Set(await this.repo.withLeaveRequests(ids));
+    await this.repo.cancel([...keep], now);
+    const rest = ids.filter((id) => !keep.has(id));
+    if (rest.length) await this.repo.remove(rest);
   }
 
   private enqueue(courseId: string, task: () => Promise<void>): Promise<void> {
@@ -93,7 +103,8 @@ export class SessionsService implements SessionSyncer {
     return run;
   }
 
-  // คาบที่กล้องเปิดแล้ว (ก่อนเวลาเริ่มตาม CAMERA_OPEN_BEFORE_MIN) ห้ามแตะ ไม่งั้นผลเช็คชื่อหายตาม
+  // คาบที่กล้องเปิดแล้ว (ก่อนเวลาเริ่มตาม CAMERA_OPEN_BEFORE_MIN) ห้ามลบหรือย้าย ไม่งั้นผลเช็คชื่อหายตาม
+  // ถ้าอาจารย์งดสอนหลังกล้องเปิด ทำเครื่องหมายว่าลบคาบแทน
   private async syncNow(courseId: string): Promise<void> {
     const now = this.now();
     const from = bangkokDate(now);
@@ -114,7 +125,7 @@ export class SessionsService implements SessionSyncer {
 
     // คาบสอบแทนคาบเรียนของวิชาเดียวกันที่ทับในวันนั้น และ sync ไม่แตะคาบสอบ
     const rows = await this.repo.listByCourse(courseId, from, to);
-    const exams = rows.filter((r) => r.kind === 'exam');
+    const exams = rows.filter((r) => r.kind === 'exam' && !r.cancelledAt);
     for (const [key, session] of planned) {
       if (exams.some((e) => e.onDate === session.onDate && overlaps(e, session))) {
         planned.delete(key);
@@ -122,18 +133,28 @@ export class SessionsService implements SessionSyncer {
     }
     const existing = rows.filter((r) => r.kind === 'class');
     const existingKeys = new Set(existing.map(keyOf));
+    const cancelledByTeacher = new Set(overrides.filter((o) => o.cancelled).map(keyOf));
     const toRemove: string[] = [];
+    const toCancel: string[] = [];
+    const toRestore: SessionRow[] = [];
     const toUpdate: { id: string; session: PlannedSession }[] = [];
     // เวลาเริ่มของแถวที่จะเหลืออยู่ ใช้กันชน unique (course_id, starts_at)
     const taken = new Map<string, number>();
 
     for (const row of existing) {
       const wanted = row.scheduleId ? planned.get(keyOf(row)) : undefined;
+      if (row.cancelledAt && !wanted) continue;
+      const started = cameraOpened(row.startsAt, now, this.config?.cameraOpenBeforeMin);
+      if (!row.cancelledAt && started && cancelledByTeacher.has(keyOf(row))) {
+        toCancel.push(row.id);
+        continue;
+      }
+      if (row.cancelledAt) toRestore.push(row);
       if (
-        cameraOpened(row.startsAt, now, this.config?.cameraOpenBeforeMin) ||
+        started ||
         (wanted && sameSlot(row, wanted)) ||
-        // เวลาใหม่จบไปแล้ว ย้ายไปคาบจะหายทั้งคาบ คงเวลาเดิมของวันนี้ไว้
-        (wanted && wanted.endsAt <= now)
+        // เวลาใหม่เริ่มไปแล้ว ย้ายไปทุกคนจะสายหรือคาบหาย คงเวลาเดิมของวันนี้ไว้
+        (wanted && wanted.startsAt <= now)
       ) {
         taken.set(row.id, row.startsAt.getTime());
       } else if (!wanted) {
@@ -157,7 +178,13 @@ export class SessionsService implements SessionSyncer {
     );
 
     // ลบก่อนเพิ่ม กันชน unique (course_id, starts_at)
-    if (toRemove.length) await this.repo.remove(toRemove);
+    await this.repo.cancel(toCancel, now);
+    if (toRemove.length) await this.removeKeepingLeave(toRemove, now);
+    await this.repo.restore(
+      toRestore
+        .filter((r) => !isTaken(new Date(taken.get(r.id) ?? r.startsAt.getTime()), r.id))
+        .map((r) => r.id),
+    );
     for (const { id, session } of toUpdate) {
       await this.repo.update(id, {
         roomId: session.roomId,
@@ -208,6 +235,7 @@ export class SessionsService implements SessionSyncer {
       startsAt: row.startsAt.toISOString(),
       endsAt: row.endsAt.toISOString(),
       status: row.endsAt <= now ? 'ended' : row.startsAt <= now ? 'live' : 'upcoming',
+      cancelled: row.cancelledAt !== null,
     }));
   }
 }

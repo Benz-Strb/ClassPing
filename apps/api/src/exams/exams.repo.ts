@@ -98,6 +98,7 @@ export class SupabaseExamsRepo implements ExamsRepo {
       .select(COLUMNS)
       .eq('kind', 'exam')
       .eq('course_id', courseId)
+      .is('cancelled_at', null)
       .order('starts_at');
     if (error) throw dbError();
     return (data as unknown as Row[]).map(toExam);
@@ -109,6 +110,7 @@ export class SupabaseExamsRepo implements ExamsRepo {
       .select(COLUMNS)
       .eq('kind', 'exam')
       .eq('id', id)
+      .is('cancelled_at', null)
       .maybeSingle();
     if (error) throw dbError();
     return data ? toExam(data as unknown as Row) : null;
@@ -147,8 +149,21 @@ export class SupabaseExamsRepo implements ExamsRepo {
     if (insertError) throw dbError();
   }
 
+  // คาบสอบที่มีใบลาลบจริงไม่ได้ ใบลากับหลักฐานจะหายตาม จึงทำเครื่องหมายแทน
   async remove(id: string): Promise<void> {
-    const { error } = await this.db.from('sessions').delete().eq('id', id).eq('kind', 'exam');
+    const { data: leave, error: leaveError } = await this.db
+      .from('leave_requests')
+      .select('id')
+      .eq('session_id', id)
+      .limit(1);
+    if (leaveError) throw dbError();
+    const query = this.db.from('sessions');
+    const { error } = await (leave?.length
+      ? query.update({ cancelled_at: new Date().toISOString() })
+      : query.delete()
+    )
+      .eq('id', id)
+      .eq('kind', 'exam');
     if (error) throw dbError();
   }
 

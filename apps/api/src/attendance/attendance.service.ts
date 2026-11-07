@@ -355,6 +355,7 @@ export class AttendanceService {
       startsAt: session.startsAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
       status: session.endsAt <= now ? 'ended' : session.startsAt <= now ? 'live' : 'upcoming',
+      cancelled: session.cancelled,
     };
   }
 }
