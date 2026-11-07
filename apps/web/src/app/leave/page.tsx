@@ -60,8 +60,11 @@ function StudentLeavePage() {
   }, [router]);
 
   const availableSessions = useMemo(() => {
+    // คำขอที่ถูกปฏิเสธยื่นคาบเดิมใหม่ได้
     const requested = new Set(
-      requests?.map((request) => request.sessionId) ?? [],
+      requests
+        ?.filter((request) => request.status !== "rejected")
+        .map((request) => request.sessionId) ?? [],
     );
     return sessions?.filter((session) => !requested.has(session.id)) ?? [];
   }, [requests, sessions]);

@@ -76,10 +76,15 @@ class MemoryLeaveRepo implements LeaveRepo {
   }
 
   async createRequest(input: LeaveRequestInput) {
-    if (this.requests.some((item) => item.sessionId === input.sessionId)) {
+    // เหมือน partial unique index: คำขอที่ถูกปฏิเสธไม่นับว่าซ้ำ
+    if (
+      this.requests.some(
+        (item) => item.sessionId === input.sessionId && item.status !== 'rejected',
+      )
+    ) {
       throw new Error('LEAVE_REQUEST_DUPLICATE');
     }
-    const id = '22222222-2222-4222-8222-222222222222';
+    const id = `22222222-2222-4222-8222-${String(222222222222 + this.requests.length)}`;
     this.requests.push({
       id,
       sessionId: input.sessionId,
@@ -244,6 +249,20 @@ describe('ระบบลา (e2e)', () => {
         .expect(path.endsWith('preview') ? 200 : 201);
     }
     expect(repo.requests).toHaveLength(1);
+  });
+
+  it('ยื่นคาบเดิมซ้ำได้ 409 แต่ยื่นใหม่ได้หลังถูกปฏิเสธ', async () => {
+    const server = app.getHttpServer();
+    const submit = () =>
+      request(server).post('/leave-requests').set('x-role', 'student')
+        .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+    await submit().expect(201);
+    await submit().expect(409);
+    await request(server).post(`/leave-requests/${repo.requests[0].id}/review`)
+      .set('x-role', 'teacher').send({ decision: 'rejected' }).expect(200);
+    await submit().expect(201);
+    expect(repo.requests).toHaveLength(2);
   });
 
   it('ปฏิเสธหลักฐานเกิน 25 MB ทั้งอ่านร่างและยื่นลา', async () => {
