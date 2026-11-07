@@ -9,13 +9,20 @@ describe('classifyEmail', () => {
     });
   });
 
-  it('เมลเป็นชื่อไม่ได้สิทธิ์อาจารย์อัตโนมัติ', () => {
-    expect(classifyEmail('somsak.kit@dpu.ac.th', [])).toEqual({
+  it('เมลแบบชื่อ.นามสกุล 3 ตัวเป็นอาจารย์', () => {
+    expect(classifyEmail('Somsak.Kit@dpu.ac.th', [])).toEqual({
       email: 'somsak.kit@dpu.ac.th',
-      role: 'student',
+      role: 'teacher',
       studentId: null,
     });
   });
+
+  it.each(['somsak', 'somsak.ki', 'somsak.kitt', 'som.sak.kit', 's0msak.kit', 'somsak.k1t'])(
+    '%s ไม่ตรงรูปแบบอาจารย์ เป็นนักศึกษาไว้ก่อน',
+    (local) => {
+      expect(classifyEmail(`${local}@dpu.ac.th`, [])?.role).toBe('student');
+    },
+  );
 
   it('ตัดช่องว่างและแปลงเป็นตัวเล็ก', () => {
     expect(classifyEmail('  66112106@DPU.AC.TH ', [])?.email).toBe(
