@@ -293,7 +293,7 @@ describe('LeaveService.review หมายเหตุ', () => {
     await service.review(teacher, id, 'approved', '  ok  ');
     await service.review(teacher, id, 'rejected', '   ');
     await service.review(teacher, id, 'rejected');
-    expect(repo.reviewRequest.mock.calls.map((c) => c[3])).toEqual(['ok', null, null]);
+    expect((repo.reviewRequest.mock.calls as unknown[][]).map((c) => c[3])).toEqual(['ok', null, null]);
   });
 });
 
