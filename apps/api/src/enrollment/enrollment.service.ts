@@ -6,7 +6,7 @@ import { dbError } from '../common/db-error.js';
 import { looksLike } from '../common/image-type.js';
 import { FaceClient, type EnrollResult } from '../face/face.client.js';
 import { UsersService, type AppUser } from '../users/users.service.js';
-import { CARD_MATCH_MIN, checkCard } from './card-check.js';
+import { CARD_MATCH_MIN, checkCard, readStudyInfo } from './card-check.js';
 import { ENROLLMENT_REPO, type EnrollmentRepo, type FaceRow } from './enrollment.repo.js';
 import {
   checkPose,
@@ -126,7 +126,7 @@ export class EnrollmentService {
       rows.find((r) => r.pose === 'front'),
     );
     await this.removeQuietly(await this.repo.deleteByUser(user.id, 'front'));
-    await this.users.setIdentity(user.id, score);
+    await this.users.setIdentity(user.id, score, readStudyInfo(read.lines));
     return { done: ['front'], complete: false, verified: true };
   }
 
