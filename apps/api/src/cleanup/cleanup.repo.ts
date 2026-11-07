@@ -41,15 +41,20 @@ export class SupabaseCleanupRepo implements CleanupRepo {
   }
 
   async files(bucket: Bucket, folder: string): Promise<StoredFile[]> {
-    return (
-      (await this.list(bucket, folder))
-        .filter((e) => e.id !== null)
+    const files: StoredFile[] = [];
+    for (const e of await this.list(bucket, folder)) {
+      // โฟลเดอร์ย่อย (captures/<sessionId>/door/) ลงไปเก็บไฟล์ด้วย path เต็ม
+      if (e.id === null) {
+        files.push(...(await this.files(bucket, `${folder}/${e.name}`)));
+        continue;
+      }
+      files.push({
+        path: `${folder}/${e.name}`,
         // ไม่รู้เวลาอัปโหลด ถือว่าเพิ่งอัปโหลด จะได้ไม่ถูกลบ
-        .map((e) => ({
-          path: `${folder}/${e.name}`,
-          createdAt: e.created_at ? new Date(e.created_at) : new Date(),
-        }))
-    );
+        createdAt: e.created_at ? new Date(e.created_at) : new Date(),
+      });
+    }
+    return files;
   }
 
   async existingOwners(bucket: Bucket, ids: string[]): Promise<Set<string>> {
@@ -63,7 +68,8 @@ export class SupabaseCleanupRepo implements CleanupRepo {
   }
 
   async referenced(bucket: Bucket, paths: string[]): Promise<Set<string>> {
-    const tables = bucket === 'captures' ? ['attendance', 'unknown_faces'] : ['face_profiles'];
+    const tables =
+      bucket === 'captures' ? ['attendance', 'unknown_faces', 'door_trips'] : ['face_profiles'];
     const found = new Set<string>();
     for (const table of tables) {
       for (const batch of chunk(paths, 100)) {
@@ -72,7 +78,10 @@ export class SupabaseCleanupRepo implements CleanupRepo {
           .select('image_path')
           .in('image_path', batch);
         if (error) throw dbError();
-        for (const row of data as { image_path: string }[]) found.add(row.image_path);
+        // door_trips.image_path เป็น null ได้ (รอบที่ไม่มีรูป)
+        for (const row of data as { image_path: string | null }[]) {
+          if (row.image_path) found.add(row.image_path);
+        }
       }
     }
     return found;
