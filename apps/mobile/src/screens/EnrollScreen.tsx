@@ -18,6 +18,7 @@ import type { FaceStatus, Pose } from '../lib/types';
 const POSES: Pose[] = ['front', 'left', 'right', 'up', 'down'];
 
 // ปัญหาที่ภาพบัตร สแกนหน้าใหม่ไม่ช่วย ต้องกลับไปเลือกภาพบัตรใหม่
+// FACE_ALREADY_ENROLLED สแกนซ้ำก็ได้ผลเดิม จึงกลับไปหน้าเลือกบัตรที่แสดงข้อความและมีปุ่มออกจากระบบ
 const CARD_ERRORS = new Set([
   'CARD_INVALID',
   'CARD_UNREADABLE',
@@ -25,6 +26,7 @@ const CARD_ERRORS = new Set([
   'CARD_NOT_TODAY',
   'CARD_NO_FACE',
   'CARD_MULTIPLE_FACES',
+  'FACE_ALREADY_ENROLLED',
 ]);
 
 const HINT: Record<Pose, string> = {
