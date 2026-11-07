@@ -70,11 +70,17 @@ export function CheckinSessions() {
                   {formatTime(session.startsAt)}-{formatTime(session.endsAt)} · {session.roomName}
                 </span>
                 {session.kind === "exam" && <ExamBadge title={session.title} />}
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${STATUS[session.status].className}`}
-                >
-                  {STATUS[session.status].label}
-                </span>
+                {session.cancelled ? (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">
+                    ลบคาบแล้ว
+                  </span>
+                ) : (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${STATUS[session.status].className}`}
+                  >
+                    {STATUS[session.status].label}
+                  </span>
+                )}
                 <span className="ml-auto text-sm text-blue-600">ดูการเช็คชื่อ</span>
               </Link>
             </li>

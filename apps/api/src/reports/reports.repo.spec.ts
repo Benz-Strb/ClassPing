@@ -167,6 +167,82 @@ describe('SupabaseReportsRepo', () => {
       expect(signedPaths).toEqual([['own.jpg']]);
     },
   );
+  it('ไม่นับขาดคาบก่อนเข้ารายชื่อและคาบที่กล้องไม่ได้บันทึก ส่วนรอตรวจไม่นับเป็นตัวหาร', async () => {
+    const session = (id: string, day: string) => ({
+      id,
+      course_id: 'course-1',
+      on_date: `2026-10-${day}`,
+      kind: 'class',
+      starts_at: `2026-10-${day}T02:00:00Z`,
+      ends_at: `2026-10-${day}T05:00:00Z`,
+      late_after_min: null,
+      absent_after_min: null,
+      out_of_room_limit_min: null,
+    });
+    const rows: Record<string, Record<string, unknown>[]> = {
+      courses: [{ id: 'course-1', code: 'CS101', name: 'ทดสอบ', section: null }],
+      attendance_rules: [],
+      enrollments: [
+        { course_id: 'course-1', student_code: '66000001', added_at: '2026-10-01T00:00:00Z' },
+        { course_id: 'course-1', student_code: '66000002', added_at: '2026-10-15T00:00:00Z' },
+      ],
+      users: [
+        { id: 'user-1', student_id: '66000001' },
+        { id: 'user-2', student_id: '66000002' },
+      ],
+      sessions: [session('before', '10'), session('blank', '20'), session('after', '25')],
+      attendance: [
+        { session_id: 'before', student_id: 'user-1', status: 'present', first_seen_at: null },
+        { session_id: 'after', student_id: 'user-1', status: 'present', first_seen_at: null },
+        { session_id: 'after', student_id: 'user-2', status: 'pending', first_seen_at: null },
+      ],
+    };
+    const db = {
+      from: (table: string) => {
+        let data = rows[table];
+        const query = {
+          // เอาเฉพาะคอลัมน์ที่ขอจริง
+          select: (columns: string) => {
+            if (table === 'enrollments') {
+              const names = columns.split(',').map((c) => c.trim());
+              data = data.map((row) => ({
+                ...Object.fromEntries(names.map((n) => [n, row[n]])),
+                course_id: row.course_id,
+              }));
+            }
+            return query;
+          },
+          order: () => query,
+          eq: (key: string, value: unknown) => {
+            data = data.filter((row) => row[key] === value);
+            return query;
+          },
+          in: (key: string, values: unknown[]) => {
+            data = data.filter((row) => values.includes(row[key]));
+            return query;
+          },
+          maybeSingle: async () => ({ data: data[0] ?? null, error: null }),
+          range: async (from: number, to: number) => ({
+            data: data.slice(from, to + 1),
+            error: null,
+          }),
+        };
+        return query;
+      },
+    };
+
+    const report = await new SupabaseReportsRepo(
+      db as unknown as SupabaseClient,
+    ).getAttendanceReport('course-1', { kind: 'all' }, new Date('2026-10-30T00:00:00Z'));
+
+    const [first, second] = report!.students;
+    expect(first.sessions.map((s) => s.status)).toEqual(['present', 'unrecorded', 'present']);
+    expect(first.attendanceRate).toBe(100);
+    expect(second.sessions.map((s) => s.status)).toEqual(['unrecorded', 'unrecorded', 'pending']);
+    expect(second.counts).toMatchObject({ absent: 0, pending: 1, total: 1 });
+    expect(second.attendanceRate).toBe(0);
+  });
+
   it('ดึงนักศึกษาทุกหน้าเมื่อรายชื่อเกินขีดจำกัด 1,000 แถว', async () => {
     const enrollments = Array.from({ length: 1001 }, (_, index) => ({
       student_code: String(66000001 + index),
