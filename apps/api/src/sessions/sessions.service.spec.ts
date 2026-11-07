@@ -243,6 +243,26 @@ describe('SessionsService.syncCourse', () => {
     expect(sessions().map((s) => s.startsAt)).toEqual([new Date('2026-10-20T06:00:00Z')]);
   });
 
+  it('แก้ตารางเป็นเวลาที่ผ่านไปแล้วของวันนี้ คาบวันนี้ยังอยู่เวลาเดิม สัปดาห์หน้าค่อยใช้เวลาใหม่', async () => {
+    const { course, service, addSchedule, sessions, removeSchedule } = setup();
+    const schedule = addSchedule({ weekday: 2, startTime: '14:00', endTime: '15:00' });
+    await service.syncCourse(course.id);
+    const [today] = sessions();
+    expect(today.startsAt).toEqual(new Date('2026-10-20T07:00:00Z'));
+
+    schedule.startTime = '08:00';
+    schedule.endTime = '09:00';
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([today]);
+
+    // เวลาใหม่ที่ยังไม่จบ ย้ายคาบวันนี้ได้ตามเดิม
+    schedule.startTime = '09:30';
+    schedule.endTime = '11:00';
+    await service.syncCourse(course.id);
+    expect(sessions()[0].startsAt).toEqual(new Date('2026-10-20T02:30:00Z'));
+    removeSchedule(schedule.id);
+  });
+
   it('คาบที่เลยช่วง 7 วันไม่ถูกสร้าง', async () => {
     const { course, service, addSchedule, sessions } = setup();
     // อังคารหน้า 27 ต.ค. อยู่นอกช่วง 20–26
