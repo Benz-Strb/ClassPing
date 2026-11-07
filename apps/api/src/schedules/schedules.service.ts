@@ -228,6 +228,20 @@ export class SchedulesService {
     const notFound = () => new AppError(404, 'OVERRIDE_NOT_FOUND', 'วันนี้ไม่ได้เปลี่ยนอะไรไว้');
     if (!isDate(date)) throw notFound();
     await this.checkNotStarted(schedule, date, null);
+    // ระหว่างที่งด ห้องอาจถูกวิชาอื่นใช้แล้ว ยกเลิกงดต้องไม่ทับ
+    const current = (await this.repo.listOverridesOnDate(date)).find(
+      (o) => o.scheduleId === scheduleId,
+    );
+    if (current?.cancelled) {
+      await this.checkDayConflict(schedule, {
+        scheduleId,
+        onDate: date,
+        cancelled: false,
+        roomId: null,
+        startTime: null,
+        endTime: null,
+      });
+    }
     if (!(await this.repo.removeOverride(scheduleId, date))) throw notFound();
     await this.sync(schedule.courseId);
   }
