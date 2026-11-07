@@ -9,7 +9,6 @@ from trackers import ByteTrackTracker
 from camera.door import Box
 
 SIZE = 640
-# ยังเป็นค่าเริ่มต้นชั่วคราว รอวัดที่ประตูจริง
 CONFIDENCE = 0.4
 NMS_IOU = 0.45
 # เฟรมต่อวินาทีที่ ByteTrack ใช้คำนวณเวลาที่ track หายได้
