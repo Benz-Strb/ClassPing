@@ -47,13 +47,14 @@ function setup(
     secret?: boolean;
     previousEnd?: Date | null;
     cancelledAt?: Date;
+    gone?: boolean;
   } = {},
 ) {
   const views: string[] = [];
   const listed: { path: string; from: Date; to: Date }[] = [];
   const repo = {
     session: async (id: string) =>
-      id === S1 ? { ...session, cancelledAt: opts.cancelledAt ?? null } : null,
+      id === S1 && !opts.gone ? { ...session, cancelledAt: opts.cancelledAt ?? null } : null,
     sessionsOnDate: async () => [],
     previousEndInRoom: async () => opts.previousEnd ?? null,
     logView: async (sid: string, uid: string, kind: string) => void views.push(`${kind} ${uid}`),
@@ -229,7 +230,7 @@ describe('RecordingService.openClip', () => {
   it('token ถูกต้องได้ path ช่วงเวลา และชื่อไฟล์ตอนดาวน์โหลด', async () => {
     const { service } = setup();
     const { url } = await service.link(owner, S1, body({ download: true }));
-    const clip = service.openClip(url.slice('/clips/'.length));
+    const clip = await service.openClip(url.slice('/clips/'.length));
     expect(clip).toEqual({
       path: `cam/${CAM}`,
       start: new Date('2026-10-24T10:20:00.000Z'),
@@ -241,8 +242,33 @@ describe('RecordingService.openClip', () => {
 
   it('token หมดอายุ แก้ไข หรือเป็น token ดูสด ได้ 401', async () => {
     const { service } = setup();
-    expect((await rejection(Promise.resolve().then(() => service.openClip('abc')))).status).toBe(
-      401,
-    );
+    expect((await rejection(service.openClip('abc'))).status).toBe(401);
+  });
+
+  // คลิป 17:20-17:30
+  it('ลิงก์ที่ออกก่อนลบคาบ เปิดไม่ได้ถ้าคลิปเลยเวลาที่ลบ แต่ช่วงก่อนลบยังเปิดได้', async () => {
+    const opts: { cancelledAt?: Date } = {};
+    const { service } = setup(opts);
+    const { url } = await service.link(owner, S1, body());
+    const token = url.slice('/clips/'.length);
+
+    opts.cancelledAt = new Date('2026-10-24T10:25:00Z');
+    expect(await rejection(service.openClip(token))).toMatchObject({
+      status: 401,
+      code: 'LINK_EXPIRED',
+    });
+
+    opts.cancelledAt = new Date('2026-10-24T10:40:00Z');
+    await expect(service.openClip(token)).resolves.toMatchObject({ duration: 600 });
+  });
+
+  it('ลิงก์ของคาบที่ไม่มีแล้วเปิดไม่ได้', async () => {
+    const opts: { gone?: boolean } = {};
+    const { service } = setup(opts);
+    const { url } = await service.link(owner, S1, body());
+    opts.gone = true;
+    expect(await rejection(service.openClip(url.slice('/clips/'.length)))).toMatchObject({
+      status: 401,
+    });
   });
 });
