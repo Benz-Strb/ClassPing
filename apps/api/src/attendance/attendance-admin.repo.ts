@@ -185,13 +185,30 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     }));
   }
 
+  // เก็บ URL ที่เซ็นแล้วไว้ใช้ซ้ำจนครึ่งหนึ่งของอายุ หน้าเช็คชื่อดึงทุก 5 วินาที
+  // ถ้า URL เปลี่ยนทุกรอบ เบราว์เซอร์จะโหลดรูปใหม่หมด
+  private readonly signed = new Map<string, { url: string; reuseUntil: number }>();
+
   async signCaptures(paths: string[], seconds: number): Promise<Map<string, string>> {
     const urls = new Map<string, string>();
     if (!paths.length) return urls;
-    const { data, error } = await this.db.storage.from(BUCKET).createSignedUrls(paths, seconds);
+    const now = Date.now();
+    const missing: string[] = [];
+    for (const path of new Set(paths)) {
+      const hit = this.signed.get(path);
+      if (hit && hit.reuseUntil > now) urls.set(path, hit.url);
+      else missing.push(path);
+    }
+    if (!missing.length) return urls;
+    const { data, error } = await this.db.storage.from(BUCKET).createSignedUrls(missing, seconds);
     if (error) throw dbError();
+    if (this.signed.size > 5000) {
+      for (const [path, hit] of this.signed) if (hit.reuseUntil <= now) this.signed.delete(path);
+    }
     for (const item of data) {
-      if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+      if (!item.path || !item.signedUrl) continue;
+      urls.set(item.path, item.signedUrl);
+      this.signed.set(item.path, { url: item.signedUrl, reuseUntil: now + seconds * 500 });
     }
     return urls;
   }

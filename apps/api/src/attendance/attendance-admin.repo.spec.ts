@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseAttendanceAdminRepo } from './attendance-admin.repo.js';
 
@@ -75,4 +75,34 @@ it('usersByIds คืนรหัสและชื่อ และไม่ย�
     { id: 'u9', studentCode: '66000099', fullName: 'เก้า' },
   ]);
   expect(await repo.usersByIds([])).toEqual([]);
+});
+
+afterEach(() => vi.useRealTimers());
+
+it('signCaptures ใช้ URL เดิมของรูปเดิมจนครึ่งหนึ่งของอายุ แล้วค่อยเซ็นใหม่', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
+  let n = 0;
+  const calls: string[][] = [];
+  const db = {
+    storage: {
+      from: () => ({
+        createSignedUrls: async (paths: string[]) => {
+          calls.push(paths);
+          n += 1;
+          return { data: paths.map((path) => ({ path, signedUrl: `${path}?t=${n}` })), error: null };
+        },
+      }),
+    },
+  } as unknown as SupabaseClient;
+  const repo = new SupabaseAttendanceAdminRepo(db);
+  const first = await repo.signCaptures(['a', 'b'], 600);
+  vi.advanceTimersByTime(5000);
+  const second = await repo.signCaptures(['a', 'b', 'c'], 600);
+  expect(second.get('a')).toBe(first.get('a'));
+  expect(second.get('b')).toBe(first.get('b'));
+  expect(calls[1]).toEqual(['c']);
+  vi.advanceTimersByTime(300_000);
+  const third = await repo.signCaptures(['a'], 600);
+  expect(third.get('a')).not.toBe(first.get('a'));
 });
