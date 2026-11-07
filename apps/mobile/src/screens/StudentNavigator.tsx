@@ -1,20 +1,18 @@
+import { layout, colors } from '../ui/theme';
 import { useEffect, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { BackHandler, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text } from '../ui/primitives';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { FaceStatus, Me } from '../lib/types';
 import { AttendanceSummarySection } from './AttendanceSummarySection';
+import { HomeStudies } from './HomeStudies';
 import { CoursesScreen } from './CoursesScreen';
 import { ChatScreen } from './ChatScreen';
 import { LeaveScreen } from './LeaveScreen';
+import { AccountScreen } from './AccountScreen';
+import {StudentTabBar, TABS, type Tab} from '../ui/StudentTabBar';
 
-const TABS = [
-  { key: 'home', label: 'หน้าหลัก', path: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z' },
-  { key: 'courses', label: 'รายวิชา', path: 'M4 3h7v18H4z M14 3h6v18h-6z M4 7h7 M14 7h6' },
-  { key: 'leave', label: 'การลา', path: 'M5 4h14v17H5z M9 2v4 M15 2v4 M8 11h8 M8 15h5' },
-  { key: 'chat', label: 'ผู้ช่วย', path: 'M3 4h18v13H9l-6 4z M7 9h10 M7 13h6' },
-  { key: 'account', label: 'บัญชี', path: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 22v-3a8 8 0 0 1 16 0v3' },
-] as const;
-type Tab = typeof TABS[number]['key'];
 
 export function StudentNavigator({ me, face, onSignOut }: {
   me: Me;
@@ -23,7 +21,9 @@ export function StudentNavigator({ me, face, onSignOut }: {
 }) {
   const [tab, setTab] = useState<Tab>('home');
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set(['home']));
-  const wide = useWindowDimensions().width >= 768;
+  const { width, height } = useWindowDimensions();
+  const { bottom } = useSafeAreaInsets();
+  const wide = width >= layout.tablet || width >= 600 && width > height;
   const navigate = (next: Tab) => {
     setVisited((previous) => new Set([...previous, next]));
     setTab(next);
@@ -39,64 +39,67 @@ export function StudentNavigator({ me, face, onSignOut }: {
   }, [tab]);
 
   return <View style={[styles.root, wide && styles.wide]}>
-    <View style={styles.main}>
+    <View style={[styles.main, wide && { paddingBottom: bottom }]}>
       <View style={styles.header}>
-        <Text style={styles.brand}>ClassPing</Text>
-        <Text style={styles.subtitle}>{TABS.find((item) => item.key === tab)?.label}</Text>
+        <View style={styles.brandGroup}><View style={styles.brandMark}><Text allowFontScaling={false} style={styles.brandInitial}>C</Text></View><Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={styles.brand}>ClassPing</Text></View>
+        <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatar}><Text allowFontScaling={false} style={styles.avatarText}>{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</Text></Pressable>
       </View>
       {TABS.map(({ key }) => visited.has(key) && <View key={key} style={[styles.scene, tab !== key && styles.hidden]} accessibilityElementsHidden={tab !== key} importantForAccessibility={tab === key ? 'auto' : 'no-hide-descendants'}>
         {key === 'home' && <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>สวัสดี {me.fullName ?? me.studentId}</Text>
-          <Text style={styles.secondary}>ติดตามการเข้าเรียนของคุณ</Text>
-          <AttendanceSummarySection />
-          <Pressable accessibilityRole="button" style={styles.action} onPress={() => navigate('courses')}>
-            <Text style={styles.actionText}>ดูรายวิชาและรายละเอียดเข้าเรียน</Text>
-          </Pressable>
+          <View style={styles.greeting}>
+            <Text accessibilityRole="header" maxFontSizeMultiplier={1.8} style={styles.homeName}>ตารางและงานของวันนี้</Text>
+            <Text style={styles.secondary}>{me.fullName ?? me.studentId}</Text>
+          </View>
+          <View style={[styles.dashboard, wide && styles.dashboardWide]}>
+            <View style={[styles.panel, styles.schedulePanel, wide && styles.widePanel]}><HomeStudies onOpenCourses={() => navigate('courses')} onOpenAccount={() => navigate('account')} /></View>
+            <View style={[styles.panel, wide && styles.widePanel]}><AttendanceSummarySection onOpenAccount={() => navigate('account')} /></View>
+          </View>
+          <View style={styles.shortcuts}>
+            {(['courses', 'leave'] as const).map((key) => <Pressable key={key} onPress={() => navigate(key)} style={[styles.shortcut, key === 'courses' && styles.primaryShortcut]}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={key === 'courses' ? colors.onAction : colors.action} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><Path d={TABS.find(item => item.key === key)!.path} /></Svg>
+              <Text style={[styles.shortcutText, key === 'courses' && styles.primaryShortcutText]}>{key === 'courses' ? 'ดูรายวิชาของฉัน' : 'ยื่นใบลา'}</Text>
+            </Pressable>)}
+          </View>
+          <View style={styles.tip}><Text style={styles.tipTitle}>เข้าเรียนได้โดยไม่ต้องกดเช็กชื่อ</Text><Text style={styles.tipText}>กล้องในห้องเรียนบันทึกการเข้าเรียนให้คุณ ตรวจสอบผลย้อนหลังได้ที่รายวิชา</Text></View>
         </ScrollView>}
         {key === 'courses' && <CoursesScreen active={tab === 'courses'} />}
         {key === 'leave' && <LeaveScreen />}
         {key === 'chat' && <ChatScreen authenticated />}
-        {key === 'account' && <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>ข้อมูลบัญชี</Text>
-          <Text style={styles.name}>{me.fullName ?? me.email}</Text>
-          <Text selectable style={styles.secondary}>{me.email}</Text>
-          <View style={styles.row}><Text>รหัสนักศึกษา</Text><Text selectable>{me.studentId}</Text></View>
-          <View style={styles.row}><Text>บทบาท</Text><Text>นักศึกษา</Text></View>
-          <View style={styles.row}><Text>ใบหน้า</Text><Text>{face?.complete ? 'ลงทะเบียนแล้ว' : 'ยังไม่ครบ'}</Text></View>
-          <Pressable accessibilityRole="button" style={styles.action} onPress={onSignOut}><Text style={styles.actionText}>ออกจากระบบ</Text></Pressable>
-        </ScrollView>}
+        {key === 'account' && <AccountScreen me={me} face={face} onSignOut={onSignOut} />}
       </View>)}
     </View>
-    <View accessibilityRole="tablist" style={[styles.navigation, wide && styles.rail]}>
-      {TABS.map((item) => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: tab === item.key }} onPress={() => navigate(item.key)} style={[styles.tab, wide && styles.railTab, tab === item.key && styles.selected]}>
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={tab === item.key ? '#111111' : '#5e6168'} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><Path d={item.path} /></Svg>
-        <Text style={[styles.label, tab === item.key && styles.selectedLabel]}>{item.label}</Text>
-      </Pressable>)}
-    </View>
+    <StudentTabBar tab={tab} wide={wide} bottom={bottom} onNavigate={navigate} />
   </View>;
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#fff' },
+  root: { flex: 1, backgroundColor: colors.background },
   wide: { flexDirection: 'row-reverse' },
   main: { flex: 1, minWidth: 0 },
-  header: { paddingHorizontal: 24, paddingVertical: 16, borderBottomWidth: 1, borderColor: '#e5e5e5', gap: 4 },
-  brand: { fontSize: 20, fontWeight: '700', color: '#111' },
-  subtitle: { fontSize: 14, color: '#5e6168' },
+  header: { backgroundColor: colors.surface, paddingHorizontal: 24, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.border, gap: 4 },
+  brandGroup: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandMark: { width: 28, height: 28, borderRadius: 8, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
+  brandInitial: { fontSize: 20, lineHeight: 26, fontWeight: '600', color: colors.onAction },
+  brand: { fontSize: 20, fontWeight: '700', color: colors.identity },
   scene: { flex: 1 },
   hidden: { display: 'none' },
-  content: { padding: 24, gap: 16, flexGrow: 1, width: '100%', maxWidth: 800, alignSelf: 'center' },
-  title: { fontSize: 24, fontWeight: '600', color: '#111' },
-  name: { fontSize: 18, fontWeight: '600', marginTop: 16 },
-  secondary: { fontSize: 16, color: '#5e6168', lineHeight: 24 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderColor: '#e5e5e5' },
-  action: { minHeight: 48, padding: 16, borderRadius: 8, backgroundColor: '#111', alignItems: 'center', marginTop: 16 },
-  actionText: { fontSize: 16, color: '#fff', fontWeight: '600' },
-  navigation: { flexDirection: 'row', borderTopWidth: 1, borderColor: '#dedede', backgroundColor: '#efefef', padding: 4, gap: 4 },
-  rail: { width: 120, flexDirection: 'column', borderTopWidth: 0, borderRightWidth: 1, paddingTop: 24 },
-  tab: { flex: 1, minHeight: 64, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 8 },
-  railTab: { flex: 0, marginBottom: 8 },
-  selected: { backgroundColor: '#fff' },
-  label: { fontSize: 12, color: '#5e6168', textAlign: 'center' },
-  selectedLabel: { color: '#111', fontWeight: '700' },
+  content: { padding: 24, gap: 24, flexGrow: 1, width: '100%', maxWidth: 1040, alignSelf: 'center', paddingBottom: 32 },
+  avatar: { width: 44, minHeight: 44, flexShrink: 0, borderRadius: 22, backgroundColor: colors.selected, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: colors.action, fontWeight: '600', fontSize: 18 },
+  greeting: { gap: 6, paddingVertical: 4 },
+  homeName: { fontSize: 27, lineHeight: 38, fontWeight: '500', color: colors.identity },
+  shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginVertical: 4 },
+  shortcut: { flex: 1, minWidth: 130, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 14, backgroundColor: colors.selected },
+  primaryShortcut: { backgroundColor: colors.action },
+  shortcutText: { fontSize: 14, color: colors.action, fontWeight: '500' },
+  primaryShortcutText: { color: colors.onAction },
+  dashboard: { gap: 16 },
+  dashboardWide: { flexDirection: 'row', alignItems: 'flex-start' },
+  panel: { flexGrow: 1, minWidth: 0, backgroundColor: colors.surface, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  schedulePanel: { flexGrow: 2 },
+  widePanel: { flex: 1 },
+  tip: { paddingVertical: 8, gap: 4 },
+  tipTitle: { fontSize: 14, fontWeight: '500' },
+  tipText: { fontSize: 13, lineHeight: 21, color: colors.muted },
+  secondary: { fontSize: 16, color: colors.muted, lineHeight: 24 },
 });

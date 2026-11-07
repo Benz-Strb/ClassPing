@@ -1,0 +1,162 @@
+{
+  "source": {
+    "figma": "https://www.figma.com/design/kaMgswYGB5XiMnEMZaFRO6",
+    "export": "classping-figma-design.json",
+    "method": "Figma Desktop development plugin, authorized fallback while MCP quota is exhausted"
+  },
+  "web": {
+    "stack": "Next.js / React / Tailwind",
+    "sidebarBreakpoint": 1024,
+    "sidebarWidth": 232,
+    "behavior": [
+      "collapsible navigation below 1024px",
+      "fluid content and course grids",
+      "scrollable course tabs and data tables",
+      "48px form controls",
+      "local Geist and Kanit fonts"
+    ]
+  },
+  "mobile": {
+    "stack": "Expo / React Native",
+    "railBreakpoint": 768,
+    "landscapeRailMinWidth": 600,
+    "behavior": [
+      "bottom tabs on phones, rail on tablets",
+      "fluid centered scrollable content",
+      "portrait and landscape enabled",
+      "scrollable capture controls on small landscape screens",
+      "48px controls and readable disabled states",
+      "local Geist and Kanit fonts",
+      "live daily classes from /me/studies"
+    ]
+  },
+  "checks": {
+    "webBuild": "passed",
+    "mobileTypecheck": "passed after final scrolling-rail ref type correction",
+    "webLint": "passed",
+    "expoWebIosAndroidExport": "passed on final native sources",
+    "iosSimulatorNativeBuild": "passed, 0 errors",
+    "existingWebTests": 10,
+    "existingMobileTests": 4,
+    "desktopWebLoginVisual": "passed",
+    "iosSafeAreaAutolinking": "passed: RNCSafeAreaProvider and RNCSafeAreaView linked into the rebuilt app",
+    "iosFontAbi": "passed: expo-font pinned and deduplicated at 58.0.10",
+    "iosPhoneLoginVisual": "passed on iPhone 17 Pro simulator, 1206x2622 screenshot",
+    "iosMetroConnection": "passed using localhost:8081",
+    "impeccablePolish": {
+      "webRoutes": [
+        "/login",
+        "/courses",
+        "/me"
+      ],
+      "webWidths": [
+        360,
+        768,
+        1440
+      ],
+      "horizontalOverflow": false,
+      "data": "synthetic browser-only fixtures for course/account visual checks; no backend records changed",
+      "mobile": "iPhone 17 Pro screenshot verified with compact edge-attached tabs; role permissions unchanged",
+      "webBuild": "passed",
+      "webLint": "passed",
+      "mobileTypecheck": "passed",
+      "webReportTests": 8
+    },
+    "academicWebMatrix": {
+      "routes": 26,
+      "widths": [
+        360,
+        768,
+        1440
+      ],
+      "captures": 78,
+      "issues": 0,
+      "data": "Browser-only synthetic fixtures",
+      "responsiveMenuInteractions": 2,
+      "evidence": "../.impeccable/review/web-matrix.json"
+    },
+    "academicNativeVisual": {
+      "devices": [
+        "iPhone 17 Pro iOS 26.5",
+        "iPad mini A17 Pro iOS 26.5"
+      ],
+      "scenes": [
+        "home",
+        "courses",
+        "leave",
+        "chat",
+        "login",
+        "consent",
+        "identity",
+        "account",
+        "enroll permission fallback"
+      ],
+      "textSize": "accessibility-extra-large and default",
+      "appearance": "forced light interface under light/dark OS",
+      "data": "Temporary harness importing shipping components and fixture API; not shipping or connected to live records"
+    },
+    "academicFixReview": {
+      "disposition": "ship",
+      "scope": "four material fixes reviewed for web+iOS only",
+      "evidence": "../.impeccable/review/verdict-web-ios.md",
+      "allAdaptivePlatforms": "Android deferred by user for this delivery; earlier recapture remains historical, not a web/iOS blocker"
+    },
+    "academicExtraStates": {
+      "scenes": [
+        "root guest",
+        "root student",
+        "auth callback pending",
+        "reports export controls"
+      ],
+      "widths": [
+        360,
+        768,
+        1440
+      ],
+      "captures": 12,
+      "issues": 0,
+      "evidence": "../.impeccable/review/fix-checks.json"
+    },
+    "nativeRailHeights": {
+      "heightsPt": [
+        393,
+        280
+      ],
+      "text": [
+        "default",
+        "enlarged"
+      ],
+      "selectedTab": "account",
+      "result": "visible with native vertical scrolling",
+      "evidence": "../.impeccable/review/rail-height-verdict.md",
+      "limitation": "component-height test, not full OS landscape/orientation certification"
+    },
+    "designDocumentation": "DESIGN.md and .impeccable/design.json verified"
+  },
+  "notVerified": [
+    "native Android rendering",
+    "complete orientation and keyboard matrix",
+    "real OAuth/camera/face/OCR/video success with live services",
+    "live backend write operations after redesign"
+  ],
+  "design": {
+    "name": "Academic Rhythm",
+    "selectedByUser": "2026-11-07",
+    "scope": "All existing web routes and mobile screens; purple/ClassPing and API/role behavior preserved",
+    "contract": "../apps/web/.impeccable/surfaces/apps-web-src-app-layout-tsx.md",
+    "documentation": [
+      "../DESIGN.md",
+      "../.impeccable/design.json"
+    ]
+  },
+  "deliveryScope": {
+    "included": [
+      "web",
+      "iOS"
+    ],
+    "deferredByUser": [
+      "Android"
+    ],
+    "date": "2026-11-07"
+  }
+}
