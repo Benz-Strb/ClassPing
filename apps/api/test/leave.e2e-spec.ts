@@ -278,7 +278,11 @@ describe('ระบบลา (e2e)', () => {
       await request(app.getHttpServer()).post(path).set('x-role', 'student')
         .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
         .attach('evidence', Buffer.alloc(25 * 1024 * 1024 + 1), { filename: 'leave.png', contentType: 'image/png' })
-        .expect(413);
+        .expect(413)
+        .expect((res) => {
+          expect(res.body.error.code).toBe('EVIDENCE_TOO_LARGE');
+          expect(res.body.error.message).toBe('ไฟล์หลักฐานใหญ่เกิน 25 MB');
+        });
     }
     expect(repo.requests).toHaveLength(0);
   });

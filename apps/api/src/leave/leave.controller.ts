@@ -12,6 +12,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import { AppError } from '../common/app-error.js';
+import { EvidenceUploadErrorsInterceptor } from '../enrollment/upload-errors.interceptor.js';
 import type { AppUser } from '../users/users.service.js';
 import { PreviewLimitGuard } from './preview-limit.guard.js';
 import { LeaveService, MAX_EVIDENCE_BYTES, type LeaveEvidence } from './leave.service.js';
@@ -61,6 +62,7 @@ export class LeaveController {
   @HttpCode(200)
   @UseGuards(PreviewLimitGuard)
   @UseInterceptors(
+    EvidenceUploadErrorsInterceptor,
     FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),
   )
   preview(
@@ -74,6 +76,7 @@ export class LeaveController {
   @Post()
   @HttpCode(201)
   @UseInterceptors(
+    EvidenceUploadErrorsInterceptor,
     FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),
   )
   submit(

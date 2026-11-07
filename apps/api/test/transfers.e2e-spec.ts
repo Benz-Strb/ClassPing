@@ -196,6 +196,19 @@ describe('Transfers HTTP flow', () => {
     expect(rows[0].documentName).toBe('ใบแสดงผลการเรียน.pdf');
   });
 
+  it('เอกสารเกิน 10 MB ได้ข้อความภาษาไทย', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/transfers/requests')
+      .field('payload', JSON.stringify(payload))
+      .attach('document', Buffer.alloc(10 * 1024 * 1024 + 1), {
+        filename: 'big.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(413);
+    expect(res.body.error.code).toBe('DOCUMENT_SIZE');
+    expect(res.body.error.message).toBe('ไฟล์เอกสารใหญ่เกิน 10 MB');
+  });
+
   it('อัปโหลดหลักสูตร → ชุดจับคู่ → นักศึกษายื่น → อนุมัติบางวิชา → นักศึกษาดูผล', async () => {
     await prepare();
     const curricula = await request(app.getHttpServer())
