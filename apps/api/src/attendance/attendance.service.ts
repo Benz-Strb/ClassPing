@@ -263,6 +263,15 @@ export class AttendanceService {
     const { status } = parseBody(statusSchema, body);
     const session = await this.owned(user, sessionId);
     const student = await this.student(session.courseId, code);
+    const rows = await this.repo.listBySession(sessionId);
+    if (rows.find((r) => r.userId === student)?.status === 'pending') {
+      // รูปอาจเป็นของคนอื่น ตั้งสถานะตรง ๆ จะเก็บรูปนั้นไว้กับคนนี้
+      throw new AppError(
+        409,
+        'PENDING_REVIEW',
+        'รายการนี้รอตรวจอยู่ ให้ใช้ปุ่มยืนยัน เปลี่ยนคน หรือไม่ใช่นักศึกษาวิชานี้',
+      );
+    }
     await this.repo.setStatus(sessionId, student, status, user.id);
     return this.view(user, sessionId);
   }

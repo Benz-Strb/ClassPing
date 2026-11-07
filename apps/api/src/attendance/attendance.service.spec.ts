@@ -289,6 +289,18 @@ describe('AttendanceService.setStatus', () => {
     }
   });
 
+  it('แถวรอตรวจตั้งสถานะตรง ๆ ไม่ได้ ต้องใช้ปุ่มตรวจ 409 PENDING_REVIEW', async () => {
+    const { service, repo, pending } = setup();
+    pending('u1');
+    await expect(
+      service.setStatus(teacher, SESSION_ID, '66000001', { status: 'present' }),
+    ).rejects.toMatchObject({ status: 409, code: 'PENDING_REVIEW' });
+    expect(repo.rows.get('u1')).toMatchObject({
+      status: 'pending',
+      imagePath: `${SESSION_ID}/u1-x.jpg`,
+    });
+  });
+
   it('รหัสไม่อยู่ในวิชาได้ 404 / ยังไม่เคย login ได้ 409 NO_ACCOUNT', async () => {
     const { service } = setup();
     await expect(
@@ -396,9 +408,7 @@ describe('AttendanceService.review', () => {
       toCode: '66000003',
     });
     expect(repo.rows.get('u3')).toMatchObject({ status: 'present', reviewReason: null });
-    pending('u2', 5, 'spoof');
-    await service.setStatus(teacher, SESSION_ID, '66000002', { status: 'present' });
-    expect(repo.rows.get('u2')?.reviewReason).toBeNull();
+    expect(repo.rows.get('u2')).toBeUndefined();
   });
 
   it('แถวที่ไม่ได้รอตรวจได้ 409 NOT_PENDING', async () => {
