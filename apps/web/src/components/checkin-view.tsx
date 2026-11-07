@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { bangkokTimeToIso, formatDate, formatTime } from "@/lib/time";
 import type { AttendanceRow, AttendanceStatus, SessionAttendance } from "@/lib/types";
@@ -14,6 +14,10 @@ import { TripDialog, type TripResult } from "./trip-dialog";
 import { ExamBadge } from "./exam-badge";
 
 const POLL_MS = 5000;
+// คาบจบแล้วไม่ดึงถี่ แต่ดึงเป็นระยะให้ URL รูปไม่หมดอายุ (อายุ 10 นาที)
+const IDLE_POLL_MS = 4 * 60 * 1000;
+// รูปโหลดไม่ได้ (URL หมดอายุ) ดึงใหม่ได้อย่างมากทุก 30 วินาที
+const IMAGE_RELOAD_MS = 30_000;
 
 const STATUS_LABEL: Record<AttendanceStatus, { label: string; className: string }> = {
   present: { label: "มา", className: "bg-green-100 text-green-800" },
@@ -36,10 +40,15 @@ export function CheckinView() {
   const { id, sessionId } = useParams<{ id: string; sessionId: string }>();
   const router = useRouter();
   const [data, setData] = useState<SessionAttendance | null>(null);
+  // error จากการกดแก้ กับ error จากการดึงข้อมูลเป็นรอบ แยกกันเพื่อให้รอบที่สำเร็จล้างได้เฉพาะอย่างหลัง
   const [error, setError] = useState<string | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // นับครั้งที่อาจารย์กดแก้ ผลจากรอบดึงข้อมูลที่เริ่มก่อนการแก้จะไม่ถูกใช้
+  // นับตอนเริ่มและตอนจบการกดแก้ ผลจากรอบดึงข้อมูลที่เริ่มก่อนการแก้เสร็จจะไม่ถูกใช้
   const edits = useRef(0);
+  // 403 คือไม่มีสิทธิ์ดูคาบนี้ ลองใหม่ก็ไม่หาย
+  const forbidden = useRef(false);
+  const lastImageReload = useRef(0);
   const [openTrip, setOpenTrip] = useState<{ code: string; tripId: string } | null>(null);
   const base = `/sessions/${sessionId}/attendance`;
 
@@ -47,11 +56,15 @@ export function CheckinView() {
     const startedAt = edits.current;
     return apiFetch<SessionAttendance>(base)
       .then((next) => {
-        if (edits.current === startedAt) setData(next);
+        if (edits.current === startedAt) {
+          setData(next);
+          setPollError(null);
+        }
         return next;
       })
       .catch(async (e: unknown) => {
-        setError(await handleApiError(e, router));
+        if (e instanceof ApiError && e.status === 403) forbidden.current = true;
+        setPollError(await handleApiError(e, router));
         return null;
       });
   }, [base, router]);
@@ -61,12 +74,12 @@ export function CheckinView() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     const tick = async () => {
-      let open = true;
+      let ended = false;
       if (document.visibilityState === "visible") {
         const next = await load();
-        open = !next || next.session.status !== "ended";
+        ended = next?.session.status === "ended";
       }
-      if (!stopped && open) timer = setTimeout(tick, POLL_MS);
+      if (!stopped && !forbidden.current) timer = setTimeout(tick, ended ? IDLE_POLL_MS : POLL_MS);
     };
     void tick();
     return () => {
@@ -79,15 +92,29 @@ export function CheckinView() {
   async function run(path: string, method: string, body?: unknown): Promise<TripResult> {
     edits.current += 1;
     setBusy(true);
+    let result: TripResult;
+    // 409 (NOT_PENDING, PENDING_REVIEW) คือข้อมูลบนจอเก่า แสดงข้อความแล้วดึงใหม่
+    let stale = false;
     try {
       const init = body === undefined ? { method } : { method, body: JSON.stringify(body) };
       setData(await apiFetch<SessionAttendance>(path, init));
-      return { ok: true, error: null };
+      result = { ok: true, error: null };
     } catch (e) {
-      return { ok: false, error: await handleApiError(e, router) };
-    } finally {
-      setBusy(false);
+      stale = e instanceof ApiError && e.status === 409;
+      result = { ok: false, error: await handleApiError(e, router) };
     }
+    edits.current += 1;
+    setBusy(false);
+    if (stale) void load();
+    return result;
+  }
+
+  // รูปโหลดไม่ได้มักเพราะ URL หมดอายุ (เปิดหน้าทิ้งไว้) ดึงข้อมูลใหม่ให้ได้ URL ใหม่
+  function reloadOnImageError() {
+    const now = Date.now();
+    if (now - lastImageReload.current < IMAGE_RELOAD_MS) return;
+    lastImageReload.current = now;
+    void load();
   }
 
   async function send(path: string, method: string, body?: unknown) {
@@ -114,7 +141,10 @@ export function CheckinView() {
     return send(`${base}/${code}`, "PATCH", { status });
   }
 
-  if (!data) return error ? <p className="text-red-600">{error}</p> : <p>กำลังโหลด...</p>;
+  if (!data) {
+    const message = error ?? pollError;
+    return message ? <p className="text-red-600">{message}</p> : <p>กำลังโหลด...</p>;
+  }
 
   const { session, rows, unknown, tripReviews, unknownTrips } = data;
   const pending = rows.filter((r) => r.status === "pending");
@@ -131,7 +161,7 @@ export function CheckinView() {
   const count = (status: AttendanceStatus) => rows.filter((r) => r.status === status).length;
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6" onErrorCapture={reloadOnImageError}>
       <div className="space-y-1">
         <Link href={`/courses/${id}/checkin`} className="text-sm text-blue-600 underline">
           คาบทั้งหมด
@@ -172,7 +202,7 @@ export function CheckinView() {
         )}
       </div>
 
-      {error && <p className="text-red-600">{error}</p>}
+      {(error ?? pollError) && <p className="text-red-600">{error ?? pollError}</p>}
 
       {(pending.length > 0 || tripReviews.length > 0) && (
         <div className="space-y-3">
@@ -251,8 +281,8 @@ export function CheckinView() {
           <h3 className="font-medium">หน้าที่ไม่ตรงกับใครในวิชา</h3>
           <p className="text-sm text-gray-600">เก็บไว้ 7 วันแล้วลบเอง</p>
           <div className="flex flex-wrap gap-2">
-            {unknown.map((face) => (
-              <figure key={face.imageUrl} className="text-center text-xs text-gray-500">
+            {unknown.map((face, index) => (
+              <figure key={`${face.seenAt}-${index}`} className="text-center text-xs text-gray-500">
                 <Photo src={face.imageUrl} size="h-20 w-20" />
                 <figcaption>{formatTime(face.seenAt)}</figcaption>
               </figure>
