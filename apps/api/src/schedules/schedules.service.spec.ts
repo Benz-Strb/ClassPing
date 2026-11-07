@@ -616,6 +616,61 @@ describe('SchedulesService แถวคาบค้างจริง', () => {
     ).resolves.toBeTruthy();
   });
 
+  it('เปลี่ยนเฉพาะวันให้ทับแถวคาบค้างของวิชาอื่น ได้ ROOM_CONFLICT · ต่อกันพอดีหรือคนละห้องไม่ชน', async () => {
+    const { owner, cs101, roomA, roomB, service, monday } = withLeftover();
+    const mine = await service.create(owner, cs101.id, monday({ roomId: roomB, startTime: '13:00', endTime: '15:00' }));
+    expect(
+      await rejection(
+        service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomA, startTime: '11:00', endTime: '13:00' }),
+      ),
+    ).toMatchObject({ status: 409, code: 'ROOM_CONFLICT' });
+    await expect(
+      service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomA, startTime: '12:00', endTime: '14:00' }),
+    ).resolves.toBeTruthy();
+    await expect(
+      service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomB, startTime: '10:00', endTime: '12:00' }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('เอาการเปลี่ยนเฉพาะวันออก แล้วช่องเดิมทับแถวคาบค้างของวิชาอื่น ได้ ROOM_CONFLICT', async () => {
+    const { owner, cs101, cs102, repo, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday());
+    await service.setOverride(owner, mine.id, NEXT_MONDAY, { cancelled: true });
+    repo.classSessions.push({
+      id: randomUUID(),
+      courseId: cs102.id,
+      courseCode: 'CS102',
+      roomId: mine.roomId,
+      roomName: 'ห้อง A',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T02:00:00Z'),
+      endsAt: new Date('2026-10-26T05:00:00Z'),
+    });
+    expect(await rejection(service.clearOverride(owner, mine.id, NEXT_MONDAY))).toMatchObject({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+    });
+  });
+
+  it('เปลี่ยนเฉพาะวันไม่ชนแถวคาบของวิชาเดียวกัน และแถวที่จบไปแล้ว', async () => {
+    const { owner, cs101, cs102, roomA, roomB, repo, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday({ roomId: roomB, startTime: '13:00', endTime: '15:00' }));
+    const row = (courseId: string, endsAt: string) => ({
+      id: randomUUID(),
+      courseId,
+      courseCode: 'X',
+      roomId: roomA,
+      roomName: 'ห้อง A',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T02:00:00Z'),
+      endsAt: new Date(endsAt),
+    });
+    repo.classSessions.push(row(cs101.id, '2026-10-26T05:00:00Z'), row(cs102.id, '2026-10-20T01:00:00Z'));
+    await expect(
+      service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomA, startTime: '09:00', endTime: '12:00' }),
+    ).resolves.toBeTruthy();
+  });
+
   it('แถวคาบค้างของวิชาเดียวกันไม่นับว่าชน', async () => {
     const { owner, cs101, roomA, service, monday, repo } = setup();
     repo.classSessions.push({

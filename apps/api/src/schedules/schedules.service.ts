@@ -396,6 +396,10 @@ export class SchedulesService {
     await this.checkDate(date, schedules, [...overrides, override], schedule.id);
     const [session] = planDay(date, [schedule], [override]);
     checkExamClash(session, await this.repo.listExamsBetween(date, date));
+    // แถวคาบจริงของวิชาอื่นที่ยังค้างอยู่ (repo ไม่ส่งแถวที่ยกเลิก) คาบที่จบแล้วไม่นับ
+    if (session && session.endsAt > this.now()) {
+      checkExamClash(session, await this.repo.listClassSessionsOn(date));
+    }
   }
 
   // วางคาบของวันนั้นทุกวิชา แล้วดูว่าคาบของตารางนี้ไปทับห้องหรือทับวิชาเดียวกันไหม
