@@ -106,7 +106,11 @@ export function ScheduleView() {
   }
 
   function cancelDay(session: SessionView) {
-    if (!window.confirm(`งดสอน ${formatDate(session.onDate)} ใช่ไหม`)) return;
+    const started = session.status !== "upcoming";
+    const question = started
+      ? `คาบนี้เริ่มแล้ว งดสอน ${formatDate(session.onDate)} จะลบคาบนี้ กล้องหยุดเช็คชื่อ และรายงานไม่นับคาบนี้ ใช่ไหม`
+      : `งดสอน ${formatDate(session.onDate)} ใช่ไหม`;
+    if (!window.confirm(question)) return;
     void run(() =>
       apiFetch(`/schedules/${session.scheduleId}/overrides/${session.onDate}`, {
         method: "PUT",
@@ -138,8 +142,10 @@ export function ScheduleView() {
   const isOverridden = (scheduleId: string | null, onDate: string) =>
     data.overrides.some((o) => o.scheduleId === scheduleId && o.onDate === onDate);
 
+  // คาบที่ถูกลบแสดงเป็นแถวงดสอนแถวเดียว
+  const active = data.sessions.filter((s) => !s.cancelled);
   const rows: DayRow[] = [
-    ...data.sessions.map(
+    ...active.map(
       (session): DayRow => ({
         kind: "session",
         key: session.id,
@@ -155,7 +161,7 @@ export function ScheduleView() {
           ? [{ kind: "cancelled", key: `${o.scheduleId}|${o.onDate}`, schedule, onDate: o.onDate }]
           : [];
       }),
-    ...replacedByExam(data),
+    ...replacedByExam({ ...data, sessions: active }),
   ].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   return (
@@ -222,7 +228,9 @@ export function ScheduleView() {
 
       <div className="space-y-3">
         <h2 className="font-medium">คาบ 7 วันข้างหน้า</h2>
-        <p className="text-sm text-gray-600">คาบที่เริ่มไปแล้วแก้ไม่ได้ คาบสอบแก้ที่แท็บสอบ</p>
+        <p className="text-sm text-gray-600">
+          คาบที่เริ่มไปแล้วเปลี่ยนไม่ได้ แต่งดสอนได้ คาบสอบแก้ที่แท็บสอบ
+        </p>
         {rows.length === 0 && <p className="text-gray-600">ไม่มีคาบใน 7 วันนี้</p>}
         <ul className="divide-y rounded-lg border">
           {rows.map((row) =>
@@ -272,25 +280,27 @@ export function ScheduleView() {
                       </span>
                     )}
                   </span>
-                  {row.session.status === "upcoming" && row.session.scheduleId && (
+                  {row.session.scheduleId && (
                     <span className="space-x-3 text-sm">
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          setChanging({
-                            session: row.session,
-                            form: {
-                              weekday: 0,
-                              startTime: formatTime(row.session.startsAt),
-                              endTime: formatTime(row.session.endsAt),
-                              roomId: row.session.roomId,
-                            },
-                          })
-                        }
-                        className="text-blue-600 hover:underline"
-                      >
-                        เปลี่ยน
-                      </button>
+                      {row.session.status === "upcoming" && (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            setChanging({
+                              session: row.session,
+                              form: {
+                                weekday: 0,
+                                startTime: formatTime(row.session.startsAt),
+                                endTime: formatTime(row.session.endsAt),
+                                roomId: row.session.roomId,
+                              },
+                            })
+                          }
+                          className="text-blue-600 hover:underline"
+                        >
+                          เปลี่ยน
+                        </button>
+                      )}
                       <button
                         disabled={busy}
                         onClick={() => cancelDay(row.session)}
@@ -298,7 +308,7 @@ export function ScheduleView() {
                       >
                         งดสอน
                       </button>
-                      {row.changed && (
+                      {row.session.status === "upcoming" && row.changed && (
                         <button
                           disabled={busy}
                           onClick={() => undo(row.session.scheduleId!, row.session.onDate)}
