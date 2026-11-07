@@ -60,6 +60,36 @@ describe('Gemini provider', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('uses the same model for conversational study with only read-only Google Search enabled', async () => {
+    const html = '<div>Google Search suggestions</div>';
+    const {provider, fetcher} = setup({candidates: [{finishReason: 'STOP', content: {parts: [{thought: true, text: 'hidden'}, {text: 'อธิบายการเรียน'}]}, groundingMetadata: {
+      webSearchQueries: ['learning'], searchEntryPoint: {renderedContent: html},
+      groundingChunks: [{web: {uri: 'https://example.edu/lesson', title: 'บทเรียน'}}, {web: {uri: 'https://example.edu/lesson'}}, {web: {uri: 'javascript:alert(1)'}}, {web: {uri: 'not-a-url'}}],
+    }}]});
+    const result = await provider.study('อธิบายเพิ่ม', [{question: 'คำถามก่อน', answer: 'คำตอบก่อน'}]);
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(fetcher.mock.calls[0][0]).toContain('/gemini-3.1-flash-lite:generateContent');
+    expect(body.tools).toEqual([{google_search: {}}]);
+    expect(body.contents).toEqual([{role: 'user', parts: [{text: 'คำถามก่อน'}]}, {role: 'model', parts: [{text: 'คำตอบก่อน'}]}, {role: 'user', parts: [{text: 'อธิบายเพิ่ม'}]}]);
+    expect(body.systemInstruction.parts[0].text).toContain('ตอบแชทเป็นข้อความเท่านั้น');
+    expect(body.systemInstruction.parts[0].text).toContain('ไม่มีสิทธิ์อ่านเอกสารที่อัปโหลด');
+    expect(result).toMatchObject({answer: 'อธิบายการเรียน', webGrounded: true, searchEntryPoint: html});
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0].url).toBe('https://example.edu/lesson');
+    expect(JSON.stringify(body)).not.toContain('private-id');
+  });
+
+  it('answers general learning questions without falsely marking them as web-grounded', async () => {
+    const {provider} = setup({candidates: [{finishReason: 'STOP', content: {parts: [{text: '2 + 2 = 4'}]}}]});
+    await expect(provider.study('2 + 2', [])).resolves.toMatchObject({answer: '2 + 2 = 4', sources: [], webGrounded: false});
+  });
+
+  it('does not execute or return function calls as study answers', async () => {
+    const {provider, fetcher} = setup({candidates: [{finishReason: 'STOP', content: {parts: [{functionCall: {name: 'delete_all_records'}}]}}]});
+    await expect(provider.study('แก้ข้อมูลให้', [])).rejects.toMatchObject({code: 'GEMINI_RESPONSE'});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it.each([{}, { candidates: [] }, { candidates: [{ finishReason: 'SAFETY' }] },
     { candidates: [{ finishReason: 'STOP', content: { parts: [] } }] },
     { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: 'incomplete' }] } }] },

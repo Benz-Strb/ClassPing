@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-07",
+  "routes": {
+    "public": "University knowledge retrieval, anonymous",
+    "student": "Authenticated learning assistant, no uploaded knowledge retrieval"
+  },
+  "provider": "Existing Gemini key/model; only google_search tool enabled",
+  "history": {
+    "pairs": 6,
+    "questionCharacters": 2000,
+    "answerCharacters": 2000,
+    "studyOnly": true
+  },
+  "actions": "Text responses and read-only web grounding; no functions, code execution, uploads or data mutations",
+  "groundingDisplay": "Source links and provider searchEntryPoint; native isolated WebView with CSP, Expo native bridge disabled; widget fixture verified on iPhone Simulator",
+  "checks": {
+    "relatedTests": 48,
+    "apiBuild": "passed",
+    "apiLint": "passed with pre-existing unrelated warnings",
+    "mobileTypecheck": "passed",
+    "nativeScreens": [
+      "study-chat-empty-ios.png",
+      "public-chat-empty-ios.png",
+      "study-search-widget-ios.png"
+    ],
+    "liveAttempt": "HTTP 429 GEMINI_QUOTA; successful live answer/grounding not verified"
+  },
+  "android": "Deferred by user",
+  "liveApi": "Deferred by user; new API credentials will be supplied later. Existing server credentials were not changed."
+}

@@ -210,14 +210,14 @@ export default function CourseReportsPage() {
             disabled={downloading !== null || loading || !data}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
-            {downloading === "csv" ? "กำลังส่งออก..." : "📥 ส่งออก CSV"}
+            {downloading === "csv" ? "กำลังส่งออก..." : "ส่งออก CSV"}
           </button>
           <button
             onClick={() => handleDownload("pdf")}
             disabled={downloading !== null || loading || !data}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {downloading === "pdf" ? "กำลังส่งออก..." : "📄 ส่งออก PDF"}
+            {downloading === "pdf" ? "กำลังส่งออก..." : "ส่งออก PDF"}
           </button>
         </div>
       </div>

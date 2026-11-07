@@ -1,13 +1,8 @@
+import { SelectField } from '../ui/SelectField';
+import { colors } from '../ui/theme';
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput } from '../ui/primitives';
 import * as ImagePicker from "expo-image-picker";
 import { apiFetch } from "../lib/api";
 import {
@@ -17,6 +12,7 @@ import {
   OCR_STATUS_LABEL,
   submitLeave,
   previewLeave,
+  extractLeaveReason,
 } from "../lib/leave";
 import type { LeaveRequest, LeaveSession } from "../lib/types";
 
@@ -29,6 +25,7 @@ interface Props {
 export function LeaveScreen({ onBack }: Props) {
   const [sessions, setSessions] = useState<LeaveSession[] | null>(null);
   const [requests, setRequests] = useState<LeaveRequest[] | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [evidence, setEvidence] = useState<ImagePicker.ImagePickerAsset | null>(
@@ -36,6 +33,9 @@ export function LeaveScreen({ onBack }: Props) {
   );
   const evidenceUri = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,27 +62,61 @@ export function LeaveScreen({ onBack }: Props) {
     return sessions?.filter((session) => !requested.has(session.id)) ?? [];
   }, [requests, sessions]);
 
-  async function pickEvidence() {
-    setError(null);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.9,
-    });
-    const asset = result.canceled ? null : result.assets[0];
-    if (!asset) return;
-    if (asset.fileSize && asset.fileSize > MAX_EVIDENCE_BYTES) {
-      discardLeaveEvidence(asset.uri);
-      setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
-      return;
+  const courses = useMemo(() => Array.from(new Map(availableSessions.map(session => [session.courseId, {
+    value: session.courseId,
+    label: `${session.courseCode} · ${session.courseName}${session.section ? ` · กลุ่ม ${session.section}` : ''}`,
+  }])).values()), [availableSessions]);
+  const courseSessions = availableSessions.filter(session => session.courseId === courseId);
+
+  async function autoReadEvidence(targetSessionId: string, uri: string) {
+    setReading(true);
+    setOcrError(null);
+    try {
+      const draft = await previewLeave(targetSessionId, uri);
+      setOcrText(draft.text);
+      const extractedReason = extractLeaveReason(draft.reason || draft.text);
+      if (extractedReason.trim()) {
+        setReason(extractedReason.trim());
+      }
+    } catch (e) {
+      setOcrError(
+        `${e instanceof Error ? e.message : "อ่านหลักฐานไม่สำเร็จ"} — สามารถกรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
+      );
+    } finally {
+      setReading(false);
     }
-    discardLeaveEvidence(evidence?.uri ?? null);
-    evidenceUri.current = asset.uri;
-    setEvidence(asset);
-    setOcrText(null);
+  }
+
+  async function pickEvidence() {
+    if (busy || reading) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+      const asset = result.canceled ? null : result.assets[0];
+      if (!asset) return;
+      if (asset.fileSize && asset.fileSize > MAX_EVIDENCE_BYTES) {
+        discardLeaveEvidence(asset.uri);
+        setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
+        return;
+      }
+      discardLeaveEvidence(evidence?.uri ?? null);
+      evidenceUri.current = asset.uri;
+      setEvidence(asset);
+      setOcrText(null);
+      setOcrError(null);
+      if (sessionId) {
+        await autoReadEvidence(sessionId, asset.uri);
+      }
+    } catch {
+      setError("เปิดภาพหลักฐานไม่ได้ กรุณาลองเลือกภาพใหม่");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function readEvidence() {
-    if (busy) return;
+    if (busy || reading) return;
     if (!sessionId || !evidence) {
       setError("กรุณาเลือกคาบและหลักฐานก่อนอ่านร่าง");
       return;
@@ -90,13 +124,7 @@ export function LeaveScreen({ onBack }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const draft = await previewLeave(sessionId, evidence.uri);
-      setOcrText(draft.text);
-      if (!reason.trim()) setReason(draft.reason);
-    } catch (e) {
-      setError(
-        `${e instanceof Error ? e.message : "อ่านหลักฐานไม่สำเร็จ"} — กรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
-      );
+      await autoReadEvidence(sessionId, evidence.uri);
     } finally {
       setBusy(false);
     }
@@ -117,6 +145,7 @@ export function LeaveScreen({ onBack }: Props) {
       return;
     }
     setBusy(true);
+    setSubmitting(true);
     setError(null);
     try {
       await submitLeave(sessionId, reason.trim(), evidence.uri);
@@ -126,10 +155,13 @@ export function LeaveScreen({ onBack }: Props) {
       setOcrText(null);
       setReason("");
       setSessionId(null);
+      setCourseId(null);
+      setOcrError(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "ส่งคำขอลาไม่สำเร็จ");
     } finally {
+      setSubmitting(false);
       setBusy(false);
     }
   }
@@ -143,7 +175,7 @@ export function LeaveScreen({ onBack }: Props) {
             setError(null);
             void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
           }}><Text>ลองใหม่</Text></Pressable>
-        </> : <ActivityIndicator />}
+        </> : <ActivityIndicator color={colors.action} />}
         {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับหน้าบัญชี</Text>
         </Pressable>}
@@ -153,12 +185,13 @@ export function LeaveScreen({ onBack }: Props) {
 
   return (
     <ScrollView
+      automaticallyAdjustKeyboardInsets
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>ระบบลา</Text>
+          <Text style={styles.title}>ยื่นคำขอลา</Text>
           <Text style={styles.help}>เลือกคาบและแนบภาพหลักฐาน</Text>
         </View>
         {onBack && <Pressable style={styles.secondary} onPress={onBack}>
@@ -168,31 +201,25 @@ export function LeaveScreen({ onBack }: Props) {
       {error && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.card}>
-        <Text style={styles.heading}>1. เลือกคาบที่ต้องการลา</Text>
-        {availableSessions.length === 0 ? (
-          <Text style={styles.help}>ไม่มีคาบที่ยื่นลาได้</Text>
-        ) : (
-          availableSessions.map((session) => {
-            const selected = session.id === sessionId;
-            return (
-              <Pressable
-                key={session.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                style={[styles.session, selected && styles.sessionSelected]}
-                onPress={() => setSessionId(session.id)}
-                disabled={busy}
-              >
-                <Text style={selected && styles.selectedText}>
-                  {formatLeaveSession(session)}
-                </Text>
-              </Pressable>
-            );
-          })
-        )}
+        {availableSessions.length === 0 ? <Text style={styles.help}>ไม่มีคาบที่ยื่นลาได้</Text> : <>
+          <SelectField label="รายวิชา" placeholder="เลือกรายวิชาที่ต้องการลา" value={courseId}
+            options={courses} disabled={busy}
+            onChange={value => { setCourseId(value); setSessionId(null); }} />
+          <SelectField key={courseId ?? 'no-course'} label="คาบเรียน" placeholder={courseId ? 'เลือกวันและคาบเรียน' : 'เลือกรายวิชาก่อน'}
+            value={sessionId} options={courseSessions.map(session => ({ value: session.id,
+              label: `${session.kind === 'exam' ? 'สอบ · ' : ''}${formatLeaveSession(session).split('\n').slice(1).join('\n')}${session.title ? ` · ${session.title}` : ''}`,
+            }))} onChange={(value) => {
+              setSessionId(value);
+              if (value && evidence && !reason.trim() && !reading) {
+                setBusy(true);
+                void autoReadEvidence(value, evidence.uri).finally(() => setBusy(false));
+              }
+            }} disabled={busy || !courseId} />
+        </>}
 
-        <Text style={styles.heading}>2. ระบุเหตุผล</Text>
+        <Text style={styles.heading}>ระบุเหตุผล</Text>
         <TextInput
+          accessibilityLabel="เหตุผลการลา"
           multiline
           maxLength={1000}
           value={reason}
@@ -202,7 +229,7 @@ export function LeaveScreen({ onBack }: Props) {
           style={styles.input}
         />
 
-        <Text style={styles.heading}>3. แนบภาพหลักฐาน</Text>
+        <Text style={styles.heading}>แนบภาพหลักฐาน</Text>
         <Pressable
           style={styles.secondary}
           onPress={pickEvidence}
@@ -215,18 +242,26 @@ export function LeaveScreen({ onBack }: Props) {
           </Text>
         </Pressable>
         <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 25 MB</Text>
-        <Pressable
-          style={styles.secondary}
-          onPress={readEvidence}
-          disabled={busy || !sessionId || !evidence}
-        >
-          <Text>อ่านหลักฐานช่วยกรอกเหตุผล</Text>
-        </Pressable>
+        {reading ? (
+          <View style={styles.readingStatus}>
+            <ActivityIndicator color={colors.action} />
+            <Text style={styles.readingText}>กำลังอ่านข้อความจากหลักฐานอัตโนมัติ...</Text>
+          </View>
+        ) : (
+          <Pressable
+            style={styles.secondary}
+            onPress={readEvidence}
+            disabled={busy || !sessionId || !evidence}
+          >
+            <Text>{ocrText !== null ? "อ่านหลักฐานช่วยกรอกเหตุผลอีกครั้ง" : "อ่านหลักฐานช่วยกรอกเหตุผล"}</Text>
+          </Pressable>
+        )}
+        {ocrError && <Text accessibilityRole="alert" style={styles.error}>{ocrError}</Text>}
         {ocrText !== null && (
           <View accessibilityLiveRegion="polite">
             <Text>{ocrText || "ไม่พบข้อความ กรุณากรอกเหตุผลเอง"}</Text>
             <Text style={styles.help}>
-              ตรวจและแก้เหตุผลด้านบนก่อนส่ง หากกรอกไว้แล้วระบบจะไม่เขียนทับ
+              ระบบนำข้อความจากหลักฐานมาใส่ในช่องเหตุผลด้านบนแล้ว ตรวจสอบหรือแก้ไขได้ก่อนส่ง
             </Text>
           </View>
         )}
@@ -236,12 +271,12 @@ export function LeaveScreen({ onBack }: Props) {
         </Text>
 
         <Pressable
-          style={[styles.primary, busy && styles.disabled]}
+          style={[styles.primary, (busy || reading) && styles.disabled]}
           onPress={submit}
-          disabled={busy || availableSessions.length === 0}
+          disabled={busy || reading || availableSessions.length === 0}
         >
-          {busy ? (
-            <ActivityIndicator color="#fff" />
+          {submitting ? (
+            <ActivityIndicator color={colors.surface} />
           ) : (
             <Text style={styles.primaryText}>ส่งคำขอลา</Text>
           )}
@@ -278,7 +313,7 @@ export function LeaveScreen({ onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, gap: 14, backgroundColor: "#f9fafb" },
+  container: { flexGrow: 1, width: "100%", maxWidth: 800, alignSelf: "center", padding: 24, gap: 16, backgroundColor: colors.background },
   center: {
     flex: 1,
     justifyContent: "center",
@@ -288,54 +323,50 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
-  title: { fontSize: 24, fontWeight: "600" },
-  heading: { fontSize: 16, fontWeight: "600", marginTop: 4 },
-  help: { color: "#6b7280", lineHeight: 20 },
+  title: { fontSize: 27, lineHeight: 38, fontWeight: "500", color: colors.identity },
+  heading: { fontSize: 17, fontWeight: "500", marginTop: 12, color: colors.identity },
+  help: { color: colors.muted, lineHeight: 20 },
   error: {
-    color: "#b91c1c",
-    backgroundColor: "#fef2f2",
+    color: colors.danger,
+    backgroundColor: colors.dangerBg,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    padding: 14,
-    gap: 10,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 20,
+    gap: 14,
   },
-  session: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 12,
-  },
-  sessionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
-  selectedText: { color: "#1d4ed8", fontWeight: "500" },
   input: {
+    color: colors.ink, backgroundColor: colors.surface,
     minHeight: 90,
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
+    borderColor: colors.outline,
+    borderRadius: 12,
     padding: 12,
     textAlignVertical: "top",
   },
   primary: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
+    minHeight: 48, justifyContent: "center",
+    backgroundColor: colors.action,
+    borderRadius: 12,
     padding: 14,
     alignItems: "center",
   },
-  primaryText: { color: "#fff", fontSize: 16, fontWeight: "500" },
+  primaryText: { color: colors.surface, fontSize: 16, fontWeight: "500" },
   secondary: {
+    minHeight: 48, justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
+    borderColor: colors.outline,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     alignItems: "center",
@@ -343,6 +374,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   requestHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
@@ -350,9 +382,20 @@ const styles = StyleSheet.create({
   requestTitle: { fontSize: 16, fontWeight: "600" },
   status: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: colors.outline,
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 4,
+  },
+  readingStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  readingText: {
+    color: colors.action,
+    fontWeight: "500",
   },
 });
