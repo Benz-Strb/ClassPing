@@ -166,6 +166,8 @@ export interface AttendanceRow {
   faceEnrolled: boolean;
   // null = กล้องยังไม่เห็น
   status: AttendanceStatus | null;
+  // ไม่มีแถวและเลยเวลาตัดขาดแล้ว รายงานนับเป็นขาด
+  absentByTime: boolean;
   firstSeenAt: string | null;
   confidence: number | null;
   imageUrl: string | null;
@@ -194,7 +196,7 @@ export interface TripView {
 }
 
 export interface SessionAttendance {
-  session: SessionView & { outOfRoomLimitMin: number };
+  session: SessionView & { outOfRoomLimitMin: number; recorded: boolean };
   rows: AttendanceRow[];
   unknown: { imageUrl: string; seenAt: string }[];
   // รอบนอกห้องที่กล้องไม่แน่ใจว่าใคร
