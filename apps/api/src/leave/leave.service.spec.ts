@@ -37,6 +37,7 @@ const session: LeaveSessionOption = {
   startsAt: '2026-10-28T02:00:00.000Z',
   endsAt: '2026-10-28T05:00:00.000Z',
   roomName: 'LAB 1',
+  cancelled: false,
 };
 
 function setup() {

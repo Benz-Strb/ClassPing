@@ -80,6 +80,8 @@ export interface SessionView {
   startsAt: string;
   endsAt: string;
   status: "upcoming" | "live" | "ended";
+  // ถูกลบคาบแล้ว รายงานไม่นับ
+  cancelled: boolean;
 }
 
 export interface Person {
@@ -166,6 +168,8 @@ export interface AttendanceRow {
   faceEnrolled: boolean;
   // null = กล้องยังไม่เห็น
   status: AttendanceStatus | null;
+  // ไม่มีแถวและเลยเวลาตัดขาดแล้ว รายงานนับเป็นขาด
+  absentByTime: boolean;
   firstSeenAt: string | null;
   confidence: number | null;
   imageUrl: string | null;
@@ -177,7 +181,7 @@ export interface AttendanceRow {
     totalSeconds: number;
     minutes: number;
     // ป้ายที่ API ตัดสินแล้ว หน้าเว็บไม่คิดเกณฑ์ซ้ำ
-    label: "out" | "gone" | "gone_no_return" | null;
+    label: "out" | "out_now" | "gone" | "gone_no_return" | null;
     trips: TripView[];
   };
 }
@@ -194,7 +198,7 @@ export interface TripView {
 }
 
 export interface SessionAttendance {
-  session: SessionView & { outOfRoomLimitMin: number };
+  session: SessionView & { outOfRoomLimitMin: number; recorded: boolean };
   rows: AttendanceRow[];
   unknown: { imageUrl: string; seenAt: string }[];
   // รอบนอกห้องที่กล้องไม่แน่ใจว่าใคร

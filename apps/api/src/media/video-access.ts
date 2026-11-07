@@ -16,6 +16,16 @@ export interface WatchableSession {
   proctorIds: string[];
   // กล้องหน้าห้องของห้องนี้ null = ห้องไม่มีกล้อง
   cameraId: string | null;
+  // เวลาที่ถูกลบคาบ หลังจากนี้ภาพในห้องไม่ใช่ของคาบนี้แล้ว
+  cancelledAt?: Date | null;
+}
+
+// เวลาสุดท้ายที่ห้องเป็นของคาบเหล่านี้ คาบที่ถูกลบกลางทางนับถึงตอนที่ลบ
+export function latestUse(rows: { endsAt: Date; cancelledAt: Date | null }[]): Date | null {
+  const ends = rows.map((r) =>
+    r.cancelledAt && r.cancelledAt < r.endsAt ? r.cancelledAt : r.endsAt,
+  );
+  return ends.length ? new Date(Math.max(...ends.map((e) => e.getTime()))) : null;
 }
 
 const isTeacherOf = (user: AppUser, session: WatchableSession) =>

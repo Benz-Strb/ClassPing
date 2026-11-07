@@ -167,6 +167,7 @@ export class TripsService {
     ]);
 
     // คนที่ออกจากรายชื่อแล้วไม่อยู่ในรายงาน เหมือนรายงานเช็คชื่อที่ไล่ตามรายชื่อปัจจุบัน
+    const now = this.now();
     const onRoster = new Set((await this.roster.entries(courseId)).map((e) => e.studentCode));
     const groups = new Map<string, typeof rows>();
     for (const row of rows) {
@@ -182,7 +183,7 @@ export class TripsService {
           (a, b) => a.outAt.getTime() - b.outAt.getTime(),
         );
         const limit = rulesFor(first, courseRules).outOfRoomLimitMin;
-        const result = outOfRoom(trips, first.startsAt, first.endsAt, limit);
+        const result = outOfRoom(trips, first.startsAt, first.endsAt, limit, now);
         return {
           sessionId: first.sessionId,
           onDate: first.onDate,

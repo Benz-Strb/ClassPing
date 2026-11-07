@@ -24,7 +24,8 @@ export function formatLeaveSession(session: LeaveSession) {
     timeStyle: "short",
     timeZone: "Asia/Bangkok",
   });
-  return `${session.courseCode}${section} · ${session.courseName}\n${startsAt}${room}`;
+  const cancelled = session.cancelled ? "\nคาบนี้ถูกลบแล้ว" : "";
+  return `${session.courseCode}${section} · ${session.courseName}\n${startsAt}${room}${cancelled}`;
 }
 
 export async function submitLeave(

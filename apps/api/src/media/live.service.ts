@@ -155,6 +155,8 @@ export class LiveService {
   }
 
   private cameraOpen(session: WatchableSession): boolean {
+    // ถูกลบแล้วภาพสดในห้องไม่ใช่ของคาบนี้
+    if (session.cancelledAt) return false;
     const now = this.now().getTime();
     const opensAt = session.startsAt.getTime() - this.config.cameraOpenBeforeMin * MINUTE;
     return opensAt <= now && now < session.endsAt.getTime();
