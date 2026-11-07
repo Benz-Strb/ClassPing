@@ -292,3 +292,16 @@ def test_same_session_repolled_logs_nothing(setup, caplog):
         clock.advance(POLL_SECONDS)
         loop.tick()
     assert caplog.records == []
+
+
+def test_api_down_past_end_closes_camera_and_stream(streaming):
+    api, cam, clock, streamer, loop = streaming
+    api.current = session(minutes=1, stream=STREAM)
+    loop.tick()
+    assert cam.is_open and streamer.running
+
+    api.down = True
+    clock.advance(120)
+    assert loop.tick() == RETRY_SECONDS
+    assert not cam.is_open
+    assert not streamer.running
