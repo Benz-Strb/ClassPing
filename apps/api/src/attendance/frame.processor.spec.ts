@@ -127,6 +127,7 @@ function setup(
       if (failLoad) throw new Error('db down');
       return opts.openTrips ?? [];
     },
+    demotePendingTrip: async () => false,
     closeTrip: async (_s: string, userId: string, backAt: Date, by: 'front') => {
       if (failClose === userId) throw new Error('db down');
       closes.push({ userId, backAt, by });
