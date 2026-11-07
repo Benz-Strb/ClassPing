@@ -14,6 +14,9 @@ class InMemoryRosterRepo implements RosterRepo {
   async listCodes(courseId: string) {
     return [...(this.enrollments.get(courseId) ?? [])].sort();
   }
+  async addedDates() {
+    return new Map<string, Date>();
+  }
   async addCodes(courseId: string, codes: string[]) {
     const set = this.enrollments.get(courseId) ?? new Set<string>();
     codes.forEach((c) => set.add(c));

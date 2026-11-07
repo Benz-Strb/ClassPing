@@ -17,6 +17,7 @@ export interface SessionInfo extends SessionRules {
   onDate: string;
   startsAt: Date;
   endsAt: Date;
+  cancelled: boolean;
 }
 
 export interface StoredAttendance {
@@ -87,7 +88,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     const { data, error } = await this.db
       .from('sessions')
       .select(
-        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name)',
+        'id, course_id, schedule_id, room_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, cancelled_at, rooms(name)',
       )
       .eq('id', sessionId)
       .maybeSingle();
@@ -106,6 +107,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       late_after_min: number | null;
       absent_after_min: number | null;
       out_of_room_limit_min: number | null;
+      cancelled_at: string | null;
       rooms: { name: string } | null;
     };
     return {
@@ -122,6 +124,7 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       onDate: row.on_date,
       startsAt: new Date(row.starts_at),
       endsAt: new Date(row.ends_at),
+      cancelled: row.cancelled_at !== null,
     };
   }
 

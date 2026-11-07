@@ -77,6 +77,11 @@ export class RosterService {
     });
   }
 
+  // ใช้ภายใน ไม่ได้ตรวจสิทธิ์
+  addedDates(courseId: string): Promise<Map<string, Date>> {
+    return this.repo.addedDates(courseId);
+  }
+
   async add(user: AppUser, courseId: string, body: unknown): Promise<AddResult> {
     await this.courses.getOwned(user, courseId);
     const { valid, invalid } = parseStudentCodes(parseBody(addSchema, body).codes);
