@@ -62,9 +62,7 @@ describe('SupabaseReportsRepo', () => {
             student_id: 'user-1',
             status,
             first_seen_at:
-              status === 'leave'
-                ? null
-                : status === 'late'
+              status === 'late'
                   ? '2026-11-01T02:10:00Z'
                   : status === 'absent'
                     ? '2026-11-01T05:01:00Z'
@@ -160,12 +158,16 @@ describe('SupabaseReportsRepo', () => {
         : 0;
       expect(report?.summary.attendanceRate).toBe(expectedRate);
       expect(report?.students[0]?.attendanceRate).toBe(expectedRate);
-      // รอตรวจอาจเป็นหน้าของคนอื่น นักศึกษาเห็นแค่สถานะและเวลา
-      expect(report?.students[0]?.sessions[0]).toMatchObject({
+      // รอตรวจและลาอาจเป็นรูปหน้าของคนอื่น นักศึกษาไม่เห็นรูปและเวลาพบครั้งแรก
+      const hidden = status === 'pending' || status === 'leave';
+      const row = report?.students[0]?.sessions[0];
+      expect(row).toMatchObject({
         status,
-        imageUrl: status === 'pending' ? null : 'https://storage.test/own.jpg',
+        imageUrl: hidden ? null : 'https://storage.test/own.jpg',
       });
-      expect(signedPaths).toEqual(status === 'pending' ? [] : [['own.jpg']]);
+      if (hidden) expect(row?.firstSeenAt).toBeNull();
+      else expect(row?.firstSeenAt).not.toBeNull();
+      expect(signedPaths).toEqual(hidden ? [] : [['own.jpg']]);
     },
   );
   it('ไม่นับขาดคาบก่อนเข้ารายชื่อและคาบที่กล้องไม่ได้บันทึก ส่วนรอตรวจไม่นับเป็นตัวหาร', async () => {
@@ -242,6 +244,68 @@ describe('SupabaseReportsRepo', () => {
     expect(second.sessions.map((s) => s.status)).toEqual(['unrecorded', 'unrecorded', 'pending']);
     expect(second.counts).toMatchObject({ absent: 0, pending: 1, total: 1 });
     expect(second.attendanceRate).toBe(0);
+  });
+
+  it('แถวลาจากการอนุมัติไม่ทำให้คาบที่กล้องไม่ได้ทำงานกลายเป็นขาด', async () => {
+    const session = (id: string, day: string) => ({
+      id,
+      course_id: 'course-1',
+      on_date: `2026-10-${day}`,
+      kind: 'class',
+      starts_at: `2026-10-${day}T02:00:00Z`,
+      ends_at: `2026-10-${day}T05:00:00Z`,
+      late_after_min: null,
+      absent_after_min: null,
+      out_of_room_limit_min: null,
+    });
+    const rows: Record<string, Record<string, unknown>[]> = {
+      courses: [{ id: 'course-1', code: 'CS101', name: 'ทดสอบ', section: null }],
+      attendance_rules: [],
+      enrollments: [
+        { course_id: 'course-1', student_code: '66000001', added_at: '2026-10-01T00:00:00Z' },
+        { course_id: 'course-1', student_code: '66000002', added_at: '2026-10-01T00:00:00Z' },
+      ],
+      users: [
+        { id: 'user-1', student_id: '66000001' },
+        { id: 'user-2', student_id: '66000002' },
+      ],
+      sessions: [session('leave-only', '10'), session('manual', '11')],
+      attendance: [
+        { session_id: 'leave-only', student_id: 'user-2', status: 'leave', first_seen_at: null },
+        { session_id: 'manual', student_id: 'user-2', status: 'present', first_seen_at: null, updated_by: 'teacher-1' },
+      ],
+    };
+    const db = {
+      from: (table: string) => {
+        let data = rows[table];
+        const query = {
+          select: () => query,
+          order: () => query,
+          eq: (key: string, value: unknown) => {
+            data = data.filter((row) => row[key] === value);
+            return query;
+          },
+          in: (key: string, values: unknown[]) => {
+            data = data.filter((row) => values.includes(row[key]));
+            return query;
+          },
+          maybeSingle: async () => ({ data: data[0] ?? null, error: null }),
+          range: async (from: number, to: number) => ({
+            data: data.slice(from, to + 1),
+            error: null,
+          }),
+        };
+        return query;
+      },
+    };
+    const report = await new SupabaseReportsRepo(
+      db as unknown as SupabaseClient,
+    ).getAttendanceReport('course-1', { kind: 'all' }, new Date('2026-10-30T00:00:00Z'));
+    const [first, second] = report!.students;
+    // คาบที่มีแค่แถวลา กล้องไม่ได้ทำงาน คนอื่นไม่นับเป็นขาด
+    // คาบที่อาจารย์แก้เองมีแถว present จึงนับว่ามีข้อมูล
+    expect(first.sessions.map((s) => s.status)).toEqual(['unrecorded', 'absent']);
+    expect(second.sessions.map((s) => s.status)).toEqual(['leave', 'present']);
   });
 
   it('ดึงนักศึกษาทุกหน้าเมื่อรายชื่อเกินขีดจำกัด 1,000 แถว', async () => {

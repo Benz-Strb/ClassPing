@@ -266,7 +266,9 @@ export class SupabaseReportsRepo implements ReportsRepo {
             .order('student_id', { ascending: true }),
         );
         for (const attendance of attendances) {
-          sessionsWithRows.add(attendance.session_id);
+          // แถวลาจากการอนุมัติไม่ได้มาจากกล้อง ไม่นับว่าคาบนี้มีข้อมูล
+          if (attendance.status !== 'leave')
+            sessionsWithRows.add(attendance.session_id);
           attendanceMap.set(
             `${attendance.session_id}:${attendance.student_id}`,
             attendance,
@@ -285,8 +287,9 @@ export class SupabaseReportsRepo implements ReportsRepo {
           [...attendanceMap.values()].flatMap((row) =>
             row.student_id === selectedUser.id &&
             row.image_path &&
-            // แถวรอตรวจอาจเป็นรูปหน้าของคนอื่น ไม่ส่งให้นักศึกษา
-            row.status !== 'pending'
+            // แถวรอตรวจและแถวลาอาจเป็นรูปหน้าของคนอื่น ไม่ส่งให้นักศึกษา
+            row.status !== 'pending' &&
+            row.status !== 'leave'
               ? [row.image_path]
               : [],
           ),
@@ -385,12 +388,17 @@ export class SupabaseReportsRepo implements ReportsRepo {
           kind: s.kind,
           title: s.title,
           status: finalStatus,
-          firstSeenAt: att?.first_seen_at ?? null,
+          firstSeenAt:
+            includeImages && (att?.status === 'pending' || att?.status === 'leave')
+              ? null
+              : (att?.first_seen_at ?? null),
           roomName: s.rooms?.name ?? '-',
           ...(includeImages
             ? {
                 imageUrl:
-                  att?.image_path && att.status !== 'pending'
+                  att?.image_path &&
+                  att.status !== 'pending' &&
+                  att.status !== 'leave'
                     ? (imageUrls.get(att.image_path) ?? null)
                     : null,
               }
