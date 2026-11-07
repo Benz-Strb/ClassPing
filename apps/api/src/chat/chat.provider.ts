@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import type { ChatSource } from './chat.repo.js';
 
 export const CHAT_PROVIDER = Symbol('CHAT_PROVIDER');
+export interface StudyTurn { question: string; answer: string }
+export interface StudyReply { answer: string; sources: ChatSource[]; webGrounded: boolean; searchEntryPoint?: string }
 export interface ChatProvider {
   readonly model: string;
   readonly mock: boolean;
   embed(text: string, purpose?: 'document' | 'query'): Promise<number[]>;
   answer(question: string, sources: ChatSource[]): Promise<string>;
+  study(question: string, history: StudyTurn[]): Promise<StudyReply>;
 }
 
 // shortcut: deterministic trigrams for local wiring only; replace and reindex before semantic search.
@@ -29,5 +32,8 @@ export class MockChatProvider implements ChatProvider {
     if (!sources.length) return 'ไม่พบข้อมูลที่รองรับคำถามนี้ในแหล่งข้อมูลที่คุณมีสิทธิ์เข้าถึง';
     return 'โหมดทดสอบ: ข้อความจากแหล่งข้อมูล (ยังไม่เชื่อม LLM)\n\n' +
       sources.map((s, i) => `[${i + 1}] ${s.title}\n${s.content}`).join('\n\n');
+  }
+  async study(_question: string, _history: StudyTurn[]): Promise<StudyReply> {
+    return { answer: 'ผู้ช่วยเรียนยังอยู่ในโหมดทดสอบและยังไม่ได้เชื่อม AI จริง จึงยังตอบคำถามหรือค้นเว็บไม่ได้', sources: [], webGrounded: false };
   }
 }

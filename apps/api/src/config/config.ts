@@ -4,6 +4,8 @@ export interface AppConfig {
   supabaseServiceRoleKey: string;
   adminEmails: string[];
   allowedOrigins: string[];
+  leaveOcrServiceUrl?: string;
+  leaveOcrServiceToken?: string | null;
   faceServiceUrl: string;
   faceServiceToken: string;
   redisHost: string;
@@ -115,6 +117,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     allowedOrigins: list(env.ALLOWED_ORIGINS),
     faceServiceUrl: (env.FACE_SERVICE_URL?.trim() || 'http://127.0.0.1:8001').replace(/\/+$/, ''),
     faceServiceToken: faceToken(env),
+    leaveOcrServiceUrl: url(env, 'LEAVE_OCR_SERVICE_URL', 'http://127.0.0.1:8002'),
+    leaveOcrServiceToken: optionalSecret(env, 'LEAVE_OCR_SERVICE_TOKEN'),
     redisHost: env.REDIS_HOST?.trim() || '127.0.0.1',
     redisPort: wholeNumber(env, 'REDIS_PORT', 6379),
     matchAcceptMin,

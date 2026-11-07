@@ -131,7 +131,7 @@ export function CheckinView() {
   const count = (status: AttendanceStatus) => rows.filter((r) => r.status === status).length;
 
   return (
-    <section className="space-y-6">
+    <section className="checkin-view space-y-6">
       <div className="space-y-1">
         <Link href={`/courses/${id}/checkin`} className="text-sm text-blue-600 underline">
           คาบทั้งหมด

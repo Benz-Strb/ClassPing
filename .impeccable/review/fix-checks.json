@@ -1,0 +1,86 @@
+[
+  {
+    "scene": "root-guest",
+    "width": 360,
+    "url": "/",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "root-student",
+    "width": 360,
+    "url": "/",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "callback",
+    "width": 360,
+    "url": "/auth/callback",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "reports",
+    "width": 360,
+    "url": "/courses/preview/reports",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "root-guest",
+    "width": 768,
+    "url": "/",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "root-student",
+    "width": 768,
+    "url": "/",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "callback",
+    "width": 768,
+    "url": "/auth/callback",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "reports",
+    "width": 768,
+    "url": "/courses/preview/reports",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "root-guest",
+    "width": 1440,
+    "url": "/",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "root-student",
+    "width": 1440,
+    "url": "/",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "callback",
+    "width": 1440,
+    "url": "/auth/callback",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "scene": "reports",
+    "width": 1440,
+    "url": "/courses/preview/reports",
+    "overflow": false,
+    "errors": []
+  }
+]

@@ -1,0 +1,357 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T01:23:29.850999+00:00",
+  "title": "Design System: ClassPing",
+  "extensions": {
+    "colorMeta": {
+      "action": {
+        "role": "primary",
+        "displayName": "Action",
+        "tonalRamp": [
+          "oklch(15% 0.0800 293.00)",
+          "oklch(27% 0.1440 293.00)",
+          "oklch(39% 0.1600 293.00)",
+          "oklch(51% 0.1600 293.00)",
+          "oklch(63% 0.1600 293.00)",
+          "oklch(75% 0.1600 293.00)",
+          "oklch(87% 0.0832 293.00)",
+          "oklch(95% 0.0320 293.00)"
+        ]
+      },
+      "action-hover": {
+        "role": "primary",
+        "displayName": "Action Hover",
+        "tonalRamp": [
+          "oklch(15% 0.0800 295.39)",
+          "oklch(27% 0.1440 295.39)",
+          "oklch(39% 0.1600 295.39)",
+          "oklch(51% 0.1600 295.39)",
+          "oklch(63% 0.1600 295.39)",
+          "oklch(75% 0.1600 295.39)",
+          "oklch(87% 0.0832 295.39)",
+          "oklch(95% 0.0320 295.39)"
+        ]
+      },
+      "identity": {
+        "role": "primary",
+        "displayName": "Identity",
+        "tonalRamp": [
+          "oklch(15% 0.0800 295.17)",
+          "oklch(27% 0.1440 295.17)",
+          "oklch(39% 0.1600 295.17)",
+          "oklch(51% 0.1600 295.17)",
+          "oklch(63% 0.1600 295.17)",
+          "oklch(75% 0.1600 295.17)",
+          "oklch(87% 0.0832 295.17)",
+          "oklch(95% 0.0320 295.17)"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Background",
+        "tonalRamp": [
+          "oklch(15% 0.0449 83.81)",
+          "oklch(27% 0.0808 83.81)",
+          "oklch(39% 0.0898 83.81)",
+          "oklch(51% 0.0898 83.81)",
+          "oklch(63% 0.0898 83.81)",
+          "oklch(75% 0.0898 83.81)",
+          "oklch(87% 0.0467 83.81)",
+          "oklch(95% 0.0180 83.81)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(27% 0.0000 89.88)",
+          "oklch(39% 0.0000 89.88)",
+          "oklch(51% 0.0000 89.88)",
+          "oklch(63% 0.0000 89.88)",
+          "oklch(75% 0.0000 89.88)",
+          "oklch(87% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0316 302.73)",
+          "oklch(27% 0.0569 302.73)",
+          "oklch(39% 0.0632 302.73)",
+          "oklch(51% 0.0632 302.73)",
+          "oklch(63% 0.0632 302.73)",
+          "oklch(75% 0.0632 302.73)",
+          "oklch(87% 0.0329 302.73)",
+          "oklch(95% 0.0126 302.73)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "oklch(15% 0.0175 305.86)",
+          "oklch(27% 0.0316 305.86)",
+          "oklch(39% 0.0351 305.86)",
+          "oklch(51% 0.0351 305.86)",
+          "oklch(63% 0.0351 305.86)",
+          "oklch(75% 0.0351 305.86)",
+          "oklch(87% 0.0182 305.86)",
+          "oklch(95% 0.0070 305.86)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "tonalRamp": [
+          "oklch(15% 0.0475 310.45)",
+          "oklch(27% 0.0856 310.45)",
+          "oklch(39% 0.0951 310.45)",
+          "oklch(51% 0.0951 310.45)",
+          "oklch(63% 0.0951 310.45)",
+          "oklch(75% 0.0951 310.45)",
+          "oklch(87% 0.0494 310.45)",
+          "oklch(95% 0.0190 310.45)"
+        ]
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "Selected",
+        "tonalRamp": [
+          "oklch(15% 0.0800 297.94)",
+          "oklch(27% 0.1440 297.94)",
+          "oklch(39% 0.1600 297.94)",
+          "oklch(51% 0.1600 297.94)",
+          "oklch(63% 0.1600 297.94)",
+          "oklch(75% 0.1600 297.94)",
+          "oklch(87% 0.0832 297.94)",
+          "oklch(95% 0.0320 297.94)"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger",
+        "tonalRamp": [
+          "oklch(15% 0.0800 25.76)",
+          "oklch(27% 0.1440 25.76)",
+          "oklch(39% 0.1600 25.76)",
+          "oklch(51% 0.1600 25.76)",
+          "oklch(63% 0.1600 25.76)",
+          "oklch(75% 0.1600 25.76)",
+          "oklch(87% 0.0832 25.76)",
+          "oklch(95% 0.0320 25.76)"
+        ]
+      },
+      "danger-bg": {
+        "role": "semantic",
+        "displayName": "Danger Bg",
+        "tonalRamp": [
+          "oklch(15% 0.0800 30.58)",
+          "oklch(27% 0.1440 30.58)",
+          "oklch(39% 0.1600 30.58)",
+          "oklch(51% 0.1600 30.58)",
+          "oklch(63% 0.1600 30.58)",
+          "oklch(75% 0.1600 30.58)",
+          "oklch(87% 0.0832 30.58)",
+          "oklch(95% 0.0320 30.58)"
+        ]
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Warning",
+        "tonalRamp": [
+          "oklch(15% 0.0800 75.73)",
+          "oklch(27% 0.1440 75.73)",
+          "oklch(39% 0.1600 75.73)",
+          "oklch(51% 0.1600 75.73)",
+          "oklch(63% 0.1600 75.73)",
+          "oklch(75% 0.1600 75.73)",
+          "oklch(87% 0.0832 75.73)",
+          "oklch(95% 0.0320 75.73)"
+        ]
+      },
+      "warning-bg": {
+        "role": "semantic",
+        "displayName": "Warning Bg",
+        "tonalRamp": [
+          "oklch(15% 0.0800 80.41)",
+          "oklch(27% 0.1440 80.41)",
+          "oklch(39% 0.1600 80.41)",
+          "oklch(51% 0.1600 80.41)",
+          "oklch(63% 0.1600 80.41)",
+          "oklch(75% 0.1600 80.41)",
+          "oklch(87% 0.0832 80.41)",
+          "oklch(95% 0.0320 80.41)"
+        ]
+      },
+      "info": {
+        "role": "semantic",
+        "displayName": "Info",
+        "tonalRamp": [
+          "oklch(15% 0.0800 293.11)",
+          "oklch(27% 0.1440 293.11)",
+          "oklch(39% 0.1600 293.11)",
+          "oklch(51% 0.1600 293.11)",
+          "oklch(63% 0.1600 293.11)",
+          "oklch(75% 0.1600 293.11)",
+          "oklch(87% 0.0832 293.11)",
+          "oklch(95% 0.0320 293.11)"
+        ]
+      },
+      "info-bg": {
+        "role": "semantic",
+        "displayName": "Info Bg",
+        "tonalRamp": [
+          "oklch(15% 0.0800 299.22)",
+          "oklch(27% 0.1440 299.22)",
+          "oklch(39% 0.1600 299.22)",
+          "oklch(51% 0.1600 299.22)",
+          "oklch(63% 0.1600 299.22)",
+          "oklch(75% 0.1600 299.22)",
+          "oklch(87% 0.0832 299.22)",
+          "oklch(95% 0.0320 299.22)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Web page title",
+        "purpose": "Workspace headings."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Work surface headings."
+      },
+      "body": {
+        "displayName": "Workspace body",
+        "purpose": "Web records and prose."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "web-color",
+        "value": "150ms ease",
+        "purpose": "Color transitions only without reduced motion."
+      },
+      {
+        "name": "native-pressed",
+        "value": "opacity: 0.72",
+        "purpose": "Enabled native Pressable feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "web-phone-max",
+        "value": "39.99rem"
+      },
+      {
+        "name": "web-rail-min",
+        "value": "64rem"
+      },
+      {
+        "name": "web-tools-stack-max",
+        "value": "74.99rem"
+      },
+      {
+        "name": "native-compact",
+        "value": "360pt"
+      },
+      {
+        "name": "native-tablet",
+        "value": "768pt"
+      }
+    ],
+    "rampNote": "Supplemental synthesized display ramps; application uses discrete semantic colors.",
+    "evidence": "Web+iOS delivery; four scored fixes and rail-height fix resolved. Android deferred by user on 2026-11-07, not visually verified."
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "description": "Primary button from the implemented Academic Rhythm system.",
+      "html": "<button class=\"ds-primary\">ดูรายวิชาของฉัน</button>",
+      "css": ".ds-primary{background:var(--cp-action,#7652C5);color:#fff;border:0;border-radius:10px;min-height:48px;padding:12px 16px;font:500 15px Geist,Kanit,sans-serif}.ds-primary:hover{background:var(--cp-action-hover,#5D3C9E)}.ds-primary:active{transform:translateY(1px)}.ds-primary:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}",
+      "refersTo": "button-primary"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "description": "Secondary button from the implemented Academic Rhythm system.",
+      "html": "<button class=\"ds-secondary\">ลองใหม่</button>",
+      "css": ".ds-secondary{background:var(--cp-selected,#EEE8F7);color:var(--cp-action,#7652C5);border:1px solid #EEE8F7;border-radius:10px;min-height:48px;padding:12px;font:500 14px Geist,Kanit,sans-serif}.ds-secondary:hover{background:#F1ECF8}.ds-secondary:active{opacity:.72}.ds-secondary:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}"
+    },
+    {
+      "name": "Disabled button",
+      "kind": "button",
+      "description": "Disabled button from the implemented Academic Rhythm system.",
+      "html": "<button class=\"ds-disabled\" disabled>ส่ง</button>",
+      "css": ".ds-disabled{opacity:1;background:var(--cp-bg,#FAF8F4);color:var(--cp-muted,#6D6477);border:1px solid #6D6477;border-radius:10px;min-height:48px;padding:12px 16px;cursor:not-allowed}.ds-disabled:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}",
+      "refersTo": "button-disabled"
+    },
+    {
+      "name": "Labeled field",
+      "kind": "input",
+      "description": "Labeled field from the implemented Academic Rhythm system.",
+      "html": "<label class=\"ds-field\">ชื่อรายวิชา<input class=\"ds-input\" placeholder=\"ชื่อรายวิชา\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;color:#282330;font:500 14px Geist,Kanit,sans-serif}.ds-input{background:var(--cp-surface,#FFFFFF);color:#282330;border:1px solid #b2a6bd;border-radius:10px;min-height:48px;padding:0 12px;font:400 16px Geist,Kanit,sans-serif}.ds-input::placeholder{color:#6D6477}.ds-input:hover{border-color:#6D6477}.ds-input:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}.ds-field:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}"
+    },
+    {
+      "name": "Current destination",
+      "kind": "nav",
+      "description": "Current destination from the implemented Academic Rhythm system.",
+      "html": "<nav><a class=\"ds-nav\" href=\"#home\" aria-current=\"page\">หน้าหลัก</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;min-height:48px;padding:12px 14px;border-radius:10px;background:var(--cp-action,#7652C5);color:#fff;font:500 15px Geist,Kanit,sans-serif;text-decoration:none}.ds-nav:hover{background:#5D3C9E}.ds-nav:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}"
+    },
+    {
+      "name": "Session state",
+      "kind": "chip",
+      "description": "Session state from the implemented Academic Rhythm system.",
+      "html": "<span class=\"ds-state\">คาบเรียน</span>",
+      "css": ".ds-state{display:inline-block;background:var(--cp-selected,#EEE8F7);color:#5D3C9E;border-radius:6px;padding:4px 8px;font:400 12px Geist,Kanit,sans-serif}.ds-state:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}"
+    },
+    {
+      "name": "Work surface",
+      "kind": "card",
+      "description": "Work surface from the implemented Academic Rhythm system.",
+      "html": "<section class=\"ds-surface\"><h2>คาบเรียนวันนี้</h2><div class=\"ds-row\"><strong>09:00</strong><span>CS101 · การเขียนโปรแกรม</span></div></section>",
+      "css": ".ds-surface{background:var(--cp-surface,#FFFFFF);color:#282330;border:1px solid #E6DFEB;border-radius:16px;padding:24px;font:400 15px Geist,Kanit,sans-serif}.ds-surface h2{font-size:20px;font-weight:500;margin:0 0 12px}.ds-row{display:grid;grid-template-columns:68px minmax(0,1fr);gap:18px;padding:20px 0;border-top:1px solid #E6DFEB}.ds-row strong{font-variant-numeric:tabular-nums;font-weight:500}.ds-row:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}.ds-surface:focus-visible{outline:2px solid var(--cp-action,#7652C5);outline-offset:3px}",
+      "refersTo": "work-surface"
+    },
+    {
+      "name": "Native wide navigation rail",
+      "kind": "nav",
+      "description": "StudentTabBar wide mode: vertically scrollable native rail without shared gutters; selected tab is revealed on tab, layout and content-size changes. This HTML shows scroll containment; native reveal logic lives in StudentTabBar.tsx. Compact bottom mode remains fixed.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"ClassPing\"><div class=\"ds-rail-scroll\"><a class=\"ds-rail-tab\" href=\"#home\">หน้าหลัก</a><a class=\"ds-rail-tab\" href=\"#courses\">รายวิชา</a><a class=\"ds-rail-tab\" href=\"#leave\">การลา</a><a class=\"ds-rail-tab\" href=\"#chat\">ผู้ช่วย</a><a class=\"ds-rail-tab\" href=\"#account\" aria-current=\"page\">บัญชี</a></div></nav>",
+      "css": ".ds-rail{width:112px;max-height:280px;display:flex;background:#FFFFFF;border-right:1px solid #E6DFEB;padding:0 8px 8px}.ds-rail-scroll{overflow-y:auto;min-height:0;flex:1;padding-top:24px}.ds-rail-tab{display:flex;align-items:center;justify-content:center;min-height:50px;padding:12px 0;margin-bottom:8px;border-top:2px solid transparent;color:#6D6477;font:400 11px/16px Geist,Kanit,sans-serif;text-decoration:none}.ds-rail-tab[aria-current=page]{color:#7652C5;border-top-color:#7652C5;font-weight:500}.ds-rail-tab:focus-visible{outline:2px solid #7652C5;outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Academic Rhythm",
+    "overview": "Academic Rhythm puts time, course identity and the next legitimate action in a consistent reading order. Warm ground, white work surfaces and purple identity support calm, practical Thai and Latin reading. Ruled rows provide the recurring structure; decoration stays subordinate to academic records.",
+    "keyCharacteristics": [
+      "Fixed time/code columns beside flexible details.",
+      "Warm light ground and restrained purple emphasis.",
+      "Explicit attendance and recovery states."
+    ],
+    "rules": [
+      {
+        "name": "The State Truth Rule",
+        "body": "Pending and unavailable records never imply confirmed absence or attendance.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do reuse shared tokens and primitives for future screens.",
+      "Do preserve visible labels, actionable recovery copy and distinct pending states.",
+      "Do let long Thai text, names and course details wrap."
+    ],
+    "donts": [
+      "Don't equate pending or unavailable attendance with absence.",
+      "Don't use color alone to communicate status.",
+      "Don't introduce a dark palette without a separate implementation and review."
+    ]
+  }
+}

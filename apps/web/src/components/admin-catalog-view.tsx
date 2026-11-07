@@ -80,7 +80,7 @@ export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
     {error && <p className="text-red-700" role="alert">{error}</p>}
     {status && <p className="text-green-800" role="status">{status}</p>}
     <div className="grid items-start gap-6 lg:grid-cols-2">
-      <div className="space-y-4">
+      <div className="admin-catalog-view space-y-4">
         {entries === null ? !error && <p role="status">กำลังโหลดข้อมูล...</p> : !entries.length ? <p className="text-gray-600">ยังไม่มีรายการ</p> :
           <ul className="divide-y rounded-lg border bg-white">{entries.map((row) => <li key={row.id} className="space-y-2 p-4">
             <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-medium">{row.code && `${row.code} · `}{row.name}</h3><span className={`rounded px-2 py-1 text-xs ${row.active ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-600"}`}>{row.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span></div>

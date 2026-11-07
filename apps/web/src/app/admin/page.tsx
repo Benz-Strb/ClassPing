@@ -51,7 +51,7 @@ export default function AdminDashboardPage() {
           {error}
         </p>
       )}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="admin-directory">
         {[
           ["/admin/users", "ผู้ใช้และสิทธิ์", "เปลี่ยนบทบาทและรีเซ็ตใบหน้า"],
           ["/admin/cameras", "กล้องประจำห้อง", "ดูการติดต่อและออก token"],
@@ -62,7 +62,7 @@ export default function AdminDashboardPage() {
           ["/admin/knowledge", "แหล่งความรู้", "จัดการเนื้อหาและแหล่งอ้างอิงแชทบอท"],
           ["/admin/leave-statuses", "สถานะการลา", "ติดตามสถานะการพิจารณาคำขอ"],
         ].map(([href, title, description]) => (
-          <Link key={href} href={href} className="space-y-1 rounded-lg border bg-white p-4 hover:border-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2">
+          <Link key={href} href={href} className="directory-link">
             <h3 className="font-medium text-blue-800">{title}</h3>
             <p className="text-sm text-gray-600">{description}</p>
           </Link>
@@ -71,13 +71,13 @@ export default function AdminDashboardPage() {
       {!summary ? (
         !error && <p role="status">กำลังโหลดข้อมูล...</p>
       ) : (
-        <dl className="grid gap-3 sm:grid-cols-3">
+        <dl className="system-totals">
           {[
             ["ผู้ใช้", summary.users],
             ["วิชา", summary.courses],
             ["ห้องเรียน", summary.rooms],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-lg border bg-white p-4">
+            <div key={label} className="system-total">
               <dt className="text-sm text-gray-600">{label}</dt>
               <dd className="mt-1 text-3xl font-semibold">{value}</dd>
             </div>
