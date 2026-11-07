@@ -23,9 +23,18 @@ export function LiveSessions() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     apiFetch<LiveSession[]>(`/live/sessions?date=${date}`)
-      .then(setSessions)
-      .catch(async (e: unknown) => setError(await handleApiError(e, router)));
+      .then((rows) => {
+        if (!cancelled) setSessions(rows);
+      })
+      .catch(async (e: unknown) => {
+        const message = await handleApiError(e, router);
+        if (!cancelled) setError(message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [date, router]);
 
   function go(days: number) {
