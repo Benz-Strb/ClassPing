@@ -36,7 +36,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
 
   // สรุปภาพรวม
   lines.push(escapeCsv('สรุปภาพรวม'));
-  lines.push(`จำนวนคาบทั้งหมด,${report.summary.totalSessions}`);
+  lines.push(`จำนวนคาบที่เริ่มแล้ว,${report.summary.totalSessions}`);
   lines.push(`จำนวนนักศึกษาทั้งหมด,${report.summary.totalStudents}`);
   lines.push(`มาเรียน (Present),${report.summary.counts.present}`);
   lines.push(`สาย (Late),${report.summary.counts.late}`);

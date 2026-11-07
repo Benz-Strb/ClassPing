@@ -328,6 +328,8 @@ export class SupabaseReportsRepo implements ReportsRepo {
     };
 
     const studentReports: StudentAttendanceReport[] = [];
+    // คาบล่วงหน้ายังอยู่ในรายการ แต่ไม่นับเป็นจำนวนคาบ
+    const startedSessions = sessions.filter((s) => new Date(s.starts_at) <= now).length;
 
     for (const code of studentCodes) {
       const user = usersByCode.get(code);
@@ -403,7 +405,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
         fullName: user?.full_name ?? null,
         userId: user?.id ?? null,
         counts: studentCounts,
-        totalSessions: sessions.length,
+        totalSessions: startedSessions,
         attendanceRate: rate,
         sessions: studentSessions,
       });
@@ -443,7 +445,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
       course: courseInfo,
       filter,
       summary: {
-        totalSessions: sessions.length,
+        totalSessions: startedSessions,
         totalStudents: studentCodes.length,
         counts: overallCounts,
         attendanceRate: overallRate,

@@ -323,7 +323,7 @@ export default function CourseReportsPage() {
                 {data.summary.attendanceRate}%
               </p>
               <span className="text-xs text-gray-400">
-                {data.summary.totalStudents} คน · {data.summary.totalSessions} คาบ
+                {data.summary.totalStudents} คน · {data.summary.totalSessions} คาบที่เริ่มแล้ว
               </span>
             </div>
 

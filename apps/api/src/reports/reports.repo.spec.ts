@@ -522,7 +522,10 @@ describe('SupabaseReportsRepo', () => {
 
     expect(report).not.toBeNull();
     expect(report!.course.code).toBe('CPE101');
-    expect(report!.summary.totalSessions).toBe(3);
+    // นับเฉพาะคาบที่เริ่มแล้ว sess-future ยังไม่ถึงแต่ยังอยู่ในรายการคาบ
+    expect(report!.summary.totalSessions).toBe(2);
+    expect(report!.sessions).toHaveLength(3);
+    expect(report!.students[0].totalSessions).toBe(2);
     expect(report!.summary.totalStudents).toBe(2);
 
     // ตรวจสอบ Student 1:

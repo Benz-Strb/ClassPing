@@ -56,7 +56,7 @@ export async function generateAttendancePdf(report: AttendanceReportResponse): P
     );
   for (const line of formatReportFilters(report)) doc.text(line);
   doc.text(
-    `คาบ ${report.summary.totalSessions} · นักศึกษา ${report.summary.totalStudents} · อัตราเข้าเรียน ${report.summary.attendanceRate}%`,
+    `คาบที่เริ่มแล้ว ${report.summary.totalSessions} · นักศึกษา ${report.summary.totalStudents} · อัตราเข้าเรียน ${report.summary.attendanceRate}%`,
     )
     .text(
       `มา ${report.summary.counts.present} · สาย ${report.summary.counts.late} · ขาด ${report.summary.counts.absent} · ลา ${report.summary.counts.leave} · รอตรวจ ${report.summary.counts.pending}`,
