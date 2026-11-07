@@ -26,6 +26,21 @@ export interface LeaveEvidence {
   size: number;
 }
 
+const MAX_REVIEW_NOTE = 1000;
+
+// หมายเหตุเป็นข้อความเท่านั้น ว่างถือว่าไม่มี
+function parseReviewNote(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw new AppError(400, 'BAD_REQUEST', 'หมายเหตุต้องเป็นข้อความ');
+  }
+  const note = value.trim();
+  if (note.length > MAX_REVIEW_NOTE) {
+    throw new AppError(400, 'BAD_REQUEST', `หมายเหตุยาวเกิน ${MAX_REVIEW_NOTE} ตัวอักษร`);
+  }
+  return note || null;
+}
+
 @Injectable()
 export class LeaveService {
   constructor(
@@ -177,11 +192,12 @@ export class LeaveService {
     user: AppUser,
     requestId: string,
     decision: 'approved' | 'rejected',
-    reviewNote?: string,
+    rawNote?: unknown,
   ) {
     if (user.role !== 'teacher') {
       throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ตรวจคำขอลา');
     }
+    const reviewNote = parseReviewNote(rawNote);
     if (!UUID.test(requestId))
       throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
     try {
@@ -189,7 +205,7 @@ export class LeaveService {
         requestId,
         user.id,
         decision,
-        reviewNote?.trim() || null,
+        reviewNote,
       );
     } catch (error) {
       if (

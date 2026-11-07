@@ -274,6 +274,29 @@ describe('LeaveService', () => {
   });
 });
 
+describe('LeaveService.review หมายเหตุ', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+
+  it.each([123, { a: 1 }, ['x'], true, 'x'.repeat(1001)])(
+    'หมายเหตุที่ไม่ถูกต้องได้ 400 ไม่เรียกฐาน (%s)',
+    async (note) => {
+      const { service, repo } = setup();
+      await expect(service.review(teacher, id, 'approved', note)).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(repo.reviewRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it('ตัดช่องว่าง ว่างหรือไม่ส่งเป็น null', async () => {
+    const { service, repo } = setup();
+    await service.review(teacher, id, 'approved', '  ok  ');
+    await service.review(teacher, id, 'rejected', '   ');
+    await service.review(teacher, id, 'rejected');
+    expect(repo.reviewRequest.mock.calls.map((c) => c[3])).toEqual(['ok', null, null]);
+  });
+});
+
 describe('LeaveController', () => {
   it('decision ที่ไม่รองรับได้ 400 แบบ error กลาง', () => {
     const { service } = setup();

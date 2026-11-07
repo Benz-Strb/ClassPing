@@ -92,7 +92,7 @@ export class LeaveController {
     @CurrentUser() user: AppUser,
     @Param('id') id: string,
     @Body('decision') decision: 'approved' | 'rejected',
-    @Body('reviewNote') reviewNote?: string,
+    @Body('reviewNote') reviewNote?: unknown,
   ) {
     if (decision !== 'approved' && decision !== 'rejected') {
       throw new AppError(
