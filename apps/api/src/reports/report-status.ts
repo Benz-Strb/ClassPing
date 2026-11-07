@@ -40,6 +40,11 @@ export function statusForReport(
   return attendance?.status ?? statusWithoutRow(session, courseRules, now, context);
 }
 
+// ยังไม่มีคาบที่ตัดสินผล (ไม่นับรอตรวจ) อัตราเข้าเรียนยังไม่มีความหมาย
+export function hasDecided(counts: AttendanceCounts): boolean {
+  return counts.total - counts.pending > 0;
+}
+
 // รอตรวจยังไม่รู้ผล จึงไม่นับเป็นตัวหาร
 export function attendanceRate(counts: AttendanceCounts): number {
   const decided = counts.total - counts.pending;

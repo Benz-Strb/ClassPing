@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import PDFDocument from 'pdfkit';
 import { formatReportFilters } from './format-report-filters.js';
+import { hasDecided } from './report-status.js';
 import type { AttendanceReportResponse } from './reports.types.js';
 
 const require = createRequire(import.meta.url);
@@ -56,7 +57,7 @@ export async function generateAttendancePdf(report: AttendanceReportResponse): P
     );
   for (const line of formatReportFilters(report)) doc.text(line);
   doc.text(
-    `คาบที่เริ่มแล้ว ${report.summary.totalSessions} · นักศึกษา ${report.summary.totalStudents} · อัตราเข้าเรียน ${report.summary.attendanceRate}%`,
+    `คาบที่เริ่มแล้ว ${report.summary.totalSessions} · นักศึกษา ${report.summary.totalStudents} · อัตราเข้าเรียน ${hasDecided(report.summary.counts) ? `${report.summary.attendanceRate}%` : '-'}`,
     )
     .text(
       `มา ${report.summary.counts.present} · สาย ${report.summary.counts.late} · ขาด ${report.summary.counts.absent} · ลา ${report.summary.counts.leave} · รอตรวจ ${report.summary.counts.pending}`,
@@ -167,7 +168,7 @@ export async function generateAttendancePdf(report: AttendanceReportResponse): P
       leave: String(student.counts.leave),
       pending: String(student.counts.pending),
       total: String(student.counts.total),
-      rate: `${student.attendanceRate}%`,
+      rate: hasDecided(student.counts) ? `${student.attendanceRate}%` : '-',
     };
 
     let x = doc.page.margins.left;

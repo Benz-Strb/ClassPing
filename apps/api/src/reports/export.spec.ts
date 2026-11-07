@@ -197,6 +197,18 @@ describe('export-csv', () => {
     expect(csv).toContain('"สรุปรายคาบ"');
   });
 
+  it('คนที่ยังไม่มีคาบตัดสินผลแสดง - ไม่ใช่ 0%', () => {
+    const report = structuredClone(mockReport);
+    report.students[0].counts = { present: 0, late: 0, absent: 0, leave: 0, pending: 1, total: 1 };
+    report.students[0].attendanceRate = 0;
+
+    const csv = generateAttendanceCsv(report);
+    const row = csv.split('\r\n').find((line) => line.includes('66000001'))!;
+
+    expect(row).not.toContain('0%');
+    expect(row).toContain(',-,');
+  });
+
   it('ป้องกันสูตรที่ซ่อนหลังช่องว่างหรือขึ้นบรรทัดใหม่', () => {
     const report = structuredClone(mockReport);
     report.students[0].fullName = '\n=1+1';

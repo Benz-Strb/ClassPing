@@ -1,5 +1,6 @@
 import type { AttendanceReportResponse } from './reports.types.js';
 import { formatReportFilters } from './format-report-filters.js';
+import { hasDecided } from './report-status.js';
 
 function escapeCsv(val: string | number | null | undefined): string {
   if (val === null || val === undefined) return '""';
@@ -43,7 +44,9 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   lines.push(`ขาดเรียน (Absent),${report.summary.counts.absent}`);
   lines.push(`ลา (Leave),${report.summary.counts.leave}`);
   lines.push(`รอตรวจ (Pending),${report.summary.counts.pending}`);
-  lines.push(`อัตราการเข้าเรียนเฉลี่ย,${report.summary.attendanceRate}%`);
+  lines.push(
+    `อัตราการเข้าเรียนเฉลี่ย,${hasDecided(report.summary.counts) ? `${report.summary.attendanceRate}%` : '-'}`,
+  );
   lines.push('');
 
   // สรุปรายคาบ โดยแสดง kind ชัดเจนเพื่อแยกคาบเรียนกับคาบสอบ
@@ -126,7 +129,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
       student.counts.leave,
       student.counts.pending,
       student.counts.total,
-      `${student.attendanceRate}%`,
+      hasDecided(student.counts) ? `${student.attendanceRate}%` : '-',
       ...sessionCols,
     ];
     lines.push(row.join(','));

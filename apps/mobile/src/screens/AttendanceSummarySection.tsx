@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { apiFetch } from "../lib/api";
+import { formatRate } from "../lib/attendance";
 import type { AttendanceCounts, StudentAttendanceSummary } from "../lib/types";
 import { AttendanceCourseSection } from "./AttendanceCourseSection";
 
@@ -93,7 +94,7 @@ export function AttendanceSummarySection({ mode = "summary" }: { mode?: "summary
         <>
           {mode === "summary" && <View style={styles.overallCard}>
             <Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text>
-            <Text style={styles.rate}>{data.summary.attendanceRate}%</Text>
+            <Text style={styles.rate}>{formatRate(data.summary.counts, data.summary.attendanceRate)}</Text>
             <StatusCounts counts={data.summary.counts} />
             <Text style={styles.muted}>
               รอตรวจยังไม่ใช่ผลยืนยันการเข้าเรียน

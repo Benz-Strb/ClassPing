@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
-import { buildReportQuery, type ReportFilters } from "@/lib/reports";
+import { buildReportQuery, formatRate, type ReportFilters } from "@/lib/reports";
 import { supabase } from "@/lib/supabase";
 
 interface AttendanceCounts {
@@ -320,7 +320,7 @@ export default function CourseReportsPage() {
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <span className="text-xs font-medium text-gray-500">อัตราเข้าเรียน</span>
               <p className="mt-1 text-2xl font-bold text-gray-900">
-                {data.summary.attendanceRate}%
+                {formatRate(data.summary.counts, data.summary.attendanceRate)}
               </p>
               <span className="text-xs text-gray-400">
                 {data.summary.totalStudents} คน · {data.summary.totalSessions} คาบที่เริ่มแล้ว
@@ -421,14 +421,16 @@ export default function CourseReportsPage() {
                         <td className="px-4 py-2.5 text-right font-semibold">
                           <span
                             className={
-                              student.attendanceRate >= 80
+                              student.counts.total - student.counts.pending <= 0
+                                ? "text-gray-400"
+                                : student.attendanceRate >= 80
                                 ? "text-green-600"
                                 : student.attendanceRate >= 50
                                   ? "text-yellow-600"
                                   : "text-red-600"
                             }
                           >
-                            {student.attendanceRate}%
+                            {formatRate(student.counts, student.attendanceRate)}
                           </span>
                         </td>
                       </tr>

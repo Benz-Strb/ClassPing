@@ -8,9 +8,12 @@ import {
   View,
 } from "react-native";
 import { apiFetch } from "../lib/api";
+import { formatRate } from "../lib/attendance";
+import type { AttendanceCounts } from "../lib/types";
 
 interface CourseAttendance {
   student: {
+    counts: AttendanceCounts;
     attendanceRate: number;
     sessions: {
       sessionId: string;
@@ -132,7 +135,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
         <ActivityIndicator accessibilityLabel="กำลังโหลดรายละเอียด" />
       ) : (
         <>
-          <Text>อัตราการเข้าเรียน: {data.student.attendanceRate}%</Text>
+          <Text>อัตราการเข้าเรียน: {formatRate(data.student.counts, data.student.attendanceRate)}</Text>
           {data.student.sessions.length === 0 && (
             <Text>ไม่มีคาบตามตัวกรองนี้</Text>
           )}
