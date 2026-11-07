@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dbError } from '../common/db-error.js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
-import type { WatchableSession } from './video-access.js';
+import { latestUse, type WatchableSession } from './video-access.js';
 
 export type ViewKind = 'live' | 'playback' | 'download';
 
@@ -17,7 +17,7 @@ export interface LiveRepo {
 export const LIVE_REPO = Symbol('LIVE_REPO');
 
 const COLUMNS =
-  'id, kind, title, course_id, room_id, starts_at, ends_at, courses(code, name, teacher_id), rooms(name), session_proctors(user_id)';
+  'id, kind, title, course_id, room_id, starts_at, ends_at, cancelled_at, courses(code, name, teacher_id), rooms(name), session_proctors(user_id)';
 
 interface Row {
   id: string;
@@ -27,6 +27,7 @@ interface Row {
   room_id: string;
   starts_at: string;
   ends_at: string;
+  cancelled_at: string | null;
   courses: { code: string; name: string; teacher_id: string } | null;
   rooms: { name: string } | null;
   session_proctors: { user_id: string }[];
@@ -53,6 +54,7 @@ export class SupabaseLiveRepo implements LiveRepo {
       .from('sessions')
       .select(COLUMNS)
       .eq('on_date', date)
+      .is('cancelled_at', null)
       .order('starts_at');
     if (error) throw dbError();
     return this.withCameras(data as unknown as Row[]);
@@ -61,15 +63,18 @@ export class SupabaseLiveRepo implements LiveRepo {
   async previousEndInRoom(roomId: string, after: Date, before: Date): Promise<Date | null> {
     const { data, error } = await this.db
       .from('sessions')
-      .select('ends_at')
+      .select('ends_at, cancelled_at')
       .eq('room_id', roomId)
       .gt('ends_at', after.toISOString())
-      .lt('starts_at', before.toISOString())
-      .order('ends_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .lt('starts_at', before.toISOString());
     if (error) throw dbError();
-    return data ? new Date((data as { ends_at: string }).ends_at) : null;
+    // คาบที่ถูกลบกลางทางยังมีภาพของตัวเองอยู่ คาบถัดไปต้องไม่เห็นภาพช่วงนั้น
+    return latestUse(
+      (data as { ends_at: string; cancelled_at: string | null }[]).map((r) => ({
+        endsAt: new Date(r.ends_at),
+        cancelledAt: r.cancelled_at ? new Date(r.cancelled_at) : null,
+      })),
+    );
   }
 
   async logView(sessionId: string, userId: string, kind: ViewKind): Promise<void> {
@@ -105,6 +110,7 @@ export class SupabaseLiveRepo implements LiveRepo {
       endsAt: new Date(r.ends_at),
       proctorIds: r.session_proctors.map((p) => p.user_id),
       cameraId: cameras.get(r.room_id) ?? null,
+      cancelledAt: r.cancelled_at ? new Date(r.cancelled_at) : null,
     }));
   }
 }

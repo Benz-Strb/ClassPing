@@ -228,6 +228,20 @@ export class SchedulesService {
     const notFound = () => new AppError(404, 'OVERRIDE_NOT_FOUND', 'วันนี้ไม่ได้เปลี่ยนอะไรไว้');
     if (!isDate(date)) throw notFound();
     await this.checkNotStarted(schedule, date, null);
+    // ระหว่างที่งดหรือย้ายออก ช่องเดิมอาจถูกวิชาอื่นใช้แล้ว กลับไปต้องไม่ทับ
+    const current = (await this.repo.listOverridesOnDate(date)).find(
+      (o) => o.scheduleId === scheduleId,
+    );
+    if (current) {
+      await this.checkDayConflict(schedule, {
+        scheduleId,
+        onDate: date,
+        cancelled: false,
+        roomId: null,
+        startTime: null,
+        endTime: null,
+      });
+    }
     if (!(await this.repo.removeOverride(scheduleId, date))) throw notFound();
     await this.sync(schedule.courseId);
   }
@@ -272,13 +286,14 @@ export class SchedulesService {
     }
   }
 
-  // คาบวันนี้ที่กล้องเปิดแล้ว (ทั้งเวลาเดิมและเวลาใหม่) แก้ไม่ได้
+  // คาบวันนี้ที่กล้องเปิดแล้ว (ทั้งเวลาเดิมและเวลาใหม่) ย้ายไม่ได้ แต่งดสอนและยกเลิกงดได้เสมอ
   private async checkNotStarted(schedule: Schedule, date: string, next: Override | null) {
     const now = this.now();
-    if (date !== bangkokDate(now)) return;
+    if (date !== bangkokDate(now) || next?.cancelled) return;
     const current = (await this.repo.listOverridesOnDate(date)).filter(
       (o) => o.scheduleId === schedule.id,
     );
+    if (!next && current.some((o) => o.cancelled)) return;
     const [before] = planDay(date, [schedule], current);
     const [after] = planDay(date, [schedule], next ? [next] : []);
     const opened = (s?: { startsAt: Date }) => !!s && cameraOpened(s.startsAt, now, this.config?.cameraOpenBeforeMin);
