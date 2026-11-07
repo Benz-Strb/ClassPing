@@ -362,7 +362,10 @@ def main() -> int:
                 log.exception("เกิดข้อผิดพลาด ลองใหม่ใน %d วิ", RETRY_SECONDS)
                 wait = RETRY_SECONDS
             # ไม่ประมวลผลเร็วเกิน 15 ภาพ/วินาที ที่วัดความแม่นยำไว้ เครื่องจะได้ไม่ร้อนเกินจำเป็น
-            _wait(max(wait, MIN_FRAME_SECONDS - (time.monotonic() - started)), preview)
+            # จำกัดเฉพาะตอนเพิ่งประมวลผลภาพ ตอนรอภาพใหม่ต้องรอสั้นเท่าเดิม ไม่งั้นพลาดภาพถัดไป
+            if wait == 0:
+                wait = max(0, MIN_FRAME_SECONDS - (time.monotonic() - started))
+            _wait(wait, preview)
     except BadToken as error:
         log.error("%s", error)
         return 1
