@@ -45,6 +45,7 @@ function setup() {
     listStatuses: vi.fn(async () => []),
     listEligibleSessions: vi.fn(async () => [session]),
     studentCanRequest: vi.fn(async () => true),
+    hasActiveRequest: vi.fn(async () => false),
     createRequest: vi.fn(async () => ({ id: 'leave-1' })),
     deleteRequest: vi.fn(async () => undefined),
     uploadEvidence: vi.fn(async () => undefined),
@@ -219,6 +220,25 @@ describe('LeaveService', () => {
       status: 409,
       code: 'LEAVE_REQUEST_DUPLICATE',
     });
+  });
+
+  it('มีคำขอที่ยังไม่ถูกปฏิเสธอยู่แล้ว ตอบ 409 โดยไม่เรียก OCR', async () => {
+    const { service, repo, face } = setup();
+    repo.hasActiveRequest.mockResolvedValue(true);
+
+    await expect(
+      service.submit(student, SESSION_ID, 'ป่วย', evidence),
+    ).rejects.toMatchObject({ status: 409, code: 'LEAVE_REQUEST_DUPLICATE' });
+    expect(repo.hasActiveRequest).toHaveBeenCalledWith('student-user', SESSION_ID);
+    expect(face.readLeaveDocument).not.toHaveBeenCalled();
+    expect(repo.createRequest).not.toHaveBeenCalled();
+  });
+
+  it('POST /leave-requests ใช้เพดานอ่านใบลาเดียวกับ preview', () => {
+    const guards = (name: 'preview' | 'submit') =>
+      Reflect.getMetadata('__guards__', LeaveController.prototype[name]) as unknown[];
+    expect(guards('submit')).toEqual(guards('preview'));
+    expect(guards('submit')).toHaveLength(1);
   });
 
   it('Typhoon ล้มเหลวแล้วยังบันทึกคำขอและหลักฐานเพื่อให้อาจารย์ตรวจเอง', async () => {

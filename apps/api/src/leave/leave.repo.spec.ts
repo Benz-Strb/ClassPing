@@ -234,3 +234,25 @@ it.each([
     repo.reviewRequest('leave-1', 'teacher-1', 'approved', null),
   ).rejects.toThrow(message);
 });
+
+it('hasActiveRequest นับเฉพาะคำขอที่ยังไม่ถูกปฏิเสธ', async () => {
+  const calls: unknown[][] = [];
+  const db = {
+    from: () => ({
+      select: () => {
+        const query = {
+          eq: (...args: unknown[]) => (calls.push(['eq', ...args]), query),
+          neq: (...args: unknown[]) => (calls.push(['neq', ...args]), query),
+          limit: async () => ({ data: [{ id: 'leave-1' }], error: null }),
+        };
+        return query;
+      },
+    }),
+  };
+  const repo = new SupabaseLeaveRepo(db as unknown as SupabaseClient);
+
+  await expect(repo.hasActiveRequest('student-user', 'session-1')).resolves.toBe(true);
+  expect(calls).toContainEqual(['neq', 'status', 'rejected']);
+  expect(calls).toContainEqual(['eq', 'student_id', 'student-user']);
+  expect(calls).toContainEqual(['eq', 'session_id', 'session-1']);
+});

@@ -75,6 +75,7 @@ export class LeaveController {
 
   @Post()
   @HttpCode(201)
+  @UseGuards(PreviewLimitGuard)
   @UseInterceptors(
     EvidenceUploadErrorsInterceptor,
     FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),

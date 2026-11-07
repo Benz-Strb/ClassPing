@@ -75,6 +75,12 @@ class MemoryLeaveRepo implements LeaveRepo {
     return sessionId === SESSION.id;
   }
 
+  async hasActiveRequest(_studentId: string, sessionId: string) {
+    return this.requests.some(
+      (item) => item.sessionId === sessionId && item.status !== 'rejected',
+    );
+  }
+
   async createRequest(input: LeaveRequestInput) {
     // เหมือน partial unique index: คำขอที่ถูกปฏิเสธไม่นับว่าซ้ำ
     if (
@@ -271,6 +277,17 @@ describe('ระบบลา (e2e)', () => {
       .set('x-role', 'teacher').send({ decision: 'rejected' }).expect(200);
     await submit().expect(201);
     expect(repo.requests).toHaveLength(2);
+  });
+
+  it('ยื่นลาเกิน 10 ครั้งต่อนาทีได้ 429 แม้ชน 409', async () => {
+    const server = app.getHttpServer();
+    const submit = () =>
+      request(server).post('/leave-requests').set('x-role', 'student').set('x-user', 'limit-s')
+        .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+    await submit().expect(201);
+    for (let i = 0; i < 9; i++) await submit().expect(409);
+    await submit().expect(429);
   });
 
   it('ปฏิเสธหลักฐานเกิน 25 MB ทั้งอ่านร่างและยื่นลา', async () => {

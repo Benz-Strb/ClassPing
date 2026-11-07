@@ -10,7 +10,7 @@ import { RateLimiter } from '../common/rate-limiter.js';
 export const PREVIEW_LIMIT = 10;
 export const PREVIEW_WINDOW_MS = 60_000;
 
-// อ่านใบลาด้วย OCR เสียเงินต่อครั้ง จำกัดต่อผู้ใช้
+// อ่านใบลาด้วย OCR เสียเงินต่อครั้ง จำกัดต่อผู้ใช้ ใช้ทั้งอ่านร่างและยื่นลา นับรวมกัน
 @Injectable()
 export class PreviewLimitGuard implements CanActivate {
   private readonly limiter: RateLimiter;

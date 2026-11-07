@@ -126,6 +126,15 @@ export class LeaveService {
       );
     }
 
+    // ซ้ำอยู่แล้วไม่ต้องเสีย OCR ตัวกันจริงคือ unique index ตอนสร้างคำขอ
+    if (await this.repo.hasActiveRequest(user.id, sessionId)) {
+      throw new AppError(
+        409,
+        'LEAVE_REQUEST_DUPLICATE',
+        'ส่งคำขอลาสำหรับคาบนี้แล้ว',
+      );
+    }
+
     let ocr: Awaited<ReturnType<FaceClient['readLeaveDocument']>> | null = null;
     let ocrStatus: 'completed' | 'failed' = 'failed';
     try {
