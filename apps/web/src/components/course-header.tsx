@@ -30,21 +30,21 @@ export function CourseHeader() {
   }, [id, router]);
 
   return (
-    <header className="space-y-3">
-      <Link href="/courses" className="text-sm text-blue-600 underline">
+    <header className="course-heading space-y-4">
+      <Link href="/courses" className="back-link">
         วิชาทั้งหมด
       </Link>
       {error ? (
         <p className="text-red-600">{error}</p>
       ) : (
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-2xl sm:text-3xl font-semibold">
           {course ? `${course.code} ${course.name}` : "กำลังโหลด..."}
           {course?.section && (
             <span className="font-normal text-gray-500"> · กลุ่ม {course.section}</span>
           )}
         </h1>
       )}
-      <nav className="flex gap-4 border-b">
+      <nav aria-label="เมนูรายวิชา" className="course-tabs">
         {TABS.map((tab) => {
           const href = `/courses/${id}/${tab.path}`;
           const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -52,9 +52,7 @@ export function CourseHeader() {
             <Link
               key={tab.path}
               href={href}
-              className={`-mb-px border-b-2 pb-2 ${
-                active ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600"
-              }`}
+              aria-current={active ? "page" : undefined}
             >
               {tab.label}
             </Link>

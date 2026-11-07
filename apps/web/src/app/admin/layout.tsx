@@ -54,19 +54,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <header className="space-y-3 border-b pb-4">
+    <main className="admin-workspace mx-auto space-y-8 p-4 sm:p-6">
+      <header className="admin-heading space-y-4">
         <div>
-          <p className="text-sm text-gray-500">ClassPing</p>
           <h1 className="text-2xl font-semibold">ระบบผู้ดูแล</h1>
         </div>
-        <nav aria-label="เมนูผู้ดูแล" className="flex flex-wrap gap-2">
+        <nav aria-label="เมนูผู้ดูแล" className="admin-tabs">
           {LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               aria-current={pathname === link.href ? "page" : undefined}
-              className={`rounded-md border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${pathname === link.href ? "border-blue-700 bg-blue-50 text-blue-800" : "hover:bg-gray-50"}`}
+              className="admin-tab"
             >
               {link.label}
             </Link>
