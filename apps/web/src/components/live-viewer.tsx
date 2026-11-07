@@ -28,6 +28,8 @@ declare global {
 const RETRY_MS = 3000;
 // กล้องตรวจหน้าวินาทีละครั้ง
 const FACES_MS = 1000;
+// ลองใหม่ก็ไม่หาย หยุดต่อแล้วบอกผู้ใช้
+const PERMANENT = ["NOT_LIVE", "NO_CAMERA", "SESSION_NOT_FOUND", "MEDIA_NOT_CONFIGURED"];
 
 const KIND = {
   match: { label: "", box: "border-green-400", tag: "bg-green-500" },
@@ -75,12 +77,13 @@ export function LiveViewer() {
           },
           onTrack: (evt) => {
             if (video.current) video.current.srcObject = evt.streams[0];
+            setError(null);
             setState("playing");
           },
         });
       } catch (e) {
         if (closed) return;
-        if (e instanceof ApiError && (e.code === "NOT_LIVE" || e.code === "NO_CAMERA")) {
+        if (e instanceof ApiError && (PERMANENT.includes(e.code) || e.status === 403)) {
           setState("stopped");
           setError(e.message);
           return;
@@ -103,15 +106,24 @@ export function LiveViewer() {
   useEffect(() => {
     if (state !== "playing") return;
     let stop = false;
-    const load = () =>
-      apiFetch<LiveFaces>(`/sessions/${sessionId}/live/faces`)
+    // คำขอก่อนหน้ายังไม่เสร็จก็ไม่เริ่มคำขอใหม่ คำตอบเก่าจะได้ไม่ทับของใหม่
+    let running = false;
+    const load = () => {
+      if (running) return Promise.resolve();
+      running = true;
+      return apiFetch<LiveFaces>(`/sessions/${sessionId}/live/faces`)
         .then((data) => !stop && setFaces(data.faces))
-        .catch(() => !stop && setFaces([]));
+        .catch(() => !stop && setFaces([]))
+        .finally(() => {
+          running = false;
+        });
+    };
     void load();
     const timer = setInterval(() => void load(), FACES_MS);
     return () => {
       stop = true;
       clearInterval(timer);
+      setFaces([]);
     };
   }, [state, sessionId]);
 
@@ -181,7 +193,9 @@ export function LiveViewer() {
               แสดงกรอบ
             </label>
           </div>
-          {faces.length === 0 ? (
+          {state !== "playing" ? (
+            <p className="text-sm text-gray-500">ไม่มีภาพจากกล้อง</p>
+          ) : faces.length === 0 ? (
             <p className="text-sm text-gray-500">ยังไม่เห็นใครในภาพ</p>
           ) : (
             <ol className="divide-y rounded-lg border text-sm">
