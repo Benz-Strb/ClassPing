@@ -186,6 +186,9 @@ describe('LiveService.startLive', () => {
     expect((await rejection(setup([ended]).service.startLive(owner, S1))).code).toBe('NOT_LIVE');
     const noCam = make({ cameraId: null });
     expect((await rejection(setup([noCam]).service.startLive(owner, S1))).code).toBe('NO_CAMERA');
+    // ภาพสดของห้องหลังลบคาบอาจเป็นของวิชาอื่น
+    const cancelled = make({ cancelledAt: NOW });
+    expect((await rejection(setup([cancelled]).service.startLive(owner, S1))).code).toBe('NOT_LIVE');
   });
 
   it('ห้องยังมีคาบก่อนหน้าอยู่ (กล้องเปิดก่อนเวลา) ขอดูไม่ได้ 409 NOT_LIVE และรายการขึ้นว่ายังไม่เปิด', async () => {

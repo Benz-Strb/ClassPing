@@ -80,7 +80,7 @@ export class RecordingService {
     }
 
     const { from, to } = await this.range(session);
-    const found = await this.playback.list(cameraPath(session.cameraId), from, to);
+    const found = to > from ? await this.playback.list(cameraPath(session.cameraId), from, to) : [];
     const segments = found.flatMap((seg) => {
       const start = Math.max(seg.start.getTime(), from.getTime());
       const end = Math.min(seg.start.getTime() + seg.duration * 1000, to.getTime());
@@ -161,7 +161,11 @@ export class RecordingService {
     );
     return {
       from: previousEnd && previousEnd > opensAt ? previousEnd : opensAt,
-      to: session.endsAt,
+      // คาบที่ถูกลบดูได้ถึงตอนที่ลบ หลังจากนั้นห้องอาจเป็นของวิชาอื่น
+      to:
+        session.cancelledAt && session.cancelledAt < session.endsAt
+          ? session.cancelledAt
+          : session.endsAt,
     };
   }
 
