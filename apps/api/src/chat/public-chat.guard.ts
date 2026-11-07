@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
-import { RateLimiter } from '../common/rate-limiter.js';
+import { ipKey, RateLimiter } from '../common/rate-limiter.js';
 
 export const PUBLIC_CHAT_LIMIT = 20;
 export const PUBLIC_CHAT_WINDOW_MS = 60_000;
@@ -26,7 +26,7 @@ export class PublicChatLimitGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<{ ip?: string }>();
-    this.limiter.check(req.ip ?? 'unknown');
+    this.limiter.check(ipKey(req.ip));
     return true;
   }
 }

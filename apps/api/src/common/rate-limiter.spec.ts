@@ -7,7 +7,7 @@ import {
   PREVIEW_LIMIT,
   PreviewLimitGuard,
 } from '../leave/preview-limit.guard.js';
-import { RateLimiter } from './rate-limiter.js';
+import { ipKey, RateLimiter } from './rate-limiter.js';
 
 let now = new Date('2026-11-07T02:00:00Z');
 const clock = () => now;
@@ -39,6 +39,35 @@ describe('RateLimiter', () => {
     expect(
       (limiter as unknown as { hits: Map<string, unknown> }).hits.size,
     ).toBe(1);
+  });
+});
+
+describe('RateLimiter ตารางเต็ม', () => {
+  it('ทิ้งคีย์เก่าสุด คนใหม่ยังผ่าน ไม่โดนล็อก', () => {
+    const limiter = new RateLimiter(1, 60_000, clock);
+    for (let i = 0; i < 10_000; i++) limiter.check(`k${i}`);
+    expect(() => limiter.check('new')).not.toThrow();
+    const hits = (limiter as unknown as { hits: Map<string, unknown> }).hits;
+    expect(hits.size).toBe(10_000);
+    expect(hits.has('k0')).toBe(false);
+  });
+});
+
+describe('ipKey', () => {
+  it.each([
+    ['1.2.3.4', '1.2.3.4'],
+    ['::ffff:1.2.3.4', '1.2.3.4'],
+    ['2001:db8:1:2:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::/64'],
+    ['2001:db8:1:2:1111:2222:3333:4444', '2001:db8:1:2::/64'],
+    ['2001:0db8::1', '2001:db8:0:0::/64'],
+    ['::1', '0:0:0:0::/64'],
+    ['fe80::1%en0', 'fe80:0:0:0::/64'],
+  ])('%s เป็น %s', (ip, key) => {
+    expect(ipKey(ip)).toBe(key);
+  });
+
+  it('ไม่มี IP นับรวมกันเป็น unknown', () => {
+    expect(ipKey(undefined)).toBe('unknown');
   });
 });
 
