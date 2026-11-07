@@ -20,6 +20,7 @@ it('ตรวจ enrollment ด้วยรหัสนักศึกษา แ
           calls.push([table, column, value]);
           return q;
         },
+        is: () => q,
         maybeSingle: async () => ({ data: tables[table], error: null }),
       };
       return q;
@@ -80,8 +81,10 @@ describe('รายการคาบที่ยื่นลาได้', () =
         return {
           select: () => ({
             in: () => ({
-              order: () => ({
-                limit: async () => ({ data: tableData.sessions, error: null }),
+              is: () => ({
+                order: () => ({
+                  limit: async () => ({ data: tableData.sessions, error: null }),
+                }),
               }),
             }),
           }),
@@ -103,6 +106,7 @@ describe('รายการคาบที่ยื่นลาได้', () =
         startsAt: '2026-10-28T02:00:00.000Z',
         endsAt: '2026-10-28T05:00:00.000Z',
         roomName: 'LAB 1',
+        cancelled: false,
       },
     ]);
   });

@@ -5,7 +5,7 @@ import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 import type { AttendanceStatus } from '../attendance/decide.js';
 import type { Rules } from '../courses/courses.repo.js';
 import { DEFAULT_RULES } from '../courses/courses.service.js';
-import { statusForReport } from './report-status.js';
+import { attendanceRate, statusForReport } from './report-status.js';
 import type {
   AttendanceCounts,
   AttendanceFilterDto,
@@ -52,11 +52,13 @@ interface RawSession {
   late_after_min: number | null;
   absent_after_min: number | null;
   out_of_room_limit_min: number | null;
+  cancelled_at?: string | null;
   rooms: { name: string } | null;
 }
 
 interface RawEnrollment {
   student_code: string;
+  added_at: string | null;
 }
 
 interface RawUser {
@@ -146,15 +148,11 @@ export class SupabaseReportsRepo implements ReportsRepo {
       },
       { present: 0, late: 0, absent: 0, leave: 0, pending: 0, total: 0 },
     );
-    const positive = counts.present + counts.late + counts.leave;
 
     return {
       summary: {
         counts,
-        attendanceRate:
-          counts.total > 0
-            ? Math.round((positive / counts.total) * 1000) / 10
-            : 0,
+        attendanceRate: attendanceRate(counts),
       },
       courses,
     };
@@ -195,7 +193,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
     let sessionQuery = this.db
       .from('sessions')
       .select(
-        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name)',
+        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, cancelled_at, rooms(name)',
       )
       .eq('course_id', courseId)
       .order('starts_at', { ascending: true })
@@ -214,12 +212,13 @@ export class SupabaseReportsRepo implements ReportsRepo {
       sessionQuery = sessionQuery.lte('on_date', filter.endDate);
     }
 
-    const sessions = await allRows<RawSession>(sessionQuery);
+    // คาบที่ถูกลบไม่นับในรายงาน
+    const sessions = (await allRows<RawSession>(sessionQuery)).filter((s) => !s.cancelled_at);
 
     // 3. ดึง enrollments (รายชื่อนักศึกษา)
     let enrollmentQuery = this.db
       .from('enrollments')
-      .select('student_code')
+      .select('student_code, added_at')
       .eq('course_id', courseId)
       .order('student_code', { ascending: true });
 
@@ -229,6 +228,9 @@ export class SupabaseReportsRepo implements ReportsRepo {
 
     const enrollments = await allRows<RawEnrollment>(enrollmentQuery);
     const studentCodes = enrollments.map((e) => e.student_code);
+    const addedAtByCode = new Map(
+      enrollments.map((e) => [e.student_code, e.added_at ? new Date(e.added_at) : null]),
+    );
 
     // 4. ดึง users เพื่อ map student_id -> user account
     const usersByCode = new Map<string, RawUser>();
@@ -250,6 +252,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
     // 5. ดึง attendance ของ sessions เหล่านี้
     const sessionIds = sessions.map((s) => s.id);
     const attendanceMap = new Map<string, RawAttendance>(); // key: `${sessionId}:${userId}`
+    const sessionsWithRows = new Set<string>();
     if (sessionIds.length > 0) {
       for (let start = 0; start < sessionIds.length; start += 200) {
         const attendances = await allRows<RawAttendance>(
@@ -263,6 +266,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
             .order('student_id', { ascending: true }),
         );
         for (const attendance of attendances) {
+          sessionsWithRows.add(attendance.session_id);
           attendanceMap.set(
             `${attendance.session_id}:${attendance.student_id}`,
             attendance,
@@ -349,16 +353,9 @@ export class SupabaseReportsRepo implements ReportsRepo {
             endsAt: sessionEndsAt,
           },
           courseRules,
-          att
-            ? {
-                status: att.status,
-                firstSeenAt: att.first_seen_at
-                  ? new Date(att.first_seen_at)
-                  : null,
-                updatedBy: att.updated_by,
-              }
-            : null,
+          att ?? null,
           now,
+          { addedAt: addedAtByCode.get(code), sessionHasRows: sessionsWithRows.has(s.id) },
         );
 
         if (finalStatus !== 'unrecorded') {
@@ -395,13 +392,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
         });
       }
 
-      const eligibleTotal = studentCounts.total;
-      const positiveCount =
-        studentCounts.present + studentCounts.late + studentCounts.leave;
-      const rate =
-        eligibleTotal > 0
-          ? Math.round((positiveCount / eligibleTotal) * 1000) / 10
-          : 0;
+      const rate = attendanceRate(studentCounts);
 
       studentReports.push({
         studentCode: code,
@@ -435,13 +426,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
       });
     }
 
-    const overallTotal = overallCounts.total;
-    const overallPositive =
-      overallCounts.present + overallCounts.late + overallCounts.leave;
-    const overallRate =
-      overallTotal > 0
-        ? Math.round((overallPositive / overallTotal) * 1000) / 10
-        : 0;
+    const overallRate = attendanceRate(overallCounts);
 
     const courseInfo: CourseInfo = {
       id: course.id,

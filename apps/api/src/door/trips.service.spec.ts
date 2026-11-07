@@ -40,6 +40,7 @@ const session: SessionInfo = {
   onDate: '2026-10-23',
   startsAt: START,
   endsAt: ENDS,
+  cancelled: false,
 };
 
 const roster = [

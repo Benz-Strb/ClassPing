@@ -57,6 +57,8 @@ export interface MatchResult {
 }
 
 const TIMEOUT_MS = 10_000;
+// OCR บน CPU ช้ากว่างานอื่น บัตรใบเดียววัดได้ราว 5 วิ
+const SLOW_PATHS: Record<string, number> = { '/leave/ocr': 120_000, '/cards/read': 30_000 };
 
 // ปัญหาของรูปที่ผู้ใช้แก้เองได้ (ถ่ายใหม่) ส่งต่อให้แอปแสดงข้อความ
 // code อื่นจาก service (เช่น BAD_EMBEDDING, REQUEST_TOO_LARGE, 404) เป็นบั๊กหรือตั้งค่าผิดฝั่งระบบ
@@ -141,7 +143,7 @@ export class FaceClient {
         method,
         ...(body === undefined ? {} : { body }),
         headers: { ...headers, 'X-Face-Token': this.config.faceServiceToken },
-        signal: AbortSignal.timeout(path === '/leave/ocr' ? 120_000 : TIMEOUT_MS),
+        signal: AbortSignal.timeout(SLOW_PATHS[path] ?? TIMEOUT_MS),
       });
     } catch (error) {
       this.logger.warn(`เรียก face service ไม่ได้: ${String(error)}`);

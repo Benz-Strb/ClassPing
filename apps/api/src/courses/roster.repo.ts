@@ -15,6 +15,8 @@ export interface StudentAccount {
 
 export interface RosterRepo {
   listCodes(courseId: string): Promise<string[]>;
+  // เวลาที่เพิ่มเข้ารายชื่อ key = รหัสนักศึกษา
+  addedDates(courseId: string): Promise<Map<string, Date>>;
   addCodes(courseId: string, codes: string[]): Promise<void>;
   removeCode(courseId: string, code: string): Promise<boolean>;
   accountsByCodes(codes: string[]): Promise<StudentAccount[]>;
@@ -40,6 +42,20 @@ export class SupabaseRosterRepo implements RosterRepo {
       .order('student_code');
     if (error) throw dbError();
     return (data as { student_code: string }[]).map((r) => r.student_code);
+  }
+
+  async addedDates(courseId: string): Promise<Map<string, Date>> {
+    const { data, error } = await this.db
+      .from('enrollments')
+      .select('student_code, added_at')
+      .eq('course_id', courseId);
+    if (error) throw dbError();
+    return new Map(
+      (data as { student_code: string; added_at: string }[]).map((r) => [
+        r.student_code,
+        new Date(r.added_at),
+      ]),
+    );
   }
 
   async addCodes(courseId: string, codes: string[]): Promise<void> {

@@ -457,16 +457,16 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
     await service.setOverride(owner, schedule.id, NEXT_MONDAY, { cancelled: true });
   });
 
-  it('คาบวันนี้ที่เริ่มแล้ว งดหรือเปลี่ยนไม่ได้ ได้ 400 SESSION_STARTED', async () => {
+  it('คาบวันนี้ที่เริ่มแล้ว เปลี่ยนเวลาไม่ได้ แต่งดสอนได้', async () => {
     const { owner, cs101, service, monday } = setup();
     // ตอนนี้ 10:00 คาบ 09:00-12:00 เริ่มไปแล้ว
     const schedule = await service.create(owner, cs101.id, monday({ weekday: 2 }));
-    for (const body of [{ cancelled: true }, { startTime: '10:30' }]) {
-      expect(await rejection(service.setOverride(owner, schedule.id, TUESDAY, body))).toMatchObject({
-        status: 400,
-        code: 'SESSION_STARTED',
-      });
-    }
+    expect(
+      await rejection(service.setOverride(owner, schedule.id, TUESDAY, { startTime: '10:30' })),
+    ).toMatchObject({ status: 400, code: 'SESSION_STARTED' });
+    await expect(
+      service.setOverride(owner, schedule.id, TUESDAY, { cancelled: true }),
+    ).resolves.toMatchObject({ cancelled: true });
   });
 
   it('เลื่อนคาบวันนี้ไปเวลาที่ผ่านมาแล้วไม่ได้ แต่เลื่อนไปเวลาข้างหน้าได้', async () => {
@@ -484,7 +484,7 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
     await service.setOverride(owner, schedule.id, TUESDAY, { startTime: '14:00', endTime: '15:00' });
   });
 
-  it('กล้องเปิดก่อนคาบแล้ว (20 นาที) งดหรือเปลี่ยนไม่ได้ ส่วนคาบที่กล้องยังไม่เปิดยังแก้ได้', async () => {
+  it('กล้องเปิดก่อนคาบแล้ว (20 นาที) เปลี่ยนเวลาไม่ได้ แต่งดสอนได้ ส่วนคาบที่กล้องยังไม่เปิดยังแก้ได้', async () => {
     const { owner, cs101, service, monday } = setup(20);
     // ตอนนี้ 10:00
     const soon = await service.create(
@@ -498,12 +498,13 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
       monday({ weekday: 2, startTime: '10:45', endTime: '11:30' }),
     );
     expect(
-      await rejection(service.setOverride(owner, soon.id, TUESDAY, { cancelled: true })),
+      await rejection(service.setOverride(owner, soon.id, TUESDAY, { startTime: '10:20' })),
     ).toMatchObject({ status: 400, code: 'SESSION_STARTED' });
+    await service.setOverride(owner, soon.id, TUESDAY, { cancelled: true });
     await service.setOverride(owner, later.id, TUESDAY, { cancelled: true });
   });
 
-  it('ยกเลิกงดสอนของวันนี้หลังเลยเวลาเริ่มแล้วไม่ได้', async () => {
+  it('ยกเลิกงดสอนของวันนี้ได้แม้เลยเวลาเริ่มแล้ว กันกดงดผิด', async () => {
     const { owner, cs101, repo, service, monday } = setup();
     const schedule = await service.create(owner, cs101.id, monday({ weekday: 2 }));
     await repo.saveOverride({
@@ -514,10 +515,53 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
       startTime: null,
       endTime: null,
     });
-    expect(await rejection(service.clearOverride(owner, schedule.id, TUESDAY))).toMatchObject({
-      status: 400,
-      code: 'SESSION_STARTED',
+    await expect(service.clearOverride(owner, schedule.id, TUESDAY)).resolves.toBeUndefined();
+  });
+
+  it('ย้ายคาบออกแล้ววิชาอื่นเข้าช่องเดิม ยกเลิกการย้ายไม่ได้ ไม่ทับกัน', async () => {
+    const { owner, otherTeacher, cs101, cs102, roomB, repo, service, monday } = setup();
+    const schedule = await service.create(owner, cs101.id, monday());
+    await service.setOverride(owner, schedule.id, NEXT_MONDAY, { roomId: roomB });
+    const other = await service.create(
+      otherTeacher,
+      cs102.id,
+      monday({ startTime: '13:00', endTime: '15:00' }),
+    );
+    await service.setOverride(otherTeacher, other.id, NEXT_MONDAY, {
+      startTime: '09:00',
+      endTime: '12:00',
     });
+
+    expect(await rejection(service.clearOverride(owner, schedule.id, NEXT_MONDAY))).toMatchObject({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+    });
+    expect(repo.overrides.some((o) => o.scheduleId === schedule.id)).toBe(true);
+  });
+
+  it('ระหว่างงดสอนมีวิชาอื่นใช้ห้องแล้ว ยกเลิกงดไม่ได้ ค่างดยังอยู่', async () => {
+    const { owner, otherTeacher, cs101, cs102, service, monday } = setup();
+    const schedule = await service.create(owner, cs101.id, monday());
+    await service.setOverride(owner, schedule.id, NEXT_MONDAY, { cancelled: true });
+    const other = await service.create(
+      otherTeacher,
+      cs102.id,
+      monday({ startTime: '13:00', endTime: '15:00' }),
+    );
+    await service.setOverride(otherTeacher, other.id, NEXT_MONDAY, {
+      startTime: '09:00',
+      endTime: '12:00',
+    });
+
+    expect(await rejection(service.clearOverride(owner, schedule.id, NEXT_MONDAY))).toMatchObject({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+    });
+    await service.setOverride(otherTeacher, other.id, NEXT_MONDAY, {
+      startTime: '13:00',
+      endTime: '15:00',
+    });
+    await expect(service.clearOverride(owner, schedule.id, NEXT_MONDAY)).resolves.toBeUndefined();
   });
 });
 
