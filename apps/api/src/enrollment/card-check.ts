@@ -69,3 +69,17 @@ export function checkCard(
   }
   return { ok: true };
 }
+
+export interface StudyInfo {
+  faculty: string | null;
+  major: string | null;
+}
+
+// อ่านไม่ได้ไม่ใช่เหตุให้ยืนยันบัตรไม่ผ่าน เก็บเป็นค่าว่างไว้
+export function readStudyInfo(lines: CardLine[]): StudyInfo {
+  const sure = lines.filter((l) => l.score >= MIN_LINE_SCORE).map((l) => l.text.trim());
+  return {
+    faculty: sure.find((t) => /^(คณะ|วิทยาลัย|สถาบัน)/.test(t)) ?? null,
+    major: sure.find((t) => t.startsWith('สาขา')) ?? null,
+  };
+}
