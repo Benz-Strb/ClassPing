@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { formatBuddhistDate, formatRate, parseFilterDate } from './attendance';
+import { formatBuddhistDate, formatOutOfRoom, formatRate, parseFilterDate } from './attendance';
 
 it('แสดงวันที่เป็น พ.ศ.', () => {
   expect(formatBuddhistDate('2026-11-07')).toBe('7 พ.ย. 2569');
@@ -21,4 +21,10 @@ it('ช่องกรองวันที่ปฏิเสธรูปแบ�
 it('อัตราเป็น - เมื่อยังไม่มีคาบตัดสินผล', () => {
   expect(formatRate({ total: 1, pending: 1 }, 0)).toBe('-');
   expect(formatRate({ total: 2, pending: 0 }, 50)).toBe('50%');
+});
+
+it('เวลานอกห้องแสดงเป็นนาที และไม่แสดงเมื่อเป็นศูนย์', () => {
+  expect(formatOutOfRoom(0)).toBeNull();
+  expect(formatOutOfRoom(30)).toBe('นอกห้อง ไม่ถึง 1 นาที');
+  expect(formatOutOfRoom(125)).toBe('นอกห้อง 2 นาที');
 });

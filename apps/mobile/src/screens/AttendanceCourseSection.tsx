@@ -8,13 +8,14 @@ import {
   View,
 } from "react-native";
 import { apiFetch } from "../lib/api";
-import { formatBuddhistDate, formatRate, parseFilterDate } from "../lib/attendance";
+import { formatBuddhistDate, formatOutOfRoom, formatRate, parseFilterDate } from "../lib/attendance";
 import type { AttendanceCounts } from "../lib/types";
 
 interface CourseAttendance {
   student: {
     counts: AttendanceCounts;
     attendanceRate: number;
+    outOfRoomSeconds?: number;
     sessions: {
       sessionId: string;
       onDate: string;
@@ -25,6 +26,7 @@ interface CourseAttendance {
       roomName?: string;
       firstSeenAt?: string | null;
       imageUrl?: string | null;
+      outOfRoomSeconds?: number;
       status:
         "present" | "late" | "absent" | "leave" | "pending" | "unrecorded";
     }[];
@@ -150,6 +152,9 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       ) : (
         <>
           <Text>อัตราการเข้าเรียน: {formatRate(data.student.counts, data.student.attendanceRate)}</Text>
+          {formatOutOfRoom(data.student.outOfRoomSeconds ?? 0) && (
+            <Text>รวมทุกคาบ {formatOutOfRoom(data.student.outOfRoomSeconds ?? 0)}</Text>
+          )}
           {data.student.sessions.length === 0 && (
             <Text>ไม่มีคาบตามตัวกรองนี้</Text>
           )}
@@ -173,6 +178,9 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
                 {session.roomName ?? "-"}
               </Text>
               <Text>{STATUS[session.status]}</Text>
+              {formatOutOfRoom(session.outOfRoomSeconds ?? 0) && (
+                <Text>{formatOutOfRoom(session.outOfRoomSeconds ?? 0)}</Text>
+              )}
               <Text>
                 พบครั้งแรก:{" "}
                 {session.firstSeenAt ? time(session.firstSeenAt) : "-"}

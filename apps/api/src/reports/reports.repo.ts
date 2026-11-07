@@ -407,6 +407,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
         counts: studentCounts,
         totalSessions: startedSessions,
         attendanceRate: rate,
+        outOfRoomSeconds: 0,
         sessions: studentSessions,
       });
     }

@@ -103,6 +103,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
     escapeCsv('รอตรวจ'),
     escapeCsv('รวมคาบ'),
     escapeCsv('อัตราเข้าเรียน (%)'),
+    escapeCsv('นอกห้อง (นาที)'),
     ...sessionHeaders,
   ];
   lines.push(headerRow.join(','));
@@ -130,6 +131,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
       student.counts.pending,
       student.counts.total,
       hasDecided(student.counts) ? `${student.attendanceRate}%` : '-',
+      Math.floor(student.outOfRoomSeconds / 60),
       ...sessionCols,
     ];
     lines.push(row.join(','));

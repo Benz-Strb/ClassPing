@@ -79,6 +79,7 @@ const mockReport: AttendanceReportResponse = {
       },
       totalSessions: 2,
       attendanceRate: 100.0,
+      outOfRoomSeconds: 0,
       sessions: [
         {
           sessionId: 'sess-1',
@@ -114,6 +115,7 @@ const mockReport: AttendanceReportResponse = {
       },
       totalSessions: 2,
       attendanceRate: 50.0,
+      outOfRoomSeconds: 2700,
       sessions: [
         {
           sessionId: 'sess-1',
@@ -207,6 +209,18 @@ describe('export-csv', () => {
 
     expect(row).not.toContain('0%');
     expect(row).toContain(',-,');
+  });
+
+  it('มีคอลัมน์เวลานอกห้องเป็นนาทีต่อนักศึกษา', () => {
+    const lines = generateAttendanceCsv(mockReport).split('\r\n');
+    const header = lines.find((line) => line.startsWith('"รหัสนักศึกษา"'))!;
+    const columns = header.split(',');
+    const index = columns.indexOf('"นอกห้อง (นาที)"');
+    expect(index).toBeGreaterThan(0);
+    const minutes = (code: string) =>
+      lines.find((line) => line.includes(code))!.split(',')[index];
+    expect(minutes('66000001')).toBe('0');
+    expect(minutes('66000002')).toBe('45');
   });
 
   it('ป้องกันสูตรที่ซ่อนหลังช่องว่างหรือขึ้นบรรทัดใหม่', () => {

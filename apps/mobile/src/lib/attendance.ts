@@ -46,3 +46,10 @@ export function parseFilterDate(text: string): FilterDate {
     value: `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
   };
 }
+
+// วินาทีนอกห้อง -> ข้อความ ไม่แสดงเมื่อเป็นศูนย์ (ต่ำกว่า 1 นาทีแสดงเป็น "ไม่ถึง 1 นาที")
+export function formatOutOfRoom(seconds: number): string | null {
+  if (!(seconds > 0)) return null;
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `นอกห้อง ${minutes} นาที` : "นอกห้อง ไม่ถึง 1 นาที";
+}

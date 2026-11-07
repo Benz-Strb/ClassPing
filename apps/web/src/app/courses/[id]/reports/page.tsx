@@ -34,6 +34,7 @@ interface StudentReport {
   counts: AttendanceCounts;
   totalSessions: number;
   attendanceRate: number;
+  outOfRoomSeconds: number;
   sessions: StudentSessionStatus[];
 }
 
@@ -384,12 +385,13 @@ export default function CourseReportsPage() {
                     <th className="px-3 py-2.5 text-center text-blue-700">ลา</th>
                     <th className="px-3 py-2.5 text-center text-orange-700">รอตรวจ</th>
                     <th className="px-4 py-2.5 text-right">อัตราเข้าเรียน</th>
+                    <th className="px-4 py-2.5 text-right">นอกห้อง (นาที)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {data.students.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-gray-400">
+                      <td colSpan={9} className="py-8 text-center text-gray-400">
                         ไม่พบข้อมูลนักศึกษาที่ตรงตามเงื่อนไข
                       </td>
                     </tr>
@@ -433,6 +435,9 @@ export default function CourseReportsPage() {
                           >
                             {formatRate(student.counts, student.attendanceRate)}
                           </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">
+                          {Math.floor(student.outOfRoomSeconds / 60)}
                         </td>
                       </tr>
                     ))

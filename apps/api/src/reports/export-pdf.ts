@@ -22,6 +22,7 @@ const studentColumns = [
   { label: 'รอตรวจ', key: 'pending', width: 60 },
   { label: 'รวม', key: 'total', width: 50 },
   { label: 'อัตรา', key: 'rate', width: 60 },
+  { label: 'นอกห้อง (นาที)', key: 'outMinutes', width: 80 },
 ] as const;
 
 const sessionColumns = [
@@ -169,6 +170,7 @@ export async function generateAttendancePdf(report: AttendanceReportResponse): P
       pending: String(student.counts.pending),
       total: String(student.counts.total),
       rate: hasDecided(student.counts) ? `${student.attendanceRate}%` : '-',
+      outMinutes: String(Math.floor(student.outOfRoomSeconds / 60)),
     };
 
     let x = doc.page.margins.left;
