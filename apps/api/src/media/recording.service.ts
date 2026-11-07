@@ -110,8 +110,7 @@ export class RecordingService {
       );
     }
     const start = new Date(input.start);
-    const { from, to } = await this.range(session);
-    if (start < from || start.getTime() + input.duration * 1000 > to.getTime() + 1000) {
+    if (!this.covers(await this.range(session), start, input.duration)) {
       throw new AppError(400, 'BAD_REQUEST', 'ช่วงเวลาอยู่นอกคาบนี้');
     }
     if (!session.cameraId) throw new AppError(404, 'NO_RECORDING', 'ไม่มีไฟล์อัดช่วงนี้');
@@ -133,13 +132,15 @@ export class RecordingService {
     return { url: `/clips/${token}` };
   }
 
-  openClip(token: string): OpenClip {
+  async openClip(token: string): Promise<OpenClip> {
+    const expired = () => new AppError(401, 'LINK_EXPIRED', 'ลิงก์หมดอายุแล้ว กดเปิดใหม่อีกครั้ง');
     const secret = this.config.mediaTokenSecret;
     const payload = secret ? verifyMediaToken(secret, token, this.now()) : null;
-    if (!payload || payload.act !== 'clip' || !payload.start || !payload.dur) {
-      throw new AppError(401, 'LINK_EXPIRED', 'ลิงก์หมดอายุแล้ว กดเปิดใหม่อีกครั้ง');
-    }
+    if (!payload || payload.act !== 'clip' || !payload.start || !payload.dur) throw expired();
     const start = new Date(payload.start);
+    // คาบอาจถูกลบหลังออกลิงก์ ช่วงที่ดูได้จึงต้องเช็คใหม่ทุกครั้งที่เปิด
+    const session = await this.repo.session(payload.sid);
+    if (!session || !this.covers(await this.range(session), start, payload.dur)) throw expired();
     const stamp = `${bangkokDate(start).replaceAll('-', '')}-${bangkokTime(start).replace(':', '')}`;
     return {
       path: payload.path,
@@ -167,6 +168,10 @@ export class RecordingService {
           ? session.cancelledAt
           : session.endsAt,
     };
+  }
+
+  private covers(range: { from: Date; to: Date }, start: Date, seconds: number): boolean {
+    return start >= range.from && start.getTime() + seconds * 1000 <= range.to.getTime() + 1000;
   }
 
   private async watchable(user: AppUser, sessionId: string): Promise<WatchableSession> {
