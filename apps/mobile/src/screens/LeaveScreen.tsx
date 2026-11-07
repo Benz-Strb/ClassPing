@@ -45,6 +45,8 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   const [busy, setBusy] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ข้อความโหลดไม่สำเร็จแยกจากข้อความตรวจฟอร์ม ล้างเมื่อโหลดสำเร็จ
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
     const [nextSessions, nextRequests] = await Promise.all([
@@ -53,12 +55,13 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
     ]);
     setSessions(nextSessions);
     setRequests(nextRequests);
+    setLoadError(null);
   }
 
   useEffect(() => {
     if (!active) return;
     load().catch((e: unknown) =>
-      setError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
+      setLoadError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
     );
   }, [active, focusTick]);
 
@@ -157,11 +160,11 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   if (sessions === null || requests === null) {
     return (
       <View style={styles.center}>
-        {error ? <>
-          <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+        {loadError ? <>
+          <Text accessibilityRole="alert" style={styles.error}>{loadError}</Text>
           <Pressable accessibilityRole="button" style={styles.secondary} onPress={() => {
-            setError(null);
-            void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
+            setLoadError(null);
+            void load().catch((cause: unknown) => setLoadError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
           }}><Text>ลองใหม่</Text></Pressable>
         </> : <ActivityIndicator />}
         {onBack && <Pressable style={styles.secondary} onPress={onBack}>
@@ -183,7 +186,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
             setRefreshing(true);
             load()
               .catch((e: unknown) =>
-                setError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
+                setLoadError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
               )
               .finally(() => setRefreshing(false));
           }}
@@ -199,6 +202,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
           <Text>กลับ</Text>
         </Pressable>}
       </View>
+      {loadError && <Text style={styles.error}>{loadError}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.card}>
