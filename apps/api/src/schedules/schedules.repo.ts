@@ -217,6 +217,7 @@ export class SupabaseSchedulesRepo implements SchedulesRepo {
       .from('sessions')
       .select('id, course_id, room_id, on_date, starts_at, ends_at, rooms(name), courses(code)')
       .eq('kind', kind)
+      .is('cancelled_at', null)
       .gte('on_date', from)
       .lte('on_date', to);
     if (error) throw dbError();

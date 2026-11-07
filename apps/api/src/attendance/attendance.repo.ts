@@ -83,6 +83,7 @@ export class SupabaseAttendanceRepo implements AttendanceRepo {
         'course_id, starts_at, ends_at, kind, late_after_min, absent_after_min, out_of_room_limit_min',
       )
       .eq('id', sessionId)
+      .is('cancelled_at', null)
       .maybeSingle();
     if (error) throw dbError();
     if (!data) return null;

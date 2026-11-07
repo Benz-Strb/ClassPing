@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Rules } from '../courses/courses.repo.js';
-import { statusForReport } from './report-status.js';
+import { attendanceRate, statusForReport } from './report-status.js';
 
 const courseRules: Rules = {
   lateAfterMin: 15,
@@ -13,43 +13,74 @@ const times = {
 };
 
 describe('statusForReport', () => {
-  it('คงผลรอตรวจไว้แม้หมดคาบและมีเวลาพบใบหน้า', () => {
+  it('คงผลรอตรวจไว้แม้หมดคาบ', () => {
     expect(
       statusForReport(
         { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30, outOfRoomLimitMin: null },
         courseRules,
-        {
-          status: 'pending',
-          firstSeenAt: new Date('2026-10-30T09:01:00Z'),
-          updatedBy: null,
-        },
+        { status: 'pending' },
         new Date('2026-10-31T00:00:00Z'),
       ),
     ).toBe('pending');
   });
-  it('ใช้เกณฑ์วิชากับคาบเรียน และเกณฑ์ในแถวคาบกับคาบสอบ', () => {
-    const attendance = {
-      status: 'present' as const,
-      firstSeenAt: new Date('2026-10-30T09:10:00Z'),
-      updatedBy: null,
-    };
 
+  it('ใช้สถานะที่บันทึกไว้ เปลี่ยนเกณฑ์ทีหลังผลไม่เปลี่ยน', () => {
+    const later = new Date('2026-11-05T00:00:00Z');
+    const session = {
+      ...times,
+      kind: 'class' as const,
+      lateAfterMin: null,
+      absentAfterMin: null,
+      outOfRoomLimitMin: null,
+    };
+    expect(statusForReport(session, { ...courseRules, lateAfterMin: 60 }, { status: 'late' }, later)).toBe('late');
+    expect(statusForReport(session, { ...courseRules, lateAfterMin: 1 }, { status: 'present' }, later)).toBe('present');
+  });
+
+  it('คนที่เพิ่มหลังคาบเริ่มไม่นับขาดในคาบนั้น แต่คาบหลังจากนั้นนับ', () => {
+    const session = {
+      ...times,
+      kind: 'class' as const,
+      lateAfterMin: null,
+      absentAfterMin: null,
+      outOfRoomLimitMin: null,
+    };
+    const after = new Date('2026-11-05T00:00:00Z');
     expect(
-      statusForReport(
-        { ...times, kind: 'class', lateAfterMin: null, absentAfterMin: null, outOfRoomLimitMin: null },
-        courseRules,
-        attendance,
-        new Date('2026-10-30T09:31:00Z'),
-      ),
-    ).toBe('present');
+      statusForReport(session, courseRules, null, after, {
+        addedAt: new Date('2026-10-30T09:30:00Z'),
+      }),
+    ).toBe('unrecorded');
     expect(
-      statusForReport(
-        { ...times, kind: 'exam', lateAfterMin: 5, absentAfterMin: 30, outOfRoomLimitMin: null },
-        courseRules,
-        attendance,
-        new Date('2026-10-30T09:31:00Z'),
-      ),
-    ).toBe('late');
+      statusForReport(session, courseRules, null, after, {
+        addedAt: new Date('2026-10-30T08:00:00Z'),
+      }),
+    ).toBe('absent');
+  });
+
+  it('คาบที่ไม่มีแถวของใครเลยไม่นับขาดทั้งห้อง', () => {
+    const session = {
+      ...times,
+      kind: 'class' as const,
+      lateAfterMin: null,
+      absentAfterMin: null,
+      outOfRoomLimitMin: null,
+    };
+    expect(
+      statusForReport(session, courseRules, null, new Date('2026-11-05T00:00:00Z'), {
+        sessionHasRows: false,
+      }),
+    ).toBe('unrecorded');
+  });
+
+  it('อัตราเข้าเรียนไม่นับรอตรวจเป็นตัวหาร', () => {
+    expect(
+      attendanceRate({ present: 8, late: 0, absent: 0, leave: 0, pending: 2, total: 10 }),
+    ).toBe(100);
+    expect(
+      attendanceRate({ present: 6, late: 1, absent: 1, leave: 1, pending: 1, total: 10 }),
+    ).toBe(88.9);
+    expect(attendanceRate({ present: 0, late: 0, absent: 0, leave: 0, pending: 2, total: 2 })).toBe(0);
   });
 
   it('นับผู้ไม่มีบันทึกเป็นขาดตาม absent_after_min ของคาบสอบ', () => {

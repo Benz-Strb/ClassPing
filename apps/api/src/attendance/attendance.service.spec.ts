@@ -41,6 +41,7 @@ const session: SessionInfo = {
   onDate: '2026-10-23',
   startsAt: START,
   endsAt: new Date('2026-10-23T05:00:00Z'),
+  cancelled: false,
 };
 
 const roster = [
@@ -142,7 +143,7 @@ class FakeRepo implements AttendanceAdminRepo {
   }
 }
 
-function setup() {
+function setup(now: Date = at(30)) {
   const repo = new FakeRepo();
   const courses = {
     getOwned: async (user: AppUser, courseId: string) => {
@@ -152,7 +153,11 @@ function setup() {
       return { id: courseId, code: 'CS101', name: 'x', section: null, teacherId: 't1' };
     },
   } as unknown as CoursesService;
-  const rosterService = { entries: async () => roster } as unknown as RosterService;
+  const rosterService = {
+    entries: async () => roster,
+    // 66000003 เข้ารายชื่อหลังคาบเริ่ม
+    addedDates: async () => new Map([['66000003', at(10)]]),
+  } as unknown as RosterService;
   const rejected = new RejectedGuesses(() => at(30));
   const doorTrips: { list: StoredTrip[] } = { list: [] };
   const door = { listTrips: async () => doorTrips.list } as unknown as DoorRepo;
@@ -161,7 +166,7 @@ function setup() {
     courses,
     rosterService,
     repo,
-    () => at(30),
+    () => now,
     rejected,
     door,
     doorEntries,
@@ -179,6 +184,35 @@ function setup() {
     });
   return { repo, service, pending, rejected, doorTrips, doorEntries };
 }
+
+describe('AttendanceService.view ตรงกับรายงาน', () => {
+  const afterClass = new Date('2026-10-23T06:00:00Z');
+
+  it('หมดคาบแล้วคนที่ไม่เห็นเป็นขาดตามเวลา ยกเว้นคนที่เข้ารายชื่อหลังคาบเริ่ม', async () => {
+    const { service, pending } = setup(afterClass);
+    pending('u2');
+    const view = await service.view(teacher, SESSION_ID);
+    const byCode = new Map(view.rows.map((r) => [r.studentCode, r]));
+    expect(view.session.recorded).toBe(true);
+    expect(byCode.get('66000001')).toMatchObject({ status: null, absentByTime: true });
+    expect(byCode.get('66000002')).toMatchObject({ status: 'pending', absentByTime: false });
+    expect(byCode.get('66000003')).toMatchObject({ status: null, absentByTime: false });
+  });
+
+  it('คาบที่ไม่มีแถวของใครเลย ไม่นับใครขาด', async () => {
+    const { service } = setup(afterClass);
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.recorded).toBe(false);
+    expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
+  });
+
+  it('ระหว่างคาบยังไม่ขาด', async () => {
+    const { service, pending } = setup(at(30));
+    pending('u2');
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
+  });
+});
 
 describe('AttendanceService.view', () => {
   it('ทุกคนในรายชื่อ รอตรวจขึ้นก่อน คนที่ยังไม่เห็นได้สถานะ null', async () => {
@@ -423,8 +457,37 @@ describe('AttendanceService.view รอบนอกห้อง', () => {
     expect(u2.outOfRoom).toMatchObject({ totalSeconds: 600, minutes: 10, label: 'out' });
   });
 
-  it('รอบที่ยังไม่กลับนับถึงหมดคาบ ป้าย gone_no_return และเสนอเวลาเข้าแรกหลังออก', async () => {
-    const { service, doorTrips, doorEntries } = setup();
+  it('ระหว่างคาบ รอบที่ยังไม่กลับนับถึงตอนนี้ ป้าย out_now และยังเสนอเวลาเข้า', async () => {
+    const { service, doorTrips, doorEntries } = setup(at(100));
+    doorTrips.list = [trip({ id: 'a', outAt: at(100) })];
+    doorEntries.add(SESSION_ID, at(110), session.endsAt);
+    // ตอนนี้ at(100) ออกได้ 0 วินาที
+    let view = await service.view(teacher, SESSION_ID);
+    let out = view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom;
+    expect(out).toMatchObject({ totalSeconds: 0, minutes: 0, label: 'out_now' });
+    expect(out.trips[0]).toMatchObject({ seconds: 0, suggestedBackAt: at(110).toISOString() });
+    // ออกอยู่ 5 วินาที
+    const later = setup(new Date(at(100).getTime() + 5000));
+    later.doorTrips.list = [trip({ id: 'a', outAt: at(100) })];
+    view = await later.service.view(teacher, SESSION_ID);
+    out = view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom;
+    expect(out).toMatchObject({ totalSeconds: 5, minutes: 0, label: 'out_now' });
+    expect(out.trips[0].seconds).toBe(5);
+  });
+
+  it('ระหว่างคาบ ออกเกินเกณฑ์ ป้าย gone นับถึงตอนนี้', async () => {
+    const out = await (async () => {
+      const { service, doorTrips } = setup(at(130));
+      doorTrips.list = [trip({ id: 'a', outAt: at(100) })];
+      const view = await service.view(teacher, SESSION_ID);
+      return view.rows.find((r) => r.studentCode === '66000001')!.outOfRoom;
+    })();
+    expect(out).toMatchObject({ totalSeconds: 30 * 60, minutes: 30, label: 'gone' });
+    expect(out.trips[0].seconds).toBe(30 * 60);
+  });
+
+  it('หมดคาบแล้วรอบที่ยังไม่กลับนับถึงหมดคาบ ป้าย gone_no_return และเสนอเวลาเข้าแรกหลังออก', async () => {
+    const { service, doorTrips, doorEntries } = setup(session.endsAt);
     doorTrips.list = [trip({ id: 'a', outAt: at(100) })];
     doorEntries.add(SESSION_ID, at(90), session.endsAt);
     doorEntries.add(SESSION_ID, at(120), session.endsAt);
@@ -525,8 +588,8 @@ describe('AttendanceService.view รอบนอกห้อง', () => {
   });
 
   describe('นับเฉพาะเวลาในคาบ', () => {
-    const rowOf = async (list: StoredTrip[], code = '66000001') => {
-      const { service, doorTrips } = setup();
+    const rowOf = async (list: StoredTrip[], code = '66000001', now: Date = session.endsAt) => {
+      const { service, doorTrips } = setup(now);
       doorTrips.list = list;
       const view = await service.view(teacher, SESSION_ID);
       return view.rows.find((r) => r.studentCode === code)!.outOfRoom;
@@ -541,6 +604,12 @@ describe('AttendanceService.view รอบนอกห้อง', () => {
         backAt: at(10).toISOString(),
         seconds: 600,
       });
+    });
+
+    it('คาบยังไม่เริ่ม รอบที่ยังไม่กลับ นับ 0 ไม่ติดลบ', async () => {
+      const out = await rowOf([trip({ id: 'a', outAt: at(-30) })], '66000001', at(-10));
+      expect(out).toMatchObject({ totalSeconds: 0, minutes: 0, label: 'out_now' });
+      expect(out.trips[0].seconds).toBe(0);
     });
 
     it('ออกก่อนคาบ ไม่กลับ: gone_no_return นับจากเริ่มคาบถึงหมดคาบ', async () => {
