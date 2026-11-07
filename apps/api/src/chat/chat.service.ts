@@ -26,7 +26,7 @@ export class ChatService {
     const sources = await this.repo.search(embedding, viewerId, this.provider.model);
     const answer = sources.length ? await this.provider.answer(message, sources) :
       'ไม่พบข้อมูลที่รองรับคำถามนี้ในแหล่งข้อมูลที่คุณมีสิทธิ์เข้าถึง';
-    return { answer, sources, mock: this.provider.mock, classroom: 'not_connected' as const };
+    return { answer, sources, mock: this.provider.mock };
   }
   async ingest(body: unknown) {
     const input = parseBody(knowledge, body);

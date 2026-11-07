@@ -14,6 +14,7 @@ const session: LeaveSession = {
   startsAt: "2026-10-28T02:00:00.000Z",
   endsAt: "2026-10-28T05:00:00.000Z",
   roomName: "LAB 1",
+  cancelled: false,
 };
 
 test("formatSession แสดงชื่อวิชา วันที่ และเวลาเริ่ม–จบตามเวลาไทย", () => {
@@ -21,4 +22,8 @@ test("formatSession แสดงชื่อวิชา วันที่ แ�
     formatSession(session),
     "CS101 กลุ่ม 1 · พื้นฐานการเขียนโปรแกรม · 28 ต.ค. 2569 09:00–12:00 · ห้อง LAB 1",
   );
+});
+
+test("formatSession บอกตรง ๆ ว่าคาบถูกลบแล้ว", () => {
+  assert.ok(formatSession({ ...session, cancelled: true }).endsWith(" · คาบนี้ถูกลบแล้ว"));
 });
