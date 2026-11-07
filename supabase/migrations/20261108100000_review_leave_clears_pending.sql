@@ -66,3 +66,8 @@ revoke all on function public.review_leave_request(uuid, uuid, text, text)
   from public, anon, authenticated;
 grant execute on function public.review_leave_request(uuid, uuid, text, text)
   to service_role;
+
+-- แถวลาที่อนุมัติไปก่อนหน้านี้อาจมีรูปจากแถวรอตรวจติดมา เปลี่ยนสถานะทีหลังแล้วรูปจะกลับมาแสดง
+update public.attendance
+set image_path = null, first_seen_at = null, confidence = null
+where status = 'leave' and image_path is not null;
