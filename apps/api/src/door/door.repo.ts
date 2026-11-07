@@ -249,6 +249,7 @@ export class SupabaseDoorRepo implements DoorRepo {
         )
         .eq('status', 'confirmed')
         .eq('sessions.course_id', courseId)
+        .is('sessions.cancelled_at', null)
         .gte('sessions.on_date', from)
         .lte('sessions.on_date', to)
         .order('id')

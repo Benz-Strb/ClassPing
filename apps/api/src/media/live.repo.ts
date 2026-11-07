@@ -53,6 +53,7 @@ export class SupabaseLiveRepo implements LiveRepo {
       .from('sessions')
       .select(COLUMNS)
       .eq('on_date', date)
+      .is('cancelled_at', null)
       .order('starts_at');
     if (error) throw dbError();
     return this.withCameras(data as unknown as Row[]);
@@ -63,6 +64,7 @@ export class SupabaseLiveRepo implements LiveRepo {
       .from('sessions')
       .select('ends_at')
       .eq('room_id', roomId)
+      .is('cancelled_at', null)
       .gt('ends_at', after.toISOString())
       .lt('starts_at', before.toISOString())
       .order('ends_at', { ascending: false })

@@ -272,13 +272,14 @@ export class SchedulesService {
     }
   }
 
-  // คาบวันนี้ที่กล้องเปิดแล้ว (ทั้งเวลาเดิมและเวลาใหม่) แก้ไม่ได้
+  // คาบวันนี้ที่กล้องเปิดแล้ว (ทั้งเวลาเดิมและเวลาใหม่) ย้ายไม่ได้ แต่งดสอนและยกเลิกงดได้เสมอ
   private async checkNotStarted(schedule: Schedule, date: string, next: Override | null) {
     const now = this.now();
-    if (date !== bangkokDate(now)) return;
+    if (date !== bangkokDate(now) || next?.cancelled) return;
     const current = (await this.repo.listOverridesOnDate(date)).filter(
       (o) => o.scheduleId === schedule.id,
     );
+    if (!next && current.some((o) => o.cancelled)) return;
     const [before] = planDay(date, [schedule], current);
     const [after] = planDay(date, [schedule], next ? [next] : []);
     const opened = (s?: { startsAt: Date }) => !!s && cameraOpened(s.startsAt, now, this.config?.cameraOpenBeforeMin);
