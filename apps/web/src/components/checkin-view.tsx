@@ -119,6 +119,7 @@ export function CheckinView() {
   const { session, rows, unknown, tripReviews, unknownTrips } = data;
   const pending = rows.filter((r) => r.status === "pending");
   const unseen = rows.filter((r) => r.status === null);
+  const absentByTime = rows.filter((r) => r.absentByTime).length;
   const backAtFor = (hhmm: string) =>
     bangkokTimeToIso(session.onDate, hhmm, session.startsAt, session.endsAt);
   const selected = openTrip
@@ -143,21 +144,32 @@ export function CheckinView() {
               <ExamBadge title={session.title} />
             </span>
           )}
-          {session.status === "live" && (
+          {!session.cancelled && session.status === "live" && (
             <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">
               กำลังเรียน
             </span>
           )}
-          {session.status === "upcoming" && (
+          {!session.cancelled && session.status === "upcoming" && (
             <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
               ยังไม่เริ่ม
             </span>
           )}
         </h2>
         <p className="text-sm text-gray-600">
-          มา {count("present")} · สาย {count("late")} · ขาด {count("absent")} · ลา {count("leave")}{" "}
-          · รอตรวจ {pending.length + tripReviews.length} · ยังไม่เห็น {unseen.length}
+          มา {count("present")} · สาย {count("late")} · ขาด {count("absent") + absentByTime} · ลา{" "}
+          {count("leave")} · รอตรวจ {pending.length + tripReviews.length} · ยังไม่เห็น{" "}
+          {unseen.length - absentByTime}
         </p>
+        {session.cancelled ? (
+          <p className="text-sm text-red-700">คาบนี้ถูกลบแล้ว รายงานไม่นับคาบนี้</p>
+        ) : (
+          session.status === "ended" &&
+          !session.recorded && (
+            <p className="text-sm text-yellow-700">
+              คาบนี้ไม่มีข้อมูลจากกล้อง รายงานจึงยังไม่นับคาบนี้
+            </p>
+          )
+        )}
       </div>
 
       {error && <p className="text-red-600">{error}</p>}
@@ -307,11 +319,11 @@ function StudentRow({
       </td>
       <td className="px-4 py-2">{row.firstSeenAt ? formatTime(row.firstSeenAt) : "-"}</td>
       <td className="px-4 py-2">
-        {row.status ? (
+        {row.status || row.absentByTime ? (
           <span
-            className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[row.status].className}`}
+            className={`rounded-full px-2 py-0.5 text-xs ${STATUS_LABEL[row.status ?? "absent"].className}`}
           >
-            {STATUS_LABEL[row.status].label}
+            {STATUS_LABEL[row.status ?? "absent"].label}
           </span>
         ) : (
           <span className="text-gray-500">ยังไม่เห็น</span>
