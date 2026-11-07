@@ -168,6 +168,8 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
           discardCard(card);
           setCard(null);
           setEnrolling(false);
+          // ยืนยันบัตรไปแล้วแต่ยังไม่ครบท่า ดึงสถานะจริงมาก่อนกลับหน้าหลัก
+          void refresh();
         }}
         onSignOut={signOut}
       />
