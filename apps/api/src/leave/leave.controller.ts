@@ -61,7 +61,7 @@ export class LeaveController {
   @HttpCode(200)
   @UseGuards(PreviewLimitGuard)
   @UseInterceptors(
-    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
+    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),
   )
   preview(
     @CurrentUser() user: AppUser,
@@ -74,7 +74,7 @@ export class LeaveController {
   @Post()
   @HttpCode(201)
   @UseInterceptors(
-    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
+    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),
   )
   submit(
     @CurrentUser() user: AppUser,

@@ -183,6 +183,19 @@ describe('Transfers HTTP flow', () => {
       })
       .expect(201);
   }
+  it('เก็บชื่อไฟล์ภาษาไทยให้ถูกต้อง', async () => {
+    await prepare();
+    await request(app.getHttpServer())
+      .post('/transfers/requests')
+      .field('payload', JSON.stringify(payload))
+      .attach('document', PDF, {
+        filename: 'ใบแสดงผลการเรียน.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    expect(rows[0].documentName).toBe('ใบแสดงผลการเรียน.pdf');
+  });
+
   it('อัปโหลดหลักสูตร → ชุดจับคู่ → นักศึกษายื่น → อนุมัติบางวิชา → นักศึกษาดูผล', async () => {
     await prepare();
     const curricula = await request(app.getHttpServer())

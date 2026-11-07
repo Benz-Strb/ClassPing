@@ -34,7 +34,7 @@ export class TransfersController {
   @Post('requests')
   @Roles('student')
   @UseInterceptors(
-    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 } }),
+    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }),
   )
   submit(
     @CurrentUser() user: AppUser,
@@ -64,7 +64,7 @@ export class TransfersController {
   @Post('curricula/:id/document')
   @Roles('admin')
   @UseInterceptors(
-    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 } }),
+    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }),
   )
   uploadCurriculum(
     @CurrentUser() user: AppUser,

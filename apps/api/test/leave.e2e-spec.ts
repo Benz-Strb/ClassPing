@@ -251,6 +251,14 @@ describe('ระบบลา (e2e)', () => {
     expect(repo.requests).toHaveLength(1);
   });
 
+  it('เก็บชื่อไฟล์ภาษาไทยให้ถูกต้อง', async () => {
+    await request(app.getHttpServer()).post('/leave-requests').set('x-role', 'student')
+      .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+      .attach('evidence', PNG, { filename: 'ใบรับรองแพทย์.png', contentType: 'image/png' })
+      .expect(201);
+    expect(repo.requests[0].attachments[0].fileName).toBe('ใบรับรองแพทย์.png');
+  });
+
   it('ยื่นคาบเดิมซ้ำได้ 409 แต่ยื่นใหม่ได้หลังถูกปฏิเสธ', async () => {
     const server = app.getHttpServer();
     const submit = () =>
