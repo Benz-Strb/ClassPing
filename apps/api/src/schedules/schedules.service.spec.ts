@@ -203,6 +203,15 @@ describe('SchedulesService ตารางประจำ', () => {
     ).toMatchObject({ status: 400, code: 'ROOM_NOT_FOUND' });
   });
 
+  it('แก้ตารางด้วย roomId ว่างได้ 400 ROOM_NOT_FOUND ไม่ใช่ error ฐาน', async () => {
+    const { owner, cs101, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday());
+    expect(await rejection(service.update(owner, mine.id, { roomId: '' }))).toMatchObject({
+      status: 400,
+      code: 'ROOM_NOT_FOUND',
+    });
+  });
+
   it('ห้องเดียวกัน วันเดียวกัน เวลาซ้อน ได้ 409 ROOM_CONFLICT บอกวิชาที่ชน', async () => {
     const { owner, otherTeacher, cs101, cs102, service, monday } = setup();
     await service.create(owner, cs101.id, monday());

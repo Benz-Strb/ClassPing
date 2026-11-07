@@ -144,7 +144,7 @@ export class SchedulesService {
     const patch = parseBody(updateSchema, body);
     const next = { ...current, ...patch };
     checkTimes(next.startTime, next.endTime);
-    if (patch.roomId) await this.checkRoom(patch.roomId);
+    if (patch.roomId !== undefined) await this.checkRoom(patch.roomId);
     if (patch.startTime !== undefined || patch.endTime !== undefined) {
       await this.checkOverridesStillValid(next);
     }
