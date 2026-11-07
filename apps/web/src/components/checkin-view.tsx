@@ -144,12 +144,12 @@ export function CheckinView() {
               <ExamBadge title={session.title} />
             </span>
           )}
-          {session.status === "live" && (
+          {!session.cancelled && session.status === "live" && (
             <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">
               กำลังเรียน
             </span>
           )}
-          {session.status === "upcoming" && (
+          {!session.cancelled && session.status === "upcoming" && (
             <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
               ยังไม่เริ่ม
             </span>
