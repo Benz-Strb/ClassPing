@@ -50,8 +50,10 @@ export interface DoorRepo {
   openTripUserIds(sessionId: string): Promise<string[]>;
   // ปิดเฉพาะรอบที่ยังไม่กลับ ออกก่อนเวลากลับ และอาจารย์ยังไม่แตะ
   closeTrip(sessionId: string, userId: string, backAt: Date, by: 'front'): Promise<boolean>;
-  // รอบที่ยังไม่กลับของคนนี้ถ้าเป็น pending เปลี่ยนเป็น unknown (ไม่นับว่าเป็นของคนนี้แล้ว) false = ไม่มีรอบ pending
-  demotePendingTrip(sessionId: string, userId: string): Promise<boolean>;
+  // รอบที่ยังไม่กลับของคนนี้ถ้าเป็น pending เปลี่ยนเป็น unknown (ไม่นับว่าเป็นของคนนี้แล้ว) คืน id ของรอบ null = ไม่มีรอบ pending
+  demotePendingTrip(sessionId: string, userId: string): Promise<string | null>;
+  // คืนรอบที่เพิ่งเปลี่ยนเป็น unknown กลับเป็นรอตรวจของคนเดิม ใช้ตอนบันทึกรอบใหม่ไม่สำเร็จ
+  restorePendingTrip(tripId: string, userId: string): Promise<void>;
   unknownTripsBefore(before: Date): Promise<{ id: string; imagePath: string | null }[]>;
   deleteTrips(ids: string[]): Promise<void>;
   listTrips(sessionId: string): Promise<StoredTrip[]>;
@@ -141,7 +143,16 @@ export class SupabaseDoorRepo implements DoorRepo {
     return data.length > 0;
   }
 
-  async demotePendingTrip(sessionId: string, userId: string): Promise<boolean> {
+  async restorePendingTrip(tripId: string, userId: string): Promise<void> {
+    const { error } = await this.db
+      .from('door_trips')
+      .update({ status: 'pending', student_id: userId })
+      .eq('id', tripId)
+      .eq('status', 'unknown');
+    if (error) throw dbError();
+  }
+
+  async demotePendingTrip(sessionId: string, userId: string): Promise<string | null> {
     const { data, error } = await this.db
       .from('door_trips')
       .update({ status: 'unknown', student_id: null })
@@ -151,7 +162,7 @@ export class SupabaseDoorRepo implements DoorRepo {
       .is('back_at', null)
       .select('id');
     if (error) throw dbError();
-    return data.length > 0;
+    return (data[0] as { id: string } | undefined)?.id ?? null;
   }
 
   async unknownTripsBefore(before: Date): Promise<{ id: string; imagePath: string | null }[]> {

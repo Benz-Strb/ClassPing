@@ -55,6 +55,7 @@ function setup(
   const demoted: string[] = [];
   const open = new Set<string>();
   const pendingOpen = new Set<string>();
+  const restored: string[] = [];
 
   const embeddings: FaceEmbedding[] = [];
   for (const [userId, vector] of [
@@ -80,9 +81,14 @@ function setup(
     },
     demotePendingTrip: async (_s: string, userId: string) => {
       demoted.push(userId);
-      if (!pendingOpen.delete(userId)) return false;
+      if (!pendingOpen.delete(userId)) return null;
       open.delete(userId);
-      return true;
+      return `trip-${userId}`;
+    },
+    restorePendingTrip: async (tripId: string, userId: string) => {
+      restored.push(`${tripId} ${userId}`);
+      pendingOpen.add(userId);
+      open.add(userId);
     },
     insertTrip: async (trip: NewTrip) => {
       if (opts.insertFails) throw new Error('db down');
@@ -104,6 +110,7 @@ function setup(
   const openTrips = new OpenTrips(doorRepo, () => NOW);
   const processor = new DoorProcessor(attendance, doorRepo, deps, config, () => NOW, openTrips);
   return {
+    restored,
     processor,
     openTrips,
     uploads,
@@ -215,6 +222,19 @@ describe('DoorProcessor.handleOut', () => {
     expect(demoted).toEqual(['a']);
     expect(trips).toHaveLength(1);
     expect(trips[0]).toMatchObject({ userId: 'a', status: 'confirmed' });
+  });
+
+  it('บันทึกรอบ confirmed ไม่สำเร็จ รอบ pending เดิมกลับมาเป็นของคนเดิม', async () => {
+    const { processor, open, pendingOpen, restored, openTrips } = setup({
+      detect: () => [face(A)],
+      insertFails: true,
+    });
+    open.add('a');
+    pendingOpen.add('a');
+    await expect(processor.handleOut('s1', [image('full')], OUT_AT)).rejects.toThrow('db down');
+    expect(restored).toEqual(['trip-a a']);
+    expect(pendingOpen.has('a')).toBe(true);
+    await expect(openTrips.has('s1', 'a')).resolves.toBe(true);
   });
 
   it('ผลไม่มั่นใจ (pending) ไม่ไปแตะรอบ pending เดิม', async () => {

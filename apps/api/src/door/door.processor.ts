@@ -80,24 +80,41 @@ export class DoorProcessor {
       return 'unknown';
     }
 
+    let demotedTrip: string | null = null;
     if (await this.openTrips.has(sessionId, verdict.userId)) {
       // รอบ pending เป็นแค่การเดา ผลที่มั่นใจมาทีหลังมาแทน ส่วนรอบ confirmed เดิมยังนับเป็น duplicate
-      const replaced =
-        verdict.kind === 'match' && (await this.repo.demotePendingTrip(sessionId, verdict.userId));
-      if (!replaced) return 'duplicate';
+      demotedTrip =
+        verdict.kind === 'match'
+          ? await this.repo.demotePendingTrip(sessionId, verdict.userId)
+          : null;
+      if (!demotedTrip) return 'duplicate';
       await this.openTrips.remove(sessionId, verdict.userId);
     }
     const status = verdict.kind === 'match' ? 'confirmed' : 'pending';
     const crop = candidate?.crop ? Buffer.from(candidate.crop, 'base64') : undefined;
     const imagePath = await this.upload(`${sessionId}/door/${verdict.userId}`, crop);
-    const inserted = await this.insert({
-      sessionId,
-      userId: verdict.userId,
-      status,
-      outAt,
-      confidence: verdict.score,
-      imagePath,
-    });
+    let inserted: boolean;
+    try {
+      inserted = await this.insert({
+        sessionId,
+        userId: verdict.userId,
+        status,
+        outAt,
+        confidence: verdict.score,
+        imagePath,
+      });
+    } catch (error) {
+      // บันทึกรอบใหม่ไม่สำเร็จ รอบเดิมต้องไม่เสียชื่อที่เดาไว้
+      if (demotedTrip) {
+        await this.repo
+          .restorePendingTrip(demotedTrip, verdict.userId)
+          .then(() => this.openTrips.add(sessionId, verdict.userId))
+          .catch((restoreError: unknown) =>
+            this.logger.warn(`คืนรอบรอตรวจไม่สำเร็จ: ${String(restoreError)}`),
+          );
+      }
+      throw error;
+    }
     // มีรอบเปิดอยู่แล้ว (คำขอซ้อนกัน หรือแคชเก่า) จดไว้กันถามฐานข้อมูลอีก
     await this.openTrips.add(sessionId, verdict.userId);
     return inserted ? status : 'duplicate';

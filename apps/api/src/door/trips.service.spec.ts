@@ -81,8 +81,9 @@ class FakeDoorRepo implements DoorRepo {
     return false;
   }
   async demotePendingTrip() {
-    return false;
+    return null;
   }
+  async restorePendingTrip() {}
   async unknownTripsBefore() {
     return [];
   }
