@@ -519,17 +519,27 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
   });
 
   it('ระหว่างงดสอนมีวิชาอื่นใช้ห้องแล้ว ยกเลิกงดไม่ได้ ค่างดยังอยู่', async () => {
-    const { owner, cs101, cs102, service, monday } = setup();
+    const { owner, otherTeacher, cs101, cs102, service, monday } = setup();
     const schedule = await service.create(owner, cs101.id, monday());
     await service.setOverride(owner, schedule.id, NEXT_MONDAY, { cancelled: true });
-    const other = await service.create(owner, cs102.id, monday({ startTime: '13:00', endTime: '15:00' }));
-    await service.setOverride(owner, other.id, NEXT_MONDAY, { startTime: '09:00', endTime: '12:00' });
+    const other = await service.create(
+      otherTeacher,
+      cs102.id,
+      monday({ startTime: '13:00', endTime: '15:00' }),
+    );
+    await service.setOverride(otherTeacher, other.id, NEXT_MONDAY, {
+      startTime: '09:00',
+      endTime: '12:00',
+    });
 
     expect(await rejection(service.clearOverride(owner, schedule.id, NEXT_MONDAY))).toMatchObject({
       status: 409,
       code: 'ROOM_CONFLICT',
     });
-    await service.setOverride(owner, other.id, NEXT_MONDAY, { startTime: '13:00', endTime: '15:00' });
+    await service.setOverride(otherTeacher, other.id, NEXT_MONDAY, {
+      startTime: '13:00',
+      endTime: '15:00',
+    });
     await expect(service.clearOverride(owner, schedule.id, NEXT_MONDAY)).resolves.toBeUndefined();
   });
 });
