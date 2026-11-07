@@ -41,6 +41,8 @@ const MIN_LENGTH_MIN = 15;
 const MAX_LENGTH_MIN = 6 * 60;
 const MAX_RANGE_DAYS = 31;
 export const MAX_AHEAD_DAYS = 365;
+// ช่วงที่ sync สร้างคาบล่วงหน้า (ตรงกับ WINDOW_DAYS ใน sessions.service)
+const SYNC_WINDOW_DAYS = 7;
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -143,6 +145,9 @@ export class SchedulesService {
     const next = { ...current, ...patch };
     checkTimes(next.startTime, next.endTime);
     if (patch.roomId) await this.checkRoom(patch.roomId);
+    if (patch.startTime !== undefined || patch.endTime !== undefined) {
+      await this.checkOverridesStillValid(next);
+    }
     await this.checkWeeklyConflict(next);
 
     const schedule = await this.repo.update(scheduleId, patch);
@@ -348,6 +353,37 @@ export class SchedulesService {
         overrides.filter((o) => o.onDate === exam.onDate && o.scheduleId === mine.id),
       );
       checkExamClash(session, [exam]);
+    }
+
+    // แถวคาบจริงของวิชาอื่นที่ยังค้างอยู่ (เช่นหลังแก้ตารางตอนกล้องเปิดแล้ว) ในช่วงที่ sync สร้างคาบ
+    const now = this.now();
+    for (let day = 0; day < SYNC_WINDOW_DAYS; day++) {
+      const date = addDays(today, day);
+      if (weekdayOf(date) !== next.weekday) continue;
+      const [session] = planDay(
+        date,
+        [mine],
+        overrides.filter((o) => o.onDate === date && o.scheduleId === mine.id),
+      );
+      if (!session || session.endsAt <= now) continue;
+      checkExamClash(session, await this.repo.listClassSessionsOn(date));
+    }
+  }
+
+  // เปลี่ยนเฉพาะเวลาเริ่มหรือเวลาจบของบางวันไว้ แล้วแก้ตารางจนวันนั้นเวลาจบไม่อยู่หลังเวลาเริ่ม
+  private async checkOverridesStillValid(next: Schedule) {
+    const today = bangkokDate(this.now());
+    const overrides = await this.repo.listOverridesBetween(today, addDays(today, MAX_AHEAD_DAYS));
+    const bad = overrides.find(
+      (o) =>
+        o.scheduleId === next.id &&
+        !o.cancelled &&
+        (o.startTime ?? next.startTime) >= (o.endTime ?? next.endTime),
+    );
+    if (bad) {
+      throw badRequest(
+        `วันที่ ${bad.onDate} เปลี่ยนเวลาไว้ ทำให้เวลาจบไม่อยู่หลังเวลาเริ่ม แก้หรือเอาการเปลี่ยนวันนั้นออกก่อน`,
+      );
     }
   }
 
