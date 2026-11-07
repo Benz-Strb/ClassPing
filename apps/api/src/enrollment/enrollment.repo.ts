@@ -23,6 +23,14 @@ export interface EnrollmentRepo {
   // ทุกไฟล์ใต้ faces/<userId>/ รวมไฟล์ที่ไม่มีแถวชี้ถึงแล้ว
   listImages(userId: string): Promise<string[]>;
   userExists(userId: string): Promise<boolean>;
+  // หน้าของบัญชีอื่นที่ยืนยันบัตรแล้ว ทีละหน้า (offset/limit นับเป็นจำนวนบัญชี เรียงตาม id)
+  // users = จำนวนบัญชีในหน้านี้ ถ้าน้อยกว่า limit แปลว่าหมดแล้ว
+  verifiedEmbeddings(
+    excludeUserId: string,
+    model: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ users: number; embeddings: number[][] }>;
 }
 
 export const ENROLLMENT_REPO = Symbol('ENROLLMENT_REPO');
@@ -90,6 +98,37 @@ export class SupabaseEnrollmentRepo implements EnrollmentRepo {
     const { data, error } = await this.db.storage.from(BUCKET).list(userId, { limit: 1000 });
     if (error) throw dbError();
     return data.map((f) => `${userId}/${f.name}`);
+  }
+
+  async verifiedEmbeddings(
+    excludeUserId: string,
+    model: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ users: number; embeddings: number[][] }> {
+    const { data: ids, error: idError } = await this.db
+      .from('users')
+      .select('id')
+      .not('identity_verified_at', 'is', null)
+      .neq('id', excludeUserId)
+      .order('id')
+      .range(offset, offset + limit - 1);
+    if (idError) throw dbError();
+    const userIds = (ids as { id: string }[]).map((r) => r.id);
+    if (!userIds.length) return { users: 0, embeddings: [] };
+    // คนละไม่เกิน 5 แถว หน้าละไม่เกิน 50 คนจึงไม่เกิน 1000 แถวที่ Supabase คืนได้
+    const { data, error } = await this.db
+      .from('face_profiles')
+      .select('embedding')
+      .in('user_id', userIds)
+      .eq('model', model);
+    if (error) throw dbError();
+    return {
+      users: userIds.length,
+      embeddings: (data as { embedding: string | number[] }[]).map((r) =>
+        typeof r.embedding === 'string' ? (JSON.parse(r.embedding) as number[]) : r.embedding,
+      ),
+    };
   }
 
   async userExists(userId: string): Promise<boolean> {
