@@ -4,7 +4,10 @@ import { formatReportFilters } from './format-report-filters.js';
 function escapeCsv(val: string | number | null | undefined): string {
   if (val === null || val === undefined) return '""';
   const raw = String(val);
-  const str = typeof val === 'string' && /^\s*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
+  // "-" เดี่ยว ๆ เป็นค่าว่าง ไม่ใช่สูตร ส่วน - ที่มีตัวอักษรตามหลังยังกัน
+  const head = raw.trim();
+  const formula = /^[=+@]/u.test(head) || (head.startsWith('-') && head.length > 1) || /^[\t\r]/u.test(raw);
+  const str = typeof val === 'string' && formula ? `'${raw}` : raw;
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -32,7 +35,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   lines.push('');
 
   // สรุปภาพรวม
-  lines.push('--- สรุปภาพรวม ---');
+  lines.push(escapeCsv('สรุปภาพรวม'));
   lines.push(`จำนวนคาบทั้งหมด,${report.summary.totalSessions}`);
   lines.push(`จำนวนนักศึกษาทั้งหมด,${report.summary.totalStudents}`);
   lines.push(`มาเรียน (Present),${report.summary.counts.present}`);
@@ -44,7 +47,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   lines.push('');
 
   // สรุปรายคาบ โดยแสดง kind ชัดเจนเพื่อแยกคาบเรียนกับคาบสอบ
-  lines.push('--- สรุปรายคาบ ---');
+  lines.push(escapeCsv('สรุปรายคาบ'));
   lines.push(
     [
       'วันที่',

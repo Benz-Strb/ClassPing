@@ -174,6 +174,29 @@ describe('export-csv', () => {
     expect(csv).toContain('"\'=HYPERLINK(""https://example.test"")"');
   });
 
+  it('ค่า - เดี่ยว ๆ ไม่ถูกใส่ \' นำหน้า แต่สูตรที่ขึ้นต้นด้วย - ยังถูกกัน', () => {
+    const report = structuredClone(mockReport);
+    report.sessions[0].title = null;
+    report.students[0].fullName = null;
+    report.students[1].fullName = '-1+1';
+    report.students[1].sessions[0].status = 'unrecorded';
+
+    const csv = generateAttendanceCsv(report);
+
+    expect(csv).toContain('"-"');
+    expect(csv).not.toContain('\'-"');
+    expect(csv).toContain('"\'-1+1"');
+  });
+
+  it('แถวหัวข้อส่วนไม่ขึ้นต้นด้วยตัวที่ Excel ตีเป็นสูตร', () => {
+    const csv = generateAttendanceCsv(mockReport);
+    for (const line of csv.replace('\uFEFF', '').split('\r\n')) {
+      expect(line.replace(/^"/, '')).not.toMatch(/^[=+\-@]./u);
+    }
+    expect(csv).toContain('"สรุปภาพรวม"');
+    expect(csv).toContain('"สรุปรายคาบ"');
+  });
+
   it('ป้องกันสูตรที่ซ่อนหลังช่องว่างหรือขึ้นบรรทัดใหม่', () => {
     const report = structuredClone(mockReport);
     report.students[0].fullName = '\n=1+1';
