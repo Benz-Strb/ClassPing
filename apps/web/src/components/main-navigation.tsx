@@ -11,6 +11,7 @@ import type { Me } from "@/lib/types";
 
 export function MainNavigation() {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -45,15 +46,28 @@ export function MainNavigation() {
   }, [pathname, retry]);
 
   const links = loading || failed ? [{ href: "/", label: "หน้าหลัก" }] : navigationFor(me?.role ?? null);
+  if (pathname === "/login" || pathname.startsWith("/auth/")) return null;
+  const iconFor = (href: string) => href.includes("courses") ? "courses" : href.includes("leave") ? "leave" : href === "/me" ? "user" : href.startsWith('/live') ? 'camera' : href.startsWith('/admin') ? 'admin' : href.startsWith('/transfers') ? 'transfer' : href === '/login' ? 'login' : "home";
   return (
-    <nav aria-label="เมนูหลัก" className="flex flex-wrap gap-2 border-b p-3">
-      {links.map(({ href, label }) => (
-        <Link key={href} href={href} aria-current={pathname === href || (href !== "/" && pathname.startsWith(`${href}/`)) ? "page" : undefined} className="rounded border bg-white px-3 py-1 aria-[current=page]:font-semibold">
-          {label}
-        </Link>
-      ))}
-      {loading && <span role="status" className="px-3 py-1 text-sm text-gray-600">กำลังตรวจสอบสิทธิ์...</span>}
-      {failed && <button type="button" onClick={() => setRetry((value) => value + 1)} className="rounded border px-3 py-1">โหลดเมนูใหม่</button>}
+    <nav aria-label="เมนูหลัก" className="app-navigation">
+      <div className="navigation-heading">
+        <div>
+          <Link href="/" className="navigation-brand"><span className="brand-mark" aria-hidden="true">C</span>ClassPing</Link>
+          <p className="navigation-role">{me?.role === "admin" ? "พื้นที่ผู้ดูแลระบบ" : me?.role === "teacher" ? "พื้นที่อาจารย์" : "ระบบจัดการการเข้าเรียน"}</p>
+        </div>
+        <button className="navigation-toggle" type="button" aria-expanded={open} aria-controls="main-navigation-links" onClick={() => setOpen(!open)}>{open ? "ปิดเมนู" : "เมนู"}</button>
+      </div>
+      <div id="main-navigation-links" className="navigation-links" data-open={open}>
+        {links.map(({ href, label }) => (
+          <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={pathname === href || (href !== "/" && pathname.startsWith(`${href}/`)) ? "page" : undefined} className="navigation-link">
+            <span aria-hidden="true" className="navigation-icon" style={{ maskImage: `url(/icons/${iconFor(href)}.svg)` }} />
+            {label}
+          </Link>
+        ))}
+        {loading && <span role="status" className="text-sm text-gray-600">กำลังตรวจสอบสิทธิ์...</span>}
+        {failed && <button type="button" onClick={() => setRetry((value) => value + 1)} className="rounded border px-3 py-1">โหลดเมนูใหม่</button>}
+        <div className="navigation-footer">{me && <Link href="/me" className="navigation-account" onClick={() => setOpen(false)}><span className="navigation-avatar" aria-hidden="true">{(me.fullName ?? me.email).slice(0, 1).toUpperCase()}</span><span><strong>{me.fullName ?? 'บัญชีของฉัน'}</strong><small>{me.role === 'admin' ? 'ผู้ดูแลระบบ' : me.role === 'teacher' ? 'อาจารย์' : 'นักศึกษา'}</small></span></Link>}<p>DPU · @dpu.ac.th</p></div>
+      </div>
     </nav>
   );
 }

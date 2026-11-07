@@ -1,5 +1,7 @@
+import { colors } from '../ui/theme';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet } from 'react-native';
+import { Pressable, Text, ScrollView } from '../ui/primitives';
 import * as ImagePicker from 'expo-image-picker';
 import { discardCard, prepareCard } from '../lib/face';
 
@@ -40,7 +42,7 @@ export function IdentityScreen({ error, onPicked, onSignOut }: Props) {
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView contentContainerStyle={styles.root}>
       <Text style={styles.title}>ยืนยันตัวตนด้วยบัตรนักศึกษา</Text>
       <Text style={styles.body}>ใช้ภาพบัตรของวันนี้ ระบบจะเทียบรหัสกับบัญชี และเทียบหน้าในบัตรกับหน้าคุณ</Text>
       {STEPS.map((step, i) => (
@@ -50,22 +52,22 @@ export function IdentityScreen({ error, onPicked, onSignOut }: Props) {
       ))}
       {(problem ?? error) && <Text style={styles.error}>{problem ?? error}</Text>}
       <Pressable style={styles.primary} onPress={pick} disabled={busy}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>เลือกภาพบัตร</Text>}
+        {busy ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.primaryText}>เลือกภาพบัตร</Text>}
       </Pressable>
       <Pressable style={styles.link} onPress={onSignOut}>
         <Text style={styles.linkText}>ออกจากระบบ</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#fff' },
-  title: { fontSize: 20, fontWeight: '600' },
-  body: { fontSize: 15, lineHeight: 24, color: '#374151' },
-  error: { color: '#dc2626', fontSize: 15 },
-  primary: { backgroundColor: '#2563eb', borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  primaryText: { color: '#fff', fontSize: 16 },
+  root: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.background },
+  title: { fontSize: 27, lineHeight: 38, fontWeight: '500', color: colors.identity },
+  body: { fontSize: 15, lineHeight: 24, color: colors.muted },
+  error: { color: colors.danger, fontSize: 15 },
+  primary: { backgroundColor: colors.action, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  primaryText: { color: colors.surface, fontSize: 16 },
   link: { alignItems: 'center', padding: 8 },
-  linkText: { color: '#6b7280' },
+  linkText: { color: colors.muted },
 });

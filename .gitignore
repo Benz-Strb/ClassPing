@@ -10,3 +10,6 @@ coverage/
 .DS_Store
 recordings/
 *.[mM][dD]
+!/DESIGN.md
+!/.impeccable/review/*.md
+!/apps/web/.impeccable/surfaces/*.md

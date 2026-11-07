@@ -1,5 +1,7 @@
+import { colors } from '../ui/theme';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, Text } from '../ui/primitives';
 import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
@@ -64,7 +66,7 @@ export function LoginScreen({ error: initialError, onDpuChat }: Props) {
           <Text style={styles.subtitle}>ใช้บัญชี @dpu.ac.th</Text>
           {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           <Pressable accessibilityRole="button" accessibilityLabel="เข้าสู่ระบบด้วย Google" accessibilityState={{ disabled: loading, busy: loading }} style={({ pressed }) => [styles.button, pressed && styles.pressed, loading && styles.disabled]} onPress={signIn} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>เข้าสู่ระบบด้วย Google</Text>}
+            {loading ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.buttonText}>เข้าสู่ระบบด้วย Google</Text>}
           </Pressable>
         </View>
         <View style={styles.guest}>
@@ -79,18 +81,18 @@ export function LoginScreen({ error: initialError, onDpuChat }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24, backgroundColor: '#efefef' },
-  content: { width: '100%', maxWidth: 480, alignSelf: 'center', gap: 32 },
-  brand: { fontSize: 22, fontWeight: '700', color: '#111' },
-  subtitle: { fontSize: 16, lineHeight: 24, color: '#5e6168' },
-  form: { gap: 12, paddingVertical: 24, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#d5d5d5' },
-  heading: { fontSize: 18, fontWeight: '600', color: '#111' },
-  error: { fontSize: 16, lineHeight: 24, color: '#b42318' },
-  button: { minHeight: 52, backgroundColor: '#111', borderRadius: 8, padding: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.background },
+  content: { width: '100%', maxWidth: 480, alignSelf: 'center', gap: 28 },
+  brand: { fontSize: 26, fontWeight: '700', color: colors.identity },
+  subtitle: { fontSize: 16, lineHeight: 24, color: colors.muted },
+  form: { gap: 16, padding: 24, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  heading: { fontSize: 28, lineHeight: 40, fontWeight: '500', color: colors.identity },
+  error: { fontSize: 16, lineHeight: 24, color: colors.danger },
+  button: { minHeight: 52, backgroundColor: colors.action, borderRadius: 12, padding: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.7 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  guest: { gap: 12 },
-  secondaryButton: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: '#111', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: '#111', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  pressed: { opacity: 0.9 },
+  buttonText: { color: colors.surface, fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  guest: { gap: 12, paddingTop: 24, borderTopWidth: 1, borderColor: colors.border },
+  secondaryButton: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: colors.ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: colors.ink, fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });

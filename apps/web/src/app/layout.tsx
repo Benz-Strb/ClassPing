@@ -12,10 +12,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="th">
       <body>
-        <Suspense fallback={<nav aria-label="เมนูหลัก" className="border-b p-3" aria-busy="true">ClassPing</nav>}>
-          <MainNavigation />
-        </Suspense>
-        {children}
+        <a href="#main-content" className="skip-link">ข้ามไปเนื้อหา</a>
+        <div className="app-shell">
+          <Suspense fallback={<nav aria-label="เมนูหลัก" className="app-navigation" aria-busy="true">ClassPing</nav>}>
+            <MainNavigation />
+          </Suspense>
+          <div id="main-content" className="app-content" tabIndex={-1}>{children}</div>
+        </div>
       </body>
     </html>
   );
