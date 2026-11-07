@@ -155,7 +155,7 @@ export function CheckinView() {
         </h2>
         <p className="text-sm text-gray-600">
           มา {count("present")} · สาย {count("late")} · ขาด {count("absent")} · ลา {count("leave")}{" "}
-          · รอตรวจ {pending.length} · ยังไม่เห็น {unseen.length}
+          · รอตรวจ {pending.length + tripReviews.length} · ยังไม่เห็น {unseen.length}
         </p>
       </div>
 
