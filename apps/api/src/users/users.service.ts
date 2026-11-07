@@ -118,13 +118,19 @@ export class UsersService {
     if (error) throw dbError();
   }
 
-  // score = คะแนนหน้าในบัตรเทียบหน้าสด, null = ล้างการยืนยัน (รีเซ็ตใบหน้า)
-  async setIdentity(userId: string, score: number | null): Promise<void> {
+  // score = คะแนนหน้าในบัตรเทียบหน้าสด, null = ล้างการยืนยัน (รีเซ็ตใบหน้า) ล้างคณะ สาขาด้วย
+  async setIdentity(
+    userId: string,
+    score: number | null,
+    study: { faculty: string | null; major: string | null } = { faculty: null, major: null },
+  ): Promise<void> {
     const { error } = await this.db
       .from('users')
       .update({
         identity_verified_at: score === null ? null : new Date().toISOString(),
         identity_score: score,
+        faculty: study.faculty,
+        major: study.major,
       })
       .eq('id', userId)
       .select('id')

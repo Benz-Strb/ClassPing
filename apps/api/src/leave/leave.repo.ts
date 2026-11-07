@@ -27,6 +27,8 @@ export interface LeaveSessionOption {
   startsAt: string;
   endsAt: string;
   roomName: string;
+  // อาจารย์ลบคาบนี้แล้ว ใบลายังอยู่
+  cancelled: boolean;
 }
 
 export interface LeaveStudentView {
@@ -99,6 +101,7 @@ interface SessionRelationRow {
   on_date: string;
   starts_at: string;
   ends_at: string;
+  cancelled_at: string | null;
   courses: {
     id: string;
     code: string;
@@ -129,6 +132,7 @@ const toSessionOption = (row: SessionRelationRow): LeaveSessionOption => ({
   startsAt: row.starts_at,
   endsAt: row.ends_at,
   roomName: row.rooms?.name ?? '',
+  cancelled: Boolean(row.cancelled_at),
 });
 
 const toRequestView = (row: LeaveRelationRow): LeaveRequestView => ({
@@ -185,9 +189,10 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('sessions')
       .select(
-        'id, course_id, kind, title, on_date, starts_at, ends_at, courses(id, code, name, section), rooms(name)',
+        'id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)',
       )
       .in('course_id', courseIds)
+      .is('cancelled_at', null)
       .order('starts_at', { ascending: false })
       .limit(100);
     if (error) throw dbError();
@@ -202,6 +207,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
       .from('sessions')
       .select('course_id')
       .eq('id', sessionId)
+      .is('cancelled_at', null)
       .maybeSingle();
     if (sessionError) throw dbError();
     if (!session) return false;
@@ -325,7 +331,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('leave_requests')
       .select(
-        'id, student_id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
+        'id, student_id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
       )
       .eq('student_id', studentId)
       .order('created_at', { ascending: false });
@@ -356,7 +362,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('leave_requests')
       .select(
-        'id, student_id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
+        'id, student_id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
       )
       .in('session_id', sessionIds)
       .order('created_at', { ascending: false });
