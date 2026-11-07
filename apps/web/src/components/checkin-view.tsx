@@ -26,6 +26,7 @@ const STATUS_LABEL: Record<AttendanceStatus, { label: string; className: string 
 const EDITABLE = ["present", "late", "absent"] as const;
 
 const OUT_LABEL = {
+  out_now: { text: (n: number) => `ออกอยู่ ${n} นาที`, className: "bg-gray-100 text-gray-700" },
   out: { text: (n: number) => `ออก ${n} นาที`, className: "bg-gray-100 text-gray-700" },
   gone: { text: (n: number) => `หาย ${n} นาที`, className: "bg-red-100 text-red-700" },
   gone_no_return: { text: () => "หาย · ไม่กลับ", className: "bg-red-100 text-red-700" },
@@ -224,6 +225,7 @@ export function CheckinView() {
                 key={row.studentCode}
                 row={row}
                 busy={busy}
+                ended={session.status === "ended"}
                 onChange={(status) => setStatus(row.studentCode, status)}
                 onOpenTrip={(tripId) => setOpenTrip({ code: row.studentCode, tripId })}
               />
@@ -277,11 +279,14 @@ export function CheckinView() {
 function StudentRow({
   row,
   busy,
+  ended,
   onChange,
   onOpenTrip,
 }: {
   row: AttendanceRow;
   busy: boolean;
+  // คาบจบแล้ว (สถานะมากับข้อมูลที่ดึงใหม่ทุกรอบ)
+  ended: boolean;
   onChange: (status: string) => void;
   onOpenTrip: (tripId: string) => void;
 }) {
@@ -323,7 +328,7 @@ function StudentRow({
       <td className="px-4 py-2">
         <div className="flex flex-wrap gap-1">
           {row.outOfRoom.trips.map((trip) => (
-            <TripChip key={trip.id} trip={trip} onClick={() => onOpenTrip(trip.id)} />
+            <TripChip key={trip.id} trip={trip} ended={ended} onClick={() => onOpenTrip(trip.id)} />
           ))}
         </div>
       </td>
