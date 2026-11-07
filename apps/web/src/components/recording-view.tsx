@@ -61,7 +61,7 @@ export function RecordingView() {
   const { session } = data;
 
   return (
-    <section className="space-y-4">
+    <section className="recording-view space-y-4">
       <Link href="/live" className="text-sm text-blue-600 underline">
         กล้องทั้งหมด
       </Link>

@@ -1,5 +1,7 @@
+import { colors } from '../ui/theme';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, Text } from '../ui/primitives';
 import { apiFetch } from '../lib/api';
 import type { Me } from '../lib/types';
 
@@ -79,7 +81,7 @@ export function ConsentScreen({ onAccepted, onSignOut }: Props) {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.surface} />
           ) : (
             <Text style={styles.primaryText}>ยินยอม</Text>
           )}
@@ -93,19 +95,19 @@ export function ConsentScreen({ onAccepted, onSignOut }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 24, paddingTop: 64, gap: 16 },
-  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#fff' },
-  title: { fontSize: 22, fontWeight: '600' },
-  body: { fontSize: 15, lineHeight: 24, color: '#374151' },
+  root: { flex: 1, backgroundColor: colors.background },
+  content: { padding: 24, paddingTop: 32, gap: 16 },
+  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.background },
+  title: { fontSize: 27, lineHeight: 38, fontWeight: '500', color: colors.identity },
+  body: { fontSize: 15, lineHeight: 24, color: colors.muted },
   subtitle: { fontSize: 16, fontWeight: '600', marginTop: 8 },
-  note: { fontSize: 13, lineHeight: 21, color: '#6b7280' },
-  footer: { padding: 24, paddingBottom: 40, gap: 10, borderTopWidth: 1, borderColor: '#e5e7eb' },
-  error: { color: '#dc2626' },
-  primary: { backgroundColor: '#2563eb', borderRadius: 8, padding: 14, alignItems: 'center' },
-  primaryText: { color: '#fff', fontSize: 16 },
-  secondary: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 14, alignItems: 'center' },
+  note: { fontSize: 13, lineHeight: 21, color: colors.muted },
+  footer: { width: "100%", maxWidth: 800, alignSelf: "center", padding: 24, paddingBottom: 16, gap: 10, borderTopWidth: 1, borderColor: colors.border },
+  error: { color: colors.danger },
+  primary: { minHeight: 48, justifyContent: "center", backgroundColor: colors.action, borderRadius: 12, padding: 14, alignItems: 'center' },
+  primaryText: { color: colors.surface, fontSize: 16 },
+  secondary: { minHeight: 48, justifyContent: "center", borderWidth: 1, borderColor: colors.outline, borderRadius: 12, padding: 14, alignItems: 'center' },
   disabled: { opacity: 0.5 },
   link: { alignItems: 'center', padding: 8 },
-  linkText: { color: '#6b7280' },
+  linkText: { color: colors.muted },
 });
