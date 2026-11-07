@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, BackHandler, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { ROLE_LABEL } from '../lib/access';
 import type { FaceStatus, Me } from '../lib/types';
 import { AttendanceSummarySection } from './AttendanceSummarySection';
 import { CoursesScreen } from './CoursesScreen';
@@ -16,11 +17,25 @@ const TABS = [
 ] as const;
 type Tab = typeof TABS[number]['key'];
 
-export function StudentNavigator({ me, face, onSignOut }: {
+export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
   me: Me;
   face: FaceStatus | null;
+  // กลับไปขั้นลงทะเบียนใบหน้า (ถามยินยอมก่อนถ้ายังไม่ยินยอม)
+  onEnroll: () => void;
+  // ดึงข้อมูลบัญชีและสถานะใบหน้าใหม่
+  onRefresh: () => void;
   onSignOut: () => void;
 }) {
+  // เพิ่มทุกครั้งที่แอปกลับมาเปิด ให้แต่ละแท็บโหลดข้อมูลใหม่
+  const [focusTick, setFocusTick] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const [pullTick, setPullTick] = useState(0);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setFocusTick((value) => value + 1);
+    });
+    return () => subscription.remove();
+  }, []);
   const [tab, setTab] = useState<Tab>('home');
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set(['home']));
   const wide = useWindowDimensions().width >= 768;
@@ -28,6 +43,18 @@ export function StudentNavigator({ me, face, onSignOut }: {
     setVisited((previous) => new Set([...previous, next]));
     setTab(next);
   };
+
+  // เปิดหน้าบัญชีหรือกลับเข้าแอป ดึงสถานะใหม่ เช่นแอดมินรีเซ็ตใบหน้า
+  useEffect(() => {
+    if (tab === 'account') onRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, focusTick]);
+
+  const needsFace = !!face && !face.complete;
+  const enrollBanner = needsFace && <View style={styles.banner}>
+    <Text style={styles.secondary}>{me.pdpaConsentAt ? 'ยังลงทะเบียนใบหน้าไม่ครบ กล้องในห้องเรียนจะยังเช็คชื่อให้คุณไม่ได้' : 'ยังไม่ได้ยินยอมให้ใช้ข้อมูลใบหน้า อาจารย์จะเช็คชื่อให้แทน'}</Text>
+    <Pressable accessibilityRole="button" style={styles.action} onPress={onEnroll}><Text style={styles.actionText}>ลงทะเบียนใบหน้า</Text></Pressable>
+  </View>;
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -45,24 +72,26 @@ export function StudentNavigator({ me, face, onSignOut }: {
         <Text style={styles.subtitle}>{TABS.find((item) => item.key === tab)?.label}</Text>
       </View>
       {TABS.map(({ key }) => visited.has(key) && <View key={key} style={[styles.scene, tab !== key && styles.hidden]} accessibilityElementsHidden={tab !== key} importantForAccessibility={tab === key ? 'auto' : 'no-hide-descendants'}>
-        {key === 'home' && <ScrollView contentContainerStyle={styles.content}>
+        {key === 'home' && <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={pulling} tintColor="#111" onRefresh={() => { setPulling(true); setPullTick((value) => value + 1); }} />}>
           <Text style={styles.title}>สวัสดี {me.fullName ?? me.studentId}</Text>
           <Text style={styles.secondary}>ติดตามการเข้าเรียนของคุณ</Text>
-          <AttendanceSummarySection />
+          {enrollBanner}
+          <AttendanceSummarySection active={tab === 'home'} refreshTick={focusTick + pullTick} onSettled={() => setPulling(false)} />
           <Pressable accessibilityRole="button" style={styles.action} onPress={() => navigate('courses')}>
             <Text style={styles.actionText}>ดูรายวิชาและรายละเอียดเข้าเรียน</Text>
           </Pressable>
         </ScrollView>}
         {key === 'courses' && <CoursesScreen active={tab === 'courses'} />}
-        {key === 'leave' && <LeaveScreen />}
+        {key === 'leave' && <LeaveScreen active={tab === 'leave'} focusTick={focusTick} />}
         {key === 'chat' && <ChatScreen authenticated />}
         {key === 'account' && <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>ข้อมูลบัญชี</Text>
           <Text style={styles.name}>{me.fullName ?? me.email}</Text>
           <Text selectable style={styles.secondary}>{me.email}</Text>
           <View style={styles.row}><Text>รหัสนักศึกษา</Text><Text selectable>{me.studentId}</Text></View>
-          <View style={styles.row}><Text>บทบาท</Text><Text>นักศึกษา</Text></View>
+          <View style={styles.row}><Text>บทบาท</Text><Text>{ROLE_LABEL[me.role]}</Text></View>
           <View style={styles.row}><Text>ใบหน้า</Text><Text>{face?.complete ? 'ลงทะเบียนแล้ว' : 'ยังไม่ครบ'}</Text></View>
+          {enrollBanner}
           <Pressable accessibilityRole="button" style={styles.action} onPress={onSignOut}><Text style={styles.actionText}>ออกจากระบบ</Text></Pressable>
         </ScrollView>}
       </View>)}
@@ -89,6 +118,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '600', color: '#111' },
   name: { fontSize: 18, fontWeight: '600', marginTop: 16 },
   secondary: { fontSize: 16, color: '#5e6168', lineHeight: 24 },
+  banner: { gap: 8, padding: 16, borderRadius: 8, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#dedede' },
   row: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderColor: '#e5e5e5' },
   action: { minHeight: 48, padding: 16, borderRadius: 8, backgroundColor: '#111', alignItems: 'center', marginTop: 16 },
   actionText: { fontSize: 16, color: '#fff', fontWeight: '600' },

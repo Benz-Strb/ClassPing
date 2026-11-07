@@ -13,11 +13,13 @@ interface Props {
   // ข้อความจากรอบก่อน เช่น บัตรไม่ใช่ของวันนี้
   error: string | null;
   onPicked: (cardUri: string) => void;
+  // ไว้ทีหลัง เข้าใช้ส่วนอื่นของแอปก่อน
+  onSkip: () => void;
   onSignOut: () => void;
 }
 
 // ภาพบัตรใช้ยืนยันว่าเป็นเจ้าของบัญชี ส่งไปตรวจแล้วไม่ถูกเก็บ
-export function IdentityScreen({ error, onPicked, onSignOut }: Props) {
+export function IdentityScreen({ error, onPicked, onSkip, onSignOut }: Props) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -51,6 +53,9 @@ export function IdentityScreen({ error, onPicked, onSignOut }: Props) {
       {(problem ?? error) && <Text style={styles.error}>{problem ?? error}</Text>}
       <Pressable style={styles.primary} onPress={pick} disabled={busy}>
         {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>เลือกภาพบัตร</Text>}
+      </Pressable>
+      <Pressable style={styles.link} onPress={onSkip} disabled={busy}>
+        <Text style={styles.linkText}>ไว้ทีหลัง</Text>
       </Pressable>
       <Pressable style={styles.link} onPress={onSignOut}>
         <Text style={styles.linkText}>ออกจากระบบ</Text>

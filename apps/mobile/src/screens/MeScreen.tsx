@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { decideScreen, canEnrollFace } from "../lib/access";
 import { ApiError, apiFetch } from "../lib/api";
 import { discardCard } from "../lib/face";
 import { supabase } from "../lib/supabase";
@@ -15,26 +15,54 @@ import { ConsentScreen } from "./ConsentScreen";
 import { StudentNavigator } from "./StudentNavigator";
 import { EnrollScreen } from "./EnrollScreen";
 import { IdentityScreen } from "./IdentityScreen";
-
-const ROLE_LABEL: Record<Me["role"], string> = {
-  student: "นักศึกษา",
-  teacher: "อาจารย์",
-  admin: "ผู้ดูแลระบบ",
-};
+import { WebOnlyScreen } from "./WebOnlyScreen";
 
 interface Props {
   // เด้งกลับหน้า login พร้อมข้อความ
   onRejected: (message: string) => void;
+  // ออกจากระบบตามปกติ ให้ล้างข้อความเก่าที่หน้า login
+  onSignedOut?: () => void;
 }
 
 // นักศึกษาต้องยินยอมก่อน ยืนยันบัตร แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
-export function MeScreen({ onRejected }: Props) {
-  const signOut = () => supabase.auth.signOut();
+export function MeScreen({ onRejected, onSignedOut }: Props) {
   const [me, setMe] = useState<Me | null>(null);
   const [face, setFace] = useState<FaceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [card, setCard] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
+  // ไม่ยินยอมและข้ามการลงทะเบียน เก็บเฉพาะรอบนี้ ไม่ได้บันทึกฝั่งเซิร์ฟเวอร์
+  const [consentDeclined, setConsentDeclined] = useState(false);
+  const [enrolling, setEnrolling] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const cardRef = useRef<string | null>(null);
+  cardRef.current = card;
+
+  // ภาพบัตรที่ค้างอยู่ต้องไม่ติดเครื่องเมื่อออกจากระบบกลางทาง
+  useEffect(() => () => discardCard(cardRef.current), []);
+
+  const signOut = () => {
+    discardCard(cardRef.current);
+    onSignedOut?.();
+    return supabase.auth.signOut();
+  };
+
+  // ดึงสถานะใหม่ เช่นแอดมินรีเซ็ตใบหน้าหรือถอนความยินยอม
+  const refresh = useCallback(async () => {
+    try {
+      const user = await apiFetch<Me>("/me");
+      const status = user.studentId ? await apiFetch<FaceStatus>("/me/face") : null;
+      setMe(user);
+      setFace(status);
+    } catch {
+      // ใช้ข้อมูลเดิมต่อ
+    }
+  }, []);
+
+  const startEnroll = () => {
+    setConsentDeclined(false);
+    setEnrolling(true);
+  };
 
   useEffect(() => {
     (async () => {
@@ -47,7 +75,7 @@ export function MeScreen({ onRejected }: Props) {
       setFace(status);
     })().catch(async (e: unknown) => {
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-        await signOut();
+        await supabase.auth.signOut();
         onRejected(
           e.code === "DOMAIN_NOT_ALLOWED"
             ? "ใช้ได้เฉพาะเมล @dpu.ac.th"
@@ -57,12 +85,22 @@ export function MeScreen({ onRejected }: Props) {
       }
       setError(e instanceof Error ? e.message : "เรียกระบบไม่สำเร็จ");
     });
-  }, [onRejected]);
+  }, [onRejected, attempt]);
 
   if (error) {
     return (
       <View style={styles.container}>
         <Text style={styles.error}>{error}</Text>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.button}
+          onPress={() => {
+            setError(null);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          <Text>ลองใหม่</Text>
+        </Pressable>
         <Pressable style={styles.button} onPress={signOut}>
           <Text>ออกจากระบบ</Text>
         </Pressable>
@@ -77,11 +115,25 @@ export function MeScreen({ onRejected }: Props) {
     );
   }
 
-  if (me.studentId && !me.pdpaConsentAt) {
-    return <ConsentScreen onAccepted={setMe} onSignOut={signOut} />;
+  const screen = decideScreen({
+    me,
+    face,
+    consentDeclined,
+    enrolling,
+    hasCard: !!card,
+  });
+
+  if (screen === "consent") {
+    return (
+      <ConsentScreen
+        onAccepted={setMe}
+        onContinueWithout={() => setConsentDeclined(true)}
+        onSignOut={signOut}
+      />
+    );
   }
 
-  if (face && !face.verified && !card) {
+  if (screen === "identity") {
     return (
       <IdentityScreen
         error={cardError}
@@ -89,12 +141,13 @@ export function MeScreen({ onRejected }: Props) {
           setCard(uri);
           setCardError(null);
         }}
+        onSkip={() => setEnrolling(false)}
         onSignOut={signOut}
       />
     );
   }
 
-  if (face && !face.complete) {
+  if (screen === "enroll" && face) {
     return (
       <EnrollScreen
         // ท่าที่ถ่ายไว้ก่อนยืนยันบัตรจะถูกล้าง เริ่มจากหน้าตรงใหม่
@@ -108,35 +161,38 @@ export function MeScreen({ onRejected }: Props) {
         }}
         onComplete={setFace}
         onUnauthorized={async (message) => {
-          await signOut();
+          await supabase.auth.signOut();
           onRejected(message);
+        }}
+        onSkip={() => {
+          discardCard(card);
+          setCard(null);
+          setEnrolling(false);
         }}
         onSignOut={signOut}
       />
     );
   }
 
-  if (me.studentId) {
-    return <StudentNavigator me={me} face={face} onSignOut={signOut} />;
+  if (screen === "student") {
+    return (
+      <StudentNavigator
+        me={me}
+        face={face}
+        onEnroll={startEnroll}
+        onRefresh={refresh}
+        onSignOut={signOut}
+      />
+    );
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{me.fullName ?? me.email}</Text>
-      <Text>{me.email}</Text>
-      <Text>บทบาท: {ROLE_LABEL[me.role]}</Text>
-      {me.studentId && <Text>รหัสนักศึกษา: {me.studentId}</Text>}
-      {face ? (
-        <Text style={face.complete ? styles.ok : styles.pending}>
-          {face.complete ? "ลงทะเบียนใบหน้าแล้ว" : "ยังไม่ได้ลงทะเบียนใบหน้า"}
-        </Text>
-      ) : (
-        <Text style={styles.pending}>บัญชีนี้ใช้งานบนเว็บ</Text>
-      )}
-      <Pressable style={styles.button} onPress={signOut}>
-        <Text>ออกจากระบบ</Text>
-      </Pressable>
-    </ScrollView>
+    <WebOnlyScreen
+      me={me}
+      face={face}
+      onEnroll={canEnrollFace(me) ? startEnroll : undefined}
+      onSignOut={signOut}
+    />
   );
 }
 

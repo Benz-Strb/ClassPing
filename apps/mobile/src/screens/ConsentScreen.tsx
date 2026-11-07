@@ -20,10 +20,12 @@ const CCTV_PARAGRAPHS = [
 
 interface Props {
   onAccepted: (me: Me) => void;
+  // ไม่ยินยอมแล้วเข้าใช้ส่วนที่ไม่ใช้ใบหน้าต่อ (เฉพาะรอบนี้)
+  onContinueWithout: () => void;
   onSignOut: () => void;
 }
 
-export function ConsentScreen({ onAccepted, onSignOut }: Props) {
+export function ConsentScreen({ onAccepted, onContinueWithout, onSignOut }: Props) {
   const [declined, setDeclined] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +45,11 @@ export function ConsentScreen({ onAccepted, onSignOut }: Props) {
     return (
       <View style={styles.center}>
         <Text style={styles.body}>
-          กล้องจะยังเช็คชื่อให้คุณไม่ได้ ถ้าเปลี่ยนใจ กลับมากดยินยอมได้ทุกเมื่อ
+          กล้องจะยังเช็คชื่อให้คุณไม่ได้ อาจารย์จะเช็คชื่อให้แทน ถ้าเปลี่ยนใจ กดลงทะเบียนใบหน้าในแอปได้ทุกเมื่อ ระบบจะถามยินยอมอีกครั้งตอนเปิดแอปใหม่
         </Text>
+        <Pressable accessibilityRole="button" style={styles.primary} onPress={onContinueWithout}>
+          <Text style={styles.primaryText}>เข้าใช้งานแอป</Text>
+        </Pressable>
         <Pressable style={styles.secondary} onPress={() => setDeclined(false)}>
           <Text>กลับไปอ่านอีกครั้ง</Text>
         </Pressable>
