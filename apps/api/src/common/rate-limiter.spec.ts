@@ -1,6 +1,7 @@
 import type { ExecutionContext } from '@nestjs/common';
 import {
   PUBLIC_CHAT_LIMIT,
+  PUBLIC_CHAT_TOTAL_LIMIT,
   PublicChatLimitGuard,
 } from '../chat/public-chat.guard.js';
 import {
@@ -68,6 +69,20 @@ describe('ipKey', () => {
 
   it('ไม่มี IP นับรวมกันเป็น unknown', () => {
     expect(ipKey(undefined)).toBe('unknown');
+  });
+});
+
+describe('PublicChatLimitGuard เพดานรวม', () => {
+  it('หลาย IP รวมกันเกินเพดานได้ 429 แล้วผ่านใหม่เมื่อหมดช่วง', () => {
+    const guard = new PublicChatLimitGuard(clock);
+    for (let i = 0; i < PUBLIC_CHAT_TOTAL_LIMIT; i++) {
+      guard.canActivate(ctx({ ip: `10.0.${Math.floor(i / 250)}.${i % 250}` }));
+    }
+    expect(() => guard.canActivate(ctx({ ip: '11.0.0.1' }))).toThrowError(
+      expect.objectContaining({ status: 429 }),
+    );
+    now = new Date(now.getTime() + 60_000);
+    expect(guard.canActivate(ctx({ ip: '11.0.0.1' }))).toBe(true);
   });
 });
 

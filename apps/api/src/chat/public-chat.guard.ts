@@ -9,16 +9,24 @@ import { ipKey, RateLimiter } from '../common/rate-limiter.js';
 
 export const PUBLIC_CHAT_LIMIT = 20;
 export const PUBLIC_CHAT_WINDOW_MS = 60_000;
+// เพดานรวมทุก IP กันยิงจากหลาย IP จนโควตา Gemini หมด
+export const PUBLIC_CHAT_TOTAL_LIMIT = 300;
 
 // แชตสาธารณะไม่ต้อง login จำกัดต่อ IP ใช้ req.ip ไม่อ่าน X-Forwarded-For เอง
 // ถ้าวางหลัง proxy ต้องตั้ง trust proxy ของ Express ไม่งั้นทุกคนจะนับเป็น IP เดียวกัน
 @Injectable()
 export class PublicChatLimitGuard implements CanActivate {
   private readonly limiter: RateLimiter;
+  private readonly total: RateLimiter;
 
   constructor(@Inject(CLOCK) now: Clock) {
     this.limiter = new RateLimiter(
       PUBLIC_CHAT_LIMIT,
+      PUBLIC_CHAT_WINDOW_MS,
+      now,
+    );
+    this.total = new RateLimiter(
+      PUBLIC_CHAT_TOTAL_LIMIT,
       PUBLIC_CHAT_WINDOW_MS,
       now,
     );
@@ -27,6 +35,7 @@ export class PublicChatLimitGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<{ ip?: string }>();
     this.limiter.check(ipKey(req.ip));
+    this.total.check('all');
     return true;
   }
 }
