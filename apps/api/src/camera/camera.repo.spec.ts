@@ -5,7 +5,7 @@ import { SupabaseCameraRepo } from './camera.repo.js';
 function recordingDb(result: { data: unknown; error?: unknown }) {
   const calls: [string, unknown[]][] = [];
   const q: Record<string, unknown> = {};
-  for (const name of ['select', 'eq', 'lte', 'gt', 'order', 'limit']) {
+  for (const name of ['select', 'eq', 'is', 'lte', 'gt', 'order', 'limit']) {
     q[name] = (...args: unknown[]) => (calls.push([name, args]), q);
   }
   q.maybeSingle = async () => ({ data: result.data, error: result.error ?? null });
@@ -21,5 +21,7 @@ describe('SupabaseCameraRepo.liveSession', () => {
     expect(calls).toContainEqual(['gt', ['ends_at', now.toISOString()]]);
     expect(calls).toContainEqual(['lte', ['starts_at', opensBy.toISOString()]]);
     expect(calls).toContainEqual(['eq', ['room_id', 'r1']]);
+    // คาบที่ถูกลบกล้องต้องไม่เปิด
+    expect(calls).toContainEqual(['is', ['cancelled_at', null]]);
   });
 });
