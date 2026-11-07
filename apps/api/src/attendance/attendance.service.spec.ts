@@ -152,7 +152,11 @@ function setup(now: Date = at(30)) {
       return { id: courseId, code: 'CS101', name: 'x', section: null, teacherId: 't1' };
     },
   } as unknown as CoursesService;
-  const rosterService = { entries: async () => roster } as unknown as RosterService;
+  const rosterService = {
+    entries: async () => roster,
+    // 66000003 เข้ารายชื่อหลังคาบเริ่ม
+    addedDates: async () => new Map([['66000003', at(10)]]),
+  } as unknown as RosterService;
   const rejected = new RejectedGuesses(() => at(30));
   const doorTrips: { list: StoredTrip[] } = { list: [] };
   const door = { listTrips: async () => doorTrips.list } as unknown as DoorRepo;
@@ -179,6 +183,35 @@ function setup(now: Date = at(30)) {
     });
   return { repo, service, pending, rejected, doorTrips, doorEntries };
 }
+
+describe('AttendanceService.view ตรงกับรายงาน', () => {
+  const afterClass = new Date('2026-10-23T06:00:00Z');
+
+  it('หมดคาบแล้วคนที่ไม่เห็นเป็นขาดตามเวลา ยกเว้นคนที่เข้ารายชื่อหลังคาบเริ่ม', async () => {
+    const { service, pending } = setup(afterClass);
+    pending('u2');
+    const view = await service.view(teacher, SESSION_ID);
+    const byCode = new Map(view.rows.map((r) => [r.studentCode, r]));
+    expect(view.session.recorded).toBe(true);
+    expect(byCode.get('66000001')).toMatchObject({ status: null, absentByTime: true });
+    expect(byCode.get('66000002')).toMatchObject({ status: 'pending', absentByTime: false });
+    expect(byCode.get('66000003')).toMatchObject({ status: null, absentByTime: false });
+  });
+
+  it('คาบที่ไม่มีแถวของใครเลย ไม่นับใครขาด', async () => {
+    const { service } = setup(afterClass);
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.recorded).toBe(false);
+    expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
+  });
+
+  it('ระหว่างคาบยังไม่ขาด', async () => {
+    const { service, pending } = setup(at(30));
+    pending('u2');
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
+  });
+});
 
 describe('AttendanceService.view', () => {
   it('ทุกคนในรายชื่อ รอตรวจขึ้นก่อน คนที่ยังไม่เห็นได้สถานะ null', async () => {
