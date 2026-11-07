@@ -123,6 +123,8 @@ export class AttendanceService {
       this.repo.rules(session.courseId),
     ]);
     const byUser = new Map(rows.map((r) => [r.userId, r]));
+    // แถวลาจากการอนุมัติไม่ได้มาจากกล้อง ไม่นับว่าคาบนี้มีข้อมูล (ตรงกับรายงาน)
+    const cameraRan = rows.some((r) => r.status !== 'leave');
     const limitMin = rulesFor(session, courseRules).outOfRoomLimitMin;
 
     const tripsByUser = new Map<string, StoredTrip[]>();
@@ -169,7 +171,7 @@ export class AttendanceService {
           !row &&
           statusWithoutRow(session, courseRules, now, {
             addedAt: addedDates.get(entry.studentCode),
-            sessionHasRows: rows.length > 0,
+            sessionHasRows: cameraRan,
           }) === 'absent',
         firstSeenAt: row?.firstSeenAt?.toISOString() ?? null,
         confidence: row?.confidence ?? null,
@@ -196,7 +198,7 @@ export class AttendanceService {
       session: {
         ...this.sessionView(session),
         outOfRoomLimitMin: limitMin,
-        recorded: rows.length > 0,
+        recorded: cameraRan,
       },
       rows: views,
       unknown: unknown.flatMap((u) => {

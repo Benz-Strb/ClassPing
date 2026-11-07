@@ -206,6 +206,41 @@ describe('AttendanceService.view ตรงกับรายงาน', () => {
     expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
   });
 
+  it('มีแต่แถวลาจากการอนุมัติ กล้องไม่ได้ทำงาน ไม่นับใครขาด', async () => {
+    const { service, repo } = setup(afterClass);
+    repo.rows.set('u2', {
+      userId: 'u2',
+      status: 'leave',
+      firstSeenAt: null,
+      confidence: null,
+      imagePath: null,
+      updatedBy: null,
+      updatedByName: null,
+      reviewReason: null,
+    });
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.recorded).toBe(false);
+    expect(view.rows.find((r) => r.studentCode === '66000002')?.status).toBe('leave');
+    expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
+  });
+
+  it('แถวที่อาจารย์ตั้งเองยังนับว่าคาบมีข้อมูล', async () => {
+    const { service, repo } = setup(afterClass);
+    repo.rows.set('u2', {
+      userId: 'u2',
+      status: 'present',
+      firstSeenAt: null,
+      confidence: null,
+      imagePath: null,
+      updatedBy: 't1',
+      updatedByName: 'อาจารย์',
+      reviewReason: null,
+    });
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.recorded).toBe(true);
+    expect(view.rows.find((r) => r.studentCode === '66000001')?.absentByTime).toBe(true);
+  });
+
   it('ระหว่างคาบยังไม่ขาด', async () => {
     const { service, pending } = setup(at(30));
     pending('u2');
