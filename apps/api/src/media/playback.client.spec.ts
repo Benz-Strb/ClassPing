@@ -41,13 +41,36 @@ describe('HttpPlaybackClient.list', () => {
       new Date('2026-10-24T10:00:00Z'),
       new Date('2026-10-24T11:00:00Z'),
     );
-    expect(segments).toEqual([{ start: new Date('2026-10-24T10:11:45.44181Z'), duration: 567.4 }]);
+    expect(segments[0].start).toEqual(new Date('2026-10-24T10:11:45.442Z'));
+    expect(segments[0].duration).toBeCloseTo(567.399, 6);
     const url = new URL(calls[0].url);
     expect(url.pathname).toBe('/list');
     expect(url.searchParams.get('path')).toBe('cam/c1');
     expect(url.searchParams.get('start')).toBe('2026-10-24T10:00:00.000Z');
     expect(url.searchParams.get('end')).toBe('2026-10-24T11:00:00.000Z');
     expect(calls[0].auth).toBe(`Bearer ${'s'.repeat(32)}`);
+  });
+
+  it('ปัดเวลาเริ่มขึ้น เพราะขอก่อนไฟล์เริ่มแม้เสี้ยวมิลลิวินาที MediaMTX จะตอบ 404', async () => {
+    stubFetch(
+      () =>
+        new Response(
+          JSON.stringify([
+            { start: '2026-11-04T07:55:06.512609Z', duration: 10, url: 'x' },
+            { start: '2026-11-04T08:00:00.250Z', duration: 10, url: 'x' },
+            { start: '2026-11-04T08:10:00Z', duration: 10, url: 'x' },
+          ]),
+        ),
+    );
+    const segments = await new HttpPlaybackClient(config).list('cam/c1', new Date(), new Date());
+    expect(segments.map((s) => s.start.toISOString())).toEqual([
+      '2026-11-04T07:55:06.513Z',
+      '2026-11-04T08:00:00.250Z',
+      '2026-11-04T08:10:00.000Z',
+    ]);
+    expect(segments[0].duration).toBeCloseTo(9.999, 6);
+    expect(segments[1].duration).toBe(10);
+    expect(segments[2].duration).toBe(10);
   });
 
   it('ยังไม่มีไฟล์ของ path นี้ (MediaMTX ตอบ 400/404) ได้รายการว่าง', async () => {

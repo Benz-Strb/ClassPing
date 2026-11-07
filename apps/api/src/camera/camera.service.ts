@@ -7,6 +7,8 @@ import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import type { UploadedImage } from '../enrollment/enrollment.service.js';
 import { cameraPath } from '../media/media-path.js';
 import { signMediaToken } from '../media/media-token.js';
+import { DoorEntries } from '../door/door-entries.js';
+import { DoorProcessor, type TripResult } from '../door/door.processor.js';
 import { CAMERA_REPO, type CameraIdentity, type CameraRepo } from './camera.repo.js';
 
 export interface CameraSession {
@@ -40,6 +42,8 @@ export class CameraService {
     @Inject(FRAME_QUEUE) private readonly queue: FrameQueue,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly now: Clock,
+    private readonly door: DoorProcessor,
+    private readonly doorEntries: DoorEntries,
   ) {}
 
   async currentSession(camera: CameraIdentity): Promise<CameraSession> {
@@ -83,6 +87,40 @@ export class CameraService {
       image: file.buffer.toString('base64'),
     });
     return { queued: true };
+  }
+
+  // กล้องประตูส่งมาตอนมีคนข้ามเส้น เวลาออก/เข้าใช้เวลาเซิร์ฟเวอร์ตอนรับ
+  async acceptDoorCrossing(
+    camera: CameraIdentity,
+    direction: string | undefined,
+    files: UploadedImage[],
+  ): Promise<{ trip: TripResult | null }> {
+    if (camera.kind !== 'door') {
+      throw new AppError(403, 'NOT_DOOR_CAMERA', 'กล้องนี้ไม่ใช่กล้องประตู');
+    }
+    if (direction !== 'out' && direction !== 'in') {
+      throw new AppError(400, 'BAD_DIRECTION', 'direction ต้องเป็น out หรือ in');
+    }
+    // รูปที่มากับ in ไม่ใช้ จึงไม่ตรวจ
+    const images = direction === 'out' ? files : [];
+    if (images.some((f) => !looksLike('image/jpeg', f.buffer))) {
+      throw new AppError(400, 'UNSUPPORTED_IMAGE', 'ส่งได้เฉพาะรูป JPG');
+    }
+
+    const receivedAt = this.now();
+    const live = await this.liveSessionFor(camera, receivedAt);
+    if (!live) throw new AppError(409, 'NO_LIVE_SESSION', 'ตอนนี้ห้องนี้ไม่มีคาบ');
+
+    if (direction === 'in') {
+      this.doorEntries.add(live.id, receivedAt, live.endsAt);
+      return { trip: null };
+    }
+    const trip = await this.door.handleOut(
+      live.id,
+      images.map((f) => f.buffer),
+      receivedAt,
+    );
+    return { trip };
   }
 
   private streamFor(camera: CameraIdentity, sessionId: string): CameraSession['stream'] {
