@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bangkokTimeToIso, chooseBackAt, formatTime } from "./time.ts";
+import { bangkokDate, bangkokTimeToIso, chooseBackAt, formatTime } from "./time.ts";
 
 test("เวลาในคาบปกติเป็นวันเดียวกันตามเวลาไทย", () => {
   const iso = bangkokTimeToIso(
@@ -52,4 +52,9 @@ test("แก้เวลากลับ แปลงจาก HH:mm", () => {
   const original = "2026-10-05T03:16:20.000Z";
   assert.equal(chooseBackAt(original, "10:20", SESSION), "2026-10-05T03:20:00.000Z");
   assert.equal(chooseBackAt(null, "10:20", SESSION), "2026-10-05T03:20:00.000Z");
+});
+
+test("วันที่ไทยหลัง 07:00 UTC ของวันก่อนนับเป็นวันถัดไป", () => {
+  assert.equal(bangkokDate(new Date("2026-10-28T19:00:00Z")), "2026-10-29");
+  assert.equal(bangkokDate(new Date("2026-10-28T16:59:00Z")), "2026-10-28");
 });

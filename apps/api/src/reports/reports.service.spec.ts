@@ -236,4 +236,19 @@ describe('ReportsService', () => {
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.toString('latin1').startsWith('%PDF-')).toBe(true);
   });
+
+  it('ชื่อไฟล์ใช้วันที่เวลาไทย ไม่ใช่ UTC', async () => {
+    // 29 ต.ค. 02:00 เวลาไทย = 28 ต.ค. 19:00 UTC
+    const late = new ReportsService(
+      mockCourses as CoursesService,
+      mockRepo as ReportsRepo,
+      () => new Date('2026-10-28T19:00:00Z'),
+    );
+
+    const csv = await late.exportCsv(teacherUser, 'course-1', { kind: 'all' });
+    const pdf = await late.exportPdf(teacherUser, 'course-1', { kind: 'all' });
+
+    expect(csv.filename).toBe('attendance-report-CS101-2026-10-29.csv');
+    expect(pdf.filename).toBe('attendance-report-CS101-2026-10-29.pdf');
+  });
 });

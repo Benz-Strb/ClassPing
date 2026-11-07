@@ -6,6 +6,7 @@ import { API_URL, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { buildReportQuery, formatRate, type ReportFilters } from "@/lib/reports";
 import { supabase } from "@/lib/supabase";
+import { bangkokDate } from "@/lib/time";
 
 interface AttendanceCounts {
   present: number;
@@ -183,7 +184,7 @@ export default function CourseReportsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
-      a.download = `attendance-report-${data?.course.code ?? id}-${new Date().toISOString().slice(0, 10)}.${type}`;
+      a.download = `attendance-report-${data?.course.code ?? id}-${bangkokDate(new Date())}.${type}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

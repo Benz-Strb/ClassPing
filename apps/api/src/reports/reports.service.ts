@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { CoursesService } from '../courses/courses.service.js';
+import { bangkokDate } from '../sessions/plan-day.js';
 import type { AppUser } from '../users/users.service.js';
 import { generateAttendanceCsv } from './export-csv.js';
 import { generateAttendancePdf } from './export-pdf.js';
@@ -75,7 +76,7 @@ export class ReportsService {
     filter: AttendanceFilterDto,
   ): Promise<{ filename: string; content: string }> {
     const report = await this.getAttendanceReport(user, courseId, filter);
-    const dateStr = this.now().toISOString().slice(0, 10);
+    const dateStr = bangkokDate(this.now());
     const filename = `attendance-report-${report.course.code}-${dateStr}.csv`;
     const content = generateAttendanceCsv(report);
     return { filename, content };
@@ -87,7 +88,7 @@ export class ReportsService {
     filter: AttendanceFilterDto,
   ): Promise<{ filename: string; buffer: Buffer }> {
     const report = await this.getAttendanceReport(user, courseId, filter);
-    const dateStr = this.now().toISOString().slice(0, 10);
+    const dateStr = bangkokDate(this.now());
     const filename = `attendance-report-${report.course.code}-${dateStr}.pdf`;
     const buffer = await generateAttendancePdf(report);
     return { filename, buffer };
