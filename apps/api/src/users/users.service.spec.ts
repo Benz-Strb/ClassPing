@@ -11,6 +11,8 @@ interface Row {
   pdpa_consent_at: string | null;
   identity_verified_at?: string | null;
   identity_score?: number | null;
+  faculty?: string | null;
+  major?: string | null;
 }
 
 // ตาราง users ปลอมในหน่วยความจำ รองรับเฉพาะคำสั่งที่ UsersService ใช้
@@ -206,6 +208,15 @@ describe('UsersService.setIdentity', () => {
     await new UsersService(db, config()).setIdentity('u1', 0.52);
     expect(rows.get('u1')!.identity_verified_at).not.toBeNull();
     expect(rows.get('u1')!.identity_score).toBe(0.52);
+  });
+
+  it('เก็บคณะและสาขา แล้วรีเซ็ตใบหน้าล้างออก', async () => {
+    const { db, rows } = fakeDb([row]);
+    const users = new UsersService(db, config());
+    await users.setIdentity('u1', 0.52, { faculty: 'คณะ ก', major: 'สาขา ข' });
+    expect(rows.get('u1')).toMatchObject({ faculty: 'คณะ ก', major: 'สาขา ข' });
+    await users.setIdentity('u1', null);
+    expect(rows.get('u1')).toMatchObject({ faculty: null, major: null });
   });
 
   it('ส่ง null ล้างการยืนยัน', async () => {

@@ -60,5 +60,6 @@ export async function verifyIdentity(cardUri: string, photo: Photo): Promise<Fac
   const form = new FormData();
   form.append('card', new File(cardUri));
   form.append('face', new File(await shrink(photo)));
-  return apiFetch<FaceStatus>('/me/identity', { method: 'POST', body: form });
+  // รอให้นานกว่าเวลาอ่านบัตรฝั่ง API (30 วิ) รวมเวลาตรวจหน้าและอัปโหลด
+  return apiFetch<FaceStatus>('/me/identity', { method: 'POST', body: form }, 60_000);
 }

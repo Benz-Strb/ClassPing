@@ -5,39 +5,45 @@ import {
   type SessionRules,
 } from '../attendance/decide.js';
 import type { Rules } from '../courses/courses.repo.js';
+import type { AttendanceCounts } from './reports.types.js';
 
-export interface ReportAttendance {
-  status: AttendanceStatus;
-  firstSeenAt: Date | null;
-  updatedBy: string | null;
+type ReportSession = SessionRules & { startsAt: Date; endsAt: Date };
+
+export interface NoRowContext {
+  // เวลาที่เพิ่มเข้ารายชื่อ คาบที่เริ่มก่อนหน้านั้นไม่นับ
+  addedAt?: Date | null;
+  // คาบที่ไม่มีแถวของใครเลย กล้องไม่ได้ทำงาน บอกไม่ได้ว่าใครขาด
+  sessionHasRows?: boolean;
 }
 
-export function statusForReport(
-  session: SessionRules & { startsAt: Date; endsAt: Date },
+export function statusWithoutRow(
+  session: ReportSession,
   courseRules: Rules,
-  attendance: ReportAttendance | null,
   now: Date,
-): AttendanceStatus | 'unrecorded' {
-  const sessionRules = rulesFor(session, courseRules);
-  if (!attendance) {
-    return statusAt(now, session.startsAt, session.endsAt, sessionRules) ===
-      'absent'
-      ? 'absent'
-      : 'unrecorded';
-  }
+  { addedAt = null, sessionHasRows = true }: NoRowContext = {},
+): 'absent' | 'unrecorded' {
+  if (!sessionHasRows || (addedAt && session.startsAt < addedAt)) return 'unrecorded';
+  const rules = rulesFor(session, courseRules);
+  return statusAt(now, session.startsAt, session.endsAt, rules) === 'absent'
+    ? 'absent'
+    : 'unrecorded';
+}
 
-  if (
-    attendance.status === 'leave' ||
-    attendance.status === 'pending' ||
-    attendance.firstSeenAt === null ||
-    attendance.updatedBy !== null
-  ) {
-    return attendance.status;
-  }
-  return statusAt(
-    attendance.firstSeenAt,
-    session.startsAt,
-    session.endsAt,
-    sessionRules,
-  );
+// สถานะที่บันทึกไว้คือผลจริงของคาบนั้น เปลี่ยนเกณฑ์ทีหลังไม่กระทบย้อนหลัง
+export function statusForReport(
+  session: ReportSession,
+  courseRules: Rules,
+  attendance: { status: AttendanceStatus } | null,
+  now: Date,
+  context: NoRowContext = {},
+): AttendanceStatus | 'unrecorded' {
+  return attendance?.status ?? statusWithoutRow(session, courseRules, now, context);
+}
+
+// รอตรวจยังไม่รู้ผล จึงไม่นับเป็นตัวหาร
+export function attendanceRate(counts: AttendanceCounts): number {
+  const decided = counts.total - counts.pending;
+  if (decided <= 0) return 0;
+  const positive = counts.present + counts.late + counts.leave;
+  return Math.round((positive / decided) * 1000) / 10;
 }
