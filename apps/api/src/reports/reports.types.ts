@@ -39,7 +39,7 @@ export interface AttendanceSummary {
   totalSessions: number;
   totalStudents: number;
   counts: AttendanceCounts;
-  attendanceRate: number; // ร้อยละการเข้าเรียน (present + late + leave) / total * 100
+  attendanceRate: number; // ร้อยละการเข้าเรียน (present + late + leave) / (total - pending) * 100
 }
 
 export interface StudentSessionStatus {
