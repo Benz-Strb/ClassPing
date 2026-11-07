@@ -228,11 +228,11 @@ export class SchedulesService {
     const notFound = () => new AppError(404, 'OVERRIDE_NOT_FOUND', 'วันนี้ไม่ได้เปลี่ยนอะไรไว้');
     if (!isDate(date)) throw notFound();
     await this.checkNotStarted(schedule, date, null);
-    // ระหว่างที่งด ห้องอาจถูกวิชาอื่นใช้แล้ว ยกเลิกงดต้องไม่ทับ
+    // ระหว่างที่งดหรือย้ายออก ช่องเดิมอาจถูกวิชาอื่นใช้แล้ว กลับไปต้องไม่ทับ
     const current = (await this.repo.listOverridesOnDate(date)).find(
       (o) => o.scheduleId === scheduleId,
     );
-    if (current?.cancelled) {
+    if (current) {
       await this.checkDayConflict(schedule, {
         scheduleId,
         onDate: date,
