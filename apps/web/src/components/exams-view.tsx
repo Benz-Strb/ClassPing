@@ -24,6 +24,7 @@ interface ExamForm {
   lateAfterMin: string;
   absentAtEnd: boolean;
   absentAfterMin: string;
+  outOfRoomLimitMin: string;
   proctorIds: string[];
 }
 
@@ -96,6 +97,7 @@ export function ExamsView() {
       lateAfterMin: String(data!.rules.lateAfterMin),
       absentAtEnd: data!.rules.absentAfterMin === null,
       absentAfterMin: String(data!.rules.absentAfterMin ?? 30),
+      outOfRoomLimitMin: String(data!.rules.outOfRoomLimitMin),
       proctorIds: [],
     });
   }
@@ -111,6 +113,7 @@ export function ExamsView() {
       lateAfterMin: String(exam.lateAfterMin),
       absentAtEnd: exam.absentAfterMin === null,
       absentAfterMin: String(exam.absentAfterMin ?? 30),
+      outOfRoomLimitMin: String(exam.outOfRoomLimitMin),
       proctorIds: exam.proctors.map((p) => p.id),
     });
   }
@@ -126,6 +129,7 @@ export function ExamsView() {
       roomId: form.roomId,
       lateAfterMin: Number(form.lateAfterMin),
       absentAfterMin: form.absentAtEnd ? null : Number(form.absentAfterMin),
+      outOfRoomLimitMin: Number(form.outOfRoomLimitMin),
       proctorIds: form.proctorIds,
     };
     const send = (replaceClasses: boolean) => {
@@ -186,7 +190,8 @@ export function ExamsView() {
         <p className="text-sm text-gray-700">
           {formatDate(exam.onDate)} {exam.start}-{exam.end} · {exam.room.name} · สายหลัง{" "}
           {exam.lateAfterMin} นาที ·{" "}
-          {exam.absentAfterMin === null ? "ขาดเมื่อหมดคาบ" : `ขาดหลัง ${exam.absentAfterMin} นาที`}
+          {exam.absentAfterMin === null ? "ขาดเมื่อหมดคาบ" : `ขาดหลัง ${exam.absentAfterMin} นาที`}{" "}
+          · นอกห้องเกิน {exam.outOfRoomLimitMin} นาที
         </p>
         <p className="text-sm text-gray-600">
           คุมสอบ:{" "}
@@ -363,6 +368,18 @@ function ExamFields({
             </label>
           )}
         </div>
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">นอกห้องเกิน (นาที)</span>
+          <input
+            type="number"
+            min={1}
+            max={240}
+            required
+            value={form.outOfRoomLimitMin}
+            onChange={(e) => onChange({ ...form, outOfRoomLimitMin: e.target.value })}
+            className={`${input} block w-28`}
+          />
+        </label>
       </div>
       <p className="text-sm text-gray-600">นับจากเวลาเริ่มสอบ ค่าเริ่มต้นเอามาจากเกณฑ์ของวิชา</p>
     </fieldset>

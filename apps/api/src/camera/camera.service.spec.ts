@@ -3,6 +3,8 @@ import type { FrameJob, FrameQueue } from '../attendance/frame-queue.js';
 import type { CameraIdentity, CameraRepo, LiveSession } from './camera.repo.js';
 import { CameraService, MAX_WAITING_FRAMES } from './camera.service.js';
 import { verifyMediaToken } from '../media/media-token.js';
+import type { DoorProcessor, TripResult } from '../door/door.processor.js';
+import { DoorEntries } from '../door/door-entries.js';
 
 const NOW = new Date('2026-10-22T02:00:00Z'); // 09:00 เวลาไทย
 
@@ -43,14 +45,22 @@ function setup(
     },
     waiting: async () => opts.waiting ?? 0,
   };
+  const outs: { sessionId: string; images: Buffer[]; outAt: Date }[] = [];
+  const doorProcessor = {
+    handleOut: async (sessionId: string, images: Buffer[], outAt: Date): Promise<TripResult> => {
+      outs.push({ sessionId, images, outAt });
+      return 'confirmed';
+    },
+  } as unknown as DoorProcessor;
+  const entries = new DoorEntries(() => NOW);
   const config = {
     cameraOpenBeforeMin: opts.openBefore ?? 0,
     mediaServerSecret: opts.media ? 's'.repeat(32) : null,
     mediaTokenSecret: opts.media ? 't'.repeat(32) : null,
     mediaRtspUrl: 'rtsp://media.test:8554',
   } as AppConfig;
-  const service = new CameraService(repo, queue, config, () => NOW);
-  return { service, calls, added };
+  const service = new CameraService(repo, queue, config, () => NOW, doorProcessor, entries);
+  return { service, calls, added, outs, entries };
 }
 
 describe('CameraService.currentSession', () => {
@@ -105,9 +115,7 @@ describe('CameraService.currentSession', () => {
   it('หาคาบของห้องกล้องนี้ โดยเลื่อนเวลาเปิดตาม CAMERA_OPEN_BEFORE_MIN', async () => {
     const { service, calls } = setup({ openBefore: 10 });
     await service.currentSession(front);
-    expect(calls).toEqual([
-      { roomId: 'r1', opensBy: new Date('2026-10-22T02:10:00Z'), now: NOW },
-    ]);
+    expect(calls).toEqual([{ roomId: 'r1', opensBy: new Date('2026-10-22T02:10:00Z'), now: NOW }]);
   });
 });
 
@@ -162,5 +170,91 @@ describe('CameraService.acceptFrame', () => {
       code: 'BUSY',
     });
     expect(added).toEqual([]);
+  });
+});
+
+describe('CameraService.acceptDoorCrossing', () => {
+  it('ออก: ส่งรูปให้ DoorProcessor พร้อมเวลาที่รับจากเซิร์ฟเวอร์ และคืนผลรอบ', async () => {
+    const { service, outs } = setup();
+    const file = jpeg();
+    await expect(service.acceptDoorCrossing(door, 'out', [file])).resolves.toEqual({
+      trip: 'confirmed',
+    });
+    expect(outs).toEqual([{ sessionId: 's1', images: [file.buffer], outAt: NOW }]);
+  });
+
+  it('ออกโดยไม่มีรูปก็รับ', async () => {
+    const { service, outs } = setup();
+    await service.acceptDoorCrossing(door, 'out', []);
+    expect(outs[0].images).toEqual([]);
+  });
+
+  it('เข้า: จดเวลาเข้าถึงหมดคาบ คืน trip null และไม่สนรูปที่แนบมา', async () => {
+    const { service, outs, entries } = setup();
+    await expect(
+      service.acceptDoorCrossing(door, 'in', [
+        { buffer: Buffer.from('x'), mimetype: 'image/jpeg', size: 1 },
+      ]),
+    ).resolves.toEqual({ trip: null });
+    expect(outs).toEqual([]);
+    expect(entries.between('s1', new Date(NOW.getTime() - 1000), NOW)).toEqual([NOW]);
+  });
+
+  it('กล้องหน้าห้องได้ 403 NOT_DOOR_CAMERA', async () => {
+    const { service, outs } = setup();
+    await expect(service.acceptDoorCrossing(front, 'out', [])).rejects.toMatchObject({
+      status: 403,
+      code: 'NOT_DOOR_CAMERA',
+    });
+    expect(outs).toEqual([]);
+  });
+
+  it('ไม่มีคาบได้ 409 NO_LIVE_SESSION (ทั้งออกและเข้า)', async () => {
+    const { service, outs } = setup({ live: null });
+    await expect(service.acceptDoorCrossing(door, 'out', [jpeg()])).rejects.toMatchObject({
+      status: 409,
+      code: 'NO_LIVE_SESSION',
+    });
+    await expect(service.acceptDoorCrossing(door, 'in', [])).rejects.toMatchObject({ status: 409 });
+    expect(outs).toEqual([]);
+  });
+
+  it('ถามคาบด้วยวิธีเดียวกับกล้องหน้าห้อง (liveSession ของห้อง ณ เวลารับ)', async () => {
+    const { service, calls } = setup({ openBefore: 10 });
+    await service.acceptDoorCrossing(door, 'out', []);
+    expect(calls).toEqual([{ roomId: 'r1', opensBy: new Date('2026-10-22T02:10:00Z'), now: NOW }]);
+  });
+
+  it('รูปไม่ใช่ JPEG ได้ 400 UNSUPPORTED_IMAGE', async () => {
+    const { service, outs } = setup();
+    await expect(
+      service.acceptDoorCrossing(door, 'out', [
+        jpeg(),
+        { buffer: Buffer.from('hello'), mimetype: 'image/jpeg', size: 5 },
+      ]),
+    ).rejects.toMatchObject({ status: 400, code: 'UNSUPPORTED_IMAGE' });
+    expect(outs).toEqual([]);
+  });
+
+  it('direction ไม่ใช่ out หรือ in ได้ 400', async () => {
+    const { service } = setup();
+    await expect(service.acceptDoorCrossing(door, undefined, [])).rejects.toMatchObject({
+      status: 400,
+      code: 'BAD_DIRECTION',
+    });
+    await expect(service.acceptDoorCrossing(door, 'sideways', [])).rejects.toMatchObject({
+      status: 400,
+      code: 'BAD_DIRECTION',
+    });
+  });
+});
+
+describe('CameraService.currentSession (กล้องประตู)', () => {
+  it('กล้องประตูได้คาบแต่ stream เป็น null', async () => {
+    const { service } = setup({ media: true });
+    await expect(service.currentSession(door)).resolves.toMatchObject({
+      session: { id: 's1' },
+      stream: null,
+    });
   });
 });
