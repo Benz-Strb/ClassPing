@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { apiFetch } from "../lib/api";
-import { formatRate } from "../lib/attendance";
+import { formatBuddhistDate, formatRate, parseFilterDate } from "../lib/attendance";
 import type { AttendanceCounts } from "../lib/types";
 
 interface CourseAttendance {
@@ -50,6 +50,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
   const [kind, setKind] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [filterError, setFilterError] = useState<string | null>(null);
   const [query, setQuery] = useState("kind=all");
   const [reload, setReload] = useState(0);
   const [data, setData] = useState<CourseAttendance | null>(null);
@@ -103,7 +104,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       </View>
       <TextInput
         accessibilityLabel="วันที่เริ่มต้น"
-        placeholder="ตั้งแต่ YYYY-MM-DD"
+        placeholder="ตั้งแต่ ปปปป-ดด-วว (พ.ศ. หรือ ค.ศ.)"
         value={startDate}
         onChangeText={setStartDate}
         autoCapitalize="none"
@@ -111,7 +112,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       />
       <TextInput
         accessibilityLabel="วันที่สิ้นสุด"
-        placeholder="ถึง YYYY-MM-DD"
+        placeholder="ถึง ปปปป-ดด-วว (พ.ศ. หรือ ค.ศ.)"
         value={endDate}
         onChangeText={setEndDate}
         autoCapitalize="none"
@@ -120,15 +121,28 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       <Pressable
         accessibilityRole="button"
         onPress={() => {
+          const start = parseFilterDate(startDate);
+          const end = parseFilterDate(endDate);
+          const invalid = !start.ok ? start : !end.ok ? end : null;
+          if (invalid) {
+            setFilterError(invalid.message);
+            return;
+          }
+          if (start.ok && end.ok && start.value && end.value && start.value > end.value) {
+            setFilterError("วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด");
+            return;
+          }
+          setFilterError(null);
           const params = new URLSearchParams({ kind });
-          if (startDate.trim()) params.set("startDate", startDate.trim());
-          if (endDate.trim()) params.set("endDate", endDate.trim());
+          if (start.ok && start.value) params.set("startDate", start.value);
+          if (end.ok && end.value) params.set("endDate", end.value);
           setQuery(params.toString());
           setReload((value) => value + 1);
         }}
       >
         <Text style={{ color: "#1d4ed8", padding: 8 }}>แสดงผล / โหลดใหม่</Text>
       </Pressable>
+      {filterError && <Text style={{ color: "#dc2626" }}>{filterError}</Text>}
       {error ? (
         <Text style={{ color: "#dc2626" }}>{error}</Text>
       ) : !data ? (
@@ -150,7 +164,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
               }}
             >
               <Text>
-                {session.onDate} ·{" "}
+                {formatBuddhistDate(session.onDate)} ·{" "}
                 {session.kind === "exam" ? "คาบสอบ" : "คาบเรียน"}
                 {session.title ? ` · ${session.title}` : ""}
               </Text>

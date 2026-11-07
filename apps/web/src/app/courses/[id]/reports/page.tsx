@@ -6,7 +6,7 @@ import { API_URL, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { buildReportQuery, formatRate, type ReportFilters } from "@/lib/reports";
 import { supabase } from "@/lib/supabase";
-import { bangkokDate } from "@/lib/time";
+import { bangkokDate, formatBuddhistDate } from "@/lib/time";
 
 interface AttendanceCounts {
   present: number;
@@ -253,7 +253,7 @@ export default function CourseReportsPage() {
               .filter((session) => kind === "all" || session.kind === kind)
               .map((session) => (
                 <option key={session.sessionId} value={session.sessionId}>
-                  {session.onDate} · {session.kind === "exam" ? session.title ?? "สอบ" : "คาบเรียน"}
+                  {formatBuddhistDate(session.onDate)} · {session.kind === "exam" ? session.title ?? "สอบ" : "คาบเรียน"}
                 </option>
               ))}
           </select>
@@ -468,7 +468,7 @@ export default function CourseReportsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {data.sessions.map((sess) => (
                       <tr key={sess.sessionId} className="hover:bg-gray-50/80">
-                        <td className="px-4 py-2.5 font-medium text-gray-900">{sess.onDate}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-900">{formatBuddhistDate(sess.onDate)}</td>
                         <td className="px-4 py-2.5">
                           {sess.kind === "exam" ? (
                             <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">
