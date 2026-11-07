@@ -118,7 +118,7 @@ export function RulesView() {
           className="w-32 rounded-lg border px-3 py-2"
         />
         <span className="block text-sm text-gray-600">
-          ออกนอกห้องรวมเกินนี้นับว่าโดด
+          ออกนอกห้องรวมเกินนี้ขึ้นป้ายว่าหาย
         </span>
       </label>
 
