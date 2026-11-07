@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { defaultErrorText } from "./errors";
 import { supabase } from "./supabase";
 
 export class ApiError extends Error {
@@ -65,7 +66,7 @@ export async function apiFetch<T>(
     throw new ApiError(
       res.status,
       body?.error?.code ?? "HTTP_ERROR",
-      body?.error?.message ?? "เรียกระบบไม่สำเร็จ",
+      body?.error?.message ?? defaultErrorText(res.status),
     );
   }
   if (!body || typeof body !== "object" || !("data" in body)) {

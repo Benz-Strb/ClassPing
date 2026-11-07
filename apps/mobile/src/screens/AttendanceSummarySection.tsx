@@ -40,31 +40,47 @@ function StatusCounts({ counts }: { counts: AttendanceCounts }) {
   );
 }
 
-export function AttendanceSummarySection({ mode = "summary" }: { mode?: "summary" | "courses" }) {
+export function AttendanceSummarySection({
+  mode = "summary",
+  active = true,
+  refreshTick = 0,
+  onSettled,
+}: {
+  mode?: "summary" | "courses";
+  // แท็บนี้เปิดอยู่ ปิดอยู่จะไม่โหลด
+  active?: boolean;
+  // เลขที่เพิ่มเมื่อต้องโหลดใหม่ (กลับเข้าแอป ดึงลงเพื่อรีเฟรช)
+  refreshTick?: number;
+  // โหลดจบแล้ว (สำเร็จหรือไม่)
+  onSettled?: () => void;
+}) {
   const [data, setData] = useState<StudentAttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-    setData(null);
+    if (!active) return;
+    let current = true;
     setError(null);
 
     apiFetch<StudentAttendanceSummary>("/me/reports/attendance")
-      .then((summary) => active && setData(summary))
+      .then((summary) => current && setData(summary))
       .catch((cause: unknown) => {
-        if (active) {
+        if (current) {
           setError(
             cause instanceof Error ? cause.message : "โหลดสถิติไม่สำเร็จ",
           );
         }
-      });
+      })
+      .finally(() => current && onSettled?.());
 
     return () => {
-      active = false;
+      current = false;
     };
-  }, [reloadKey]);
+    // onSettled เปลี่ยนทุกรอบเรนเดอร์ ไม่ใส่ใน deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey, active, refreshTick]);
 
   return (
     <View style={styles.section} accessibilityRole="summary">
