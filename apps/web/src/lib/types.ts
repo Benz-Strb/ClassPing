@@ -177,7 +177,7 @@ export interface AttendanceRow {
     totalSeconds: number;
     minutes: number;
     // ป้ายที่ API ตัดสินแล้ว หน้าเว็บไม่คิดเกณฑ์ซ้ำ
-    label: "out" | "gone" | "gone_no_return" | null;
+    label: "out" | "out_now" | "gone" | "gone_no_return" | null;
     trips: TripView[];
   };
 }
