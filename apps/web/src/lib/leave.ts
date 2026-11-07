@@ -13,6 +13,7 @@ export type LeaveSession = {
   startsAt: string;
   endsAt: string;
   roomName: string;
+  cancelled: boolean;
 };
 
 export type LeaveRequest = {
@@ -65,7 +66,8 @@ export function formatSession(session: LeaveSession) {
   const startsAt = new Date(session.startsAt);
   const endsAt = new Date(session.endsAt);
   const schedule = `${sessionDate.format(startsAt)} ${sessionTime.format(startsAt)}–${sessionTime.format(endsAt)}`;
-  return `${session.courseCode}${section} · ${session.courseName} · ${schedule}${room}`;
+  const cancelled = session.cancelled ? " · คาบนี้ถูกลบแล้ว" : "";
+  return `${session.courseCode}${section} · ${session.courseName} · ${schedule}${room}${cancelled}`;
 }
 
 export function formatSubmittedAt(value: string) {
