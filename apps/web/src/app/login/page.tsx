@@ -7,9 +7,11 @@ import { supabase } from "@/lib/supabase";
 function LoginForm() {
   const error = useSearchParams().get("error");
   const [loading, setLoading] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   async function signIn() {
     setLoading(true);
+    setSignInError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -18,15 +20,16 @@ function LoginForm() {
         queryParams: { hd: "dpu.ac.th", prompt: "select_account" },
       },
     });
-    if (error) setLoading(false);
+    if (error) { setSignInError(error.message); setLoading(false); }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-4 rounded-xl border p-6">
-        <h1 className="text-xl font-semibold">ClassPing</h1>
+    <main className="login-layout">
+      <div className="login-panel space-y-6">
+        <div className="login-brand">ClassPing</div>
+        <div className="space-y-2"><h1 className="text-3xl font-semibold">เข้าสู่ระบบ</h1><p className="text-gray-600">จัดการรายวิชาและติดตามการเข้าเรียน</p></div>
         <p className="text-sm text-gray-600">เข้าสู่ระบบด้วยเมลมหาวิทยาลัย (@dpu.ac.th)</p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {(signInError || error) && <p role="alert" className="surface-feedback text-sm text-red-600">{signInError || error}</p>}
         <button
           onClick={signIn}
           disabled={loading}

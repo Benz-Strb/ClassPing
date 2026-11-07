@@ -33,18 +33,21 @@ export default function Home() {
   if (state === "loading") return <p className="p-6">กำลังโหลด...</p>;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+    <main className="welcome-layout">
       {state === "student" ? (
-        <>
-          <p>บัญชีนักศึกษาใช้งานผ่านแอปมือถือ</p>
-          <Link href="/me" className="text-blue-600 underline">
-            ดูบัญชีของฉัน
-          </Link>
-        </>
+        <section className="work-surface welcome-panel">
+          <h1>พื้นที่นักศึกษา</h1>
+          <p className="tool-note mt-3 mb-6">ดูตารางเรียนและผลเข้าเรียนผ่านแอป ClassPing ส่วนคำขอลาและเทียบโอนใช้งานบนเว็บได้</p>
+          <Link href="/leave" className="tool-link">ยื่นคำขอลาและดูสถานะ<span aria-hidden="true">&rsaquo;</span></Link>
+          <Link href="/transfers" className="tool-link">ขอเทียบโอนรายวิชา<span aria-hidden="true">&rsaquo;</span></Link>
+          <Link href="/me" className="tool-link">บัญชีของฉัน<span aria-hidden="true">&rsaquo;</span></Link>
+        </section>
       ) : (
-        <Link href="/login" className="rounded-lg bg-blue-600 px-4 py-2 text-white">
-          เข้าสู่ระบบ ClassPing
-        </Link>
+        <section className="work-surface welcome-panel">
+          <h1>ClassPing</h1>
+          <p className="tool-note mt-3 mb-8">ระบบจัดการรายวิชาและการเข้าเรียนด้วยใบหน้า สำหรับนักศึกษาและบุคลากรมหาวิทยาลัย</p>
+          <Link href="/login" className="welcome-action">เข้าสู่ระบบด้วยบัญชีมหาวิทยาลัย</Link>
+        </section>
       )}
     </main>
   );

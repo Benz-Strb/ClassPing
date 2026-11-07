@@ -51,11 +51,13 @@ export default function MePage() {
   if (!me) return <p className="p-6">กำลังโหลด...</p>;
 
   return (
-    <main className="mx-auto max-w-md space-y-3 p-6">
-      <h1 className="text-xl font-semibold">{me.fullName ?? me.email}</h1>
-      <p>{me.email}</p>
-      <p>บทบาท: {ROLE_LABEL[me.role]}</p>
-      {me.studentId && <p>รหัสนักศึกษา: {me.studentId}</p>}
+    <main className="account-page mx-auto space-y-6 p-6">
+      <header><h1 className="text-2xl sm:text-3xl font-semibold">บัญชีของฉัน</h1><p className="text-gray-600">ข้อมูลบัญชีมหาวิทยาลัยของคุณ</p></header>
+      <section className="account-profile" aria-label="ข้อมูลบัญชี">
+        <span className="account-avatar" aria-hidden="true">{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</span>
+        <div><h2>{me.fullName ?? me.email}</h2><p className="text-gray-600 break-all">{me.email}</p></div>
+      </section>
+      <dl className="account-details"><div><dt>บทบาท</dt><dd>{ROLE_LABEL[me.role]}</dd></div>{me.studentId && <div><dt>รหัสนักศึกษา</dt><dd>{me.studentId}</dd></div>}</dl>
       {me.role === "admin" && (
         <Link
           href="/admin"
