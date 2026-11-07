@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { RetryButton } from "@/components/retry-button";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -131,7 +132,7 @@ export default function AdminUsersPage() {
       )}
       {status && <p role="status">{status}</p>}
       {users === null ? (
-        <p role="status">กำลังโหลดผู้ใช้...</p>
+        error ? <RetryButton /> : <p role="status">กำลังโหลดผู้ใช้...</p>
       ) : users.length === 0 ? (
         <p className="text-gray-600">ยังไม่มีผู้ใช้</p>
       ) : (

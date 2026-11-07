@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import type { Course, Me } from "@/lib/types";
+import { RetryButton } from "@/components/retry-button";
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -55,7 +56,7 @@ export default function CoursesPage() {
       {error && <p className="text-red-600">{error}</p>}
 
       {courses === null ? (
-        <p>กำลังโหลด...</p>
+        error ? <RetryButton /> : <p>กำลังโหลด...</p>
       ) : courses.length === 0 ? (
         <p className="text-gray-600">ยังไม่มีวิชา</p>
       ) : (

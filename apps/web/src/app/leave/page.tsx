@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { RetryButton } from "@/components/retry-button";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -266,7 +267,7 @@ function StudentLeavePage() {
           คำขอลาของฉัน
         </h2>
         {requests === null ? (
-          <p role="status">กำลังโหลด...</p>
+          error ? <RetryButton /> : <p role="status">กำลังโหลด...</p>
         ) : requests.length === 0 ? (
           <p className="rounded-lg border p-4 text-gray-600">ยังไม่มีคำขอลา</p>
         ) : (
