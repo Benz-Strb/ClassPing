@@ -160,10 +160,15 @@ export function CheckinView() {
           {count("leave")} · รอตรวจ {pending.length + tripReviews.length} · ยังไม่เห็น{" "}
           {unseen.length - absentByTime}
         </p>
-        {session.status === "ended" && !session.recorded && (
-          <p className="text-sm text-yellow-700">
-            คาบนี้ไม่มีข้อมูลจากกล้อง รายงานจึงยังไม่นับคาบนี้
-          </p>
+        {session.cancelled ? (
+          <p className="text-sm text-red-700">คาบนี้ถูกลบแล้ว รายงานไม่นับคาบนี้</p>
+        ) : (
+          session.status === "ended" &&
+          !session.recorded && (
+            <p className="text-sm text-yellow-700">
+              คาบนี้ไม่มีข้อมูลจากกล้อง รายงานจึงยังไม่นับคาบนี้
+            </p>
+          )
         )}
       </div>
 

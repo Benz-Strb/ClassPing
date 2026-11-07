@@ -37,6 +37,7 @@ class InMemorySessionsRepo implements SessionsRepo {
     return [...this.rows.values()].some(
       (r) =>
         r.id !== ignoreId &&
+        !r.cancelledAt &&
         ((r.courseId === row.courseId && r.startsAt.getTime() === row.startsAt.getTime()) ||
           (row.scheduleId !== null && r.scheduleId === row.scheduleId && r.onDate === row.onDate)),
     );
@@ -47,7 +48,14 @@ class InMemorySessionsRepo implements SessionsRepo {
     if (sessions.some((s) => this.clash(s))) throw new Error('duplicate key 23505');
     for (const s of sessions) {
       const id = randomUUID();
-      this.rows.set(id, { kind: 'class', title: null, ...s, id, roomName: `ห้อง ${s.roomId}` });
+      this.rows.set(id, {
+        kind: 'class',
+        title: null,
+        cancelledAt: null,
+        ...s,
+        id,
+        roomName: `ห้อง ${s.roomId}`,
+      });
     }
   }
   async update(id: string, patch: Pick<SessionRow, 'roomId' | 'startsAt' | 'endsAt'>) {
@@ -58,6 +66,18 @@ class InMemorySessionsRepo implements SessionsRepo {
   async remove(ids: string[]) {
     this.writes++;
     ids.forEach((id) => this.rows.delete(id));
+  }
+  leaveSessions = new Set<string>();
+  async cancel(ids: string[], at: Date) {
+    if (ids.length) this.writes++;
+    ids.forEach((id) => this.rows.set(id, { ...this.rows.get(id)!, cancelledAt: at }));
+  }
+  async restore(ids: string[]) {
+    if (ids.length) this.writes++;
+    ids.forEach((id) => this.rows.set(id, { ...this.rows.get(id)!, cancelledAt: null }));
+  }
+  async withLeaveRequests(ids: string[]) {
+    return ids.filter((id) => this.leaveSessions.has(id));
   }
 }
 
@@ -131,10 +151,25 @@ function setup(openBeforeMin = 0) {
     // FK ใน DB เป็น on delete set null
     for (const row of repo.rows.values()) if (row.scheduleId === id) row.scheduleId = null;
   };
+  const clearOverride = (scheduleId: string, onDate: string) => {
+    overrides = overrides.filter((x) => !(x.scheduleId === scheduleId && x.onDate === onDate));
+  };
   const sessions = () => [...repo.rows.values()];
   const setNow = (value: Date) => (now = value);
 
-  return { owner, course, repo, service, addSchedule, setOverride, removeSchedule, sessions, setNow, broken };
+  return {
+    owner,
+    course,
+    repo,
+    service,
+    addSchedule,
+    setOverride,
+    clearOverride,
+    removeSchedule,
+    sessions,
+    setNow,
+    broken,
+  };
 }
 
 describe('SessionsService.syncCourse', () => {
@@ -183,7 +218,68 @@ describe('SessionsService.syncCourse', () => {
     expect(sessions()).toEqual([]);
   });
 
-  it('คาบที่เริ่มแล้วไม่ถูกแตะ ไม่ว่าจะงดสอน ย้ายห้อง หรือลบตาราง', async () => {
+  it('งดสอนหลังกล้องเปิด ทำเครื่องหมายว่าลบคาบ ยกเลิกงดแล้วกลับมาแถวเดิม', async () => {
+    const { course, service, addSchedule, setOverride, clearOverride, sessions } = setup();
+    const tuesday = addSchedule({ weekday: 2 });
+    await service.syncCourse(course.id);
+    const live = sessions()[0];
+
+    setOverride({ scheduleId: tuesday.id, onDate: TODAY, cancelled: true });
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([{ ...live, cancelledAt: NOW }]);
+
+    // sync ซ้ำไม่เปลี่ยน
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([{ ...live, cancelledAt: NOW }]);
+
+    clearOverride(tuesday.id, TODAY);
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([live]);
+  });
+
+  it('งดสอนคาบล่วงหน้าที่มีใบลา แถวอยู่ต่อพร้อมเครื่องหมาย และกลับมาได้ ส่วนคาบที่ไม่มีใบลาลบจริง', async () => {
+    const { course, repo, service, addSchedule, setOverride, clearOverride, sessions } = setup();
+    const monday = addSchedule();
+    const friday = addSchedule({ weekday: 5, roomId: 'B' });
+    await service.syncCourse(course.id);
+    const withLeave = sessions().find((s) => s.scheduleId === monday.id)!;
+    repo.leaveSessions.add(withLeave.id);
+
+    setOverride({ scheduleId: monday.id, onDate: NEXT_MONDAY, cancelled: true });
+    setOverride({ scheduleId: friday.id, onDate: '2026-10-23', cancelled: true });
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([{ ...withLeave, cancelledAt: NOW }]);
+
+    clearOverride(monday.id, NEXT_MONDAY);
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([withLeave]);
+  });
+
+  it('คาบที่ถูกลบไม่กันเวลาเดิม คาบสอบหรือคาบใหม่ทับได้', async () => {
+    const { course, repo, service, addSchedule, setOverride, sessions } = setup();
+    const monday = addSchedule();
+    await service.syncCourse(course.id);
+    repo.leaveSessions.add(sessions()[0].id);
+    setOverride({ scheduleId: monday.id, onDate: NEXT_MONDAY, cancelled: true });
+    await service.syncCourse(course.id);
+
+    addSchedule({ roomId: 'B' });
+    await service.syncCourse(course.id);
+    expect(sessions().filter((s) => !s.cancelledAt)).toHaveLength(1);
+    expect(sessions().filter((s) => s.cancelledAt)).toHaveLength(1);
+  });
+
+  it('รายการคาบของวิชาบอกว่าคาบไหนถูกลบ', async () => {
+    const { owner, course, service, addSchedule, setOverride } = setup();
+    const tuesday = addSchedule({ weekday: 2 });
+    await service.syncCourse(course.id);
+    setOverride({ scheduleId: tuesday.id, onDate: TODAY, cancelled: true });
+    await service.syncCourse(course.id);
+    const [view] = await service.listForCourse(owner, course.id, TODAY, TODAY);
+    expect(view.cancelled).toBe(true);
+  });
+
+  it('คาบที่เริ่มแล้วไม่ถูกแตะ ไม่ว่าจะย้ายห้องหรือลบตาราง', async () => {
     const { course, service, addSchedule, setOverride, removeSchedule, sessions } = setup();
     // วันนี้ 09:00–12:00 ตอนนี้ 10:00 = กำลังเรียน
     const tuesday = addSchedule({ weekday: 2 });
@@ -195,16 +291,12 @@ describe('SessionsService.syncCourse', () => {
     await service.syncCourse(course.id);
     expect(sessions()).toEqual([live]);
 
-    setOverride({ scheduleId: tuesday.id, onDate: TODAY, cancelled: true });
-    await service.syncCourse(course.id);
-    expect(sessions()).toEqual([live]);
-
     removeSchedule(tuesday.id);
     await service.syncCourse(course.id);
     expect(sessions()).toEqual([{ ...live, scheduleId: null }]);
   });
 
-  it('กล้องเปิดก่อนคาบแล้ว (20 นาที) ถือว่าคาบเริ่มแล้ว งดสอนไม่ทำให้คาบหาย', async () => {
+  it('กล้องเปิดก่อนคาบแล้ว (20 นาที) งดสอนเป็นการทำเครื่องหมาย ส่วนคาบที่กล้องยังไม่เปิดลบจริง', async () => {
     const { course, service, addSchedule, setOverride, sessions } = setup(20);
     // ตอนนี้ 10:00 คาบ 10:15 กล้องเปิดไปแล้ว คาบ 10:30 ยังไม่เปิด
     const soon = addSchedule({ weekday: 2, startTime: '10:15', endTime: '10:45' });
@@ -216,6 +308,7 @@ describe('SessionsService.syncCourse', () => {
     setOverride({ scheduleId: later.id, onDate: TODAY, cancelled: true });
     await service.syncCourse(course.id);
     expect(sessions().map((s) => s.scheduleId)).toEqual([soon.id]);
+    expect(sessions()[0].cancelledAt).toEqual(NOW);
   });
 
   it('ลบตาราง คาบในอนาคตหาย แต่คาบที่จบไปแล้วยังอยู่', async () => {
@@ -243,7 +336,7 @@ describe('SessionsService.syncCourse', () => {
     expect(sessions().map((s) => s.startsAt)).toEqual([new Date('2026-10-20T06:00:00Z')]);
   });
 
-  it('แก้ตารางเป็นเวลาที่ผ่านไปแล้วของวันนี้ คาบวันนี้ยังอยู่เวลาเดิม สัปดาห์หน้าค่อยใช้เวลาใหม่', async () => {
+  it('แก้ตารางเป็นเวลาที่เริ่มไปแล้วของวันนี้ คาบวันนี้ยังอยู่เวลาเดิม สัปดาห์หน้าค่อยใช้เวลาใหม่', async () => {
     const { course, service, addSchedule, sessions, removeSchedule } = setup();
     const schedule = addSchedule({ weekday: 2, startTime: '14:00', endTime: '15:00' });
     await service.syncCourse(course.id);
@@ -255,11 +348,17 @@ describe('SessionsService.syncCourse', () => {
     await service.syncCourse(course.id);
     expect(sessions()).toEqual([today]);
 
-    // เวลาใหม่ที่ยังไม่จบ ย้ายคาบวันนี้ได้ตามเดิม
+    // เริ่มไปแล้วแต่ยังไม่จบ ก็ไม่ย้าย
     schedule.startTime = '09:30';
     schedule.endTime = '11:00';
     await service.syncCourse(course.id);
-    expect(sessions()[0].startsAt).toEqual(new Date('2026-10-20T02:30:00Z'));
+    expect(sessions()).toEqual([today]);
+
+    // เวลาใหม่ที่ยังไม่เริ่ม ย้ายคาบวันนี้ได้ตามเดิม
+    schedule.startTime = '10:30';
+    schedule.endTime = '11:30';
+    await service.syncCourse(course.id);
+    expect(sessions()[0].startsAt).toEqual(new Date('2026-10-20T03:30:00Z'));
     removeSchedule(schedule.id);
   });
 
@@ -289,6 +388,7 @@ describe('SessionsService กับคาบสอบ', () => {
     onDate,
     startsAt: new Date(startsAt),
     endsAt: new Date(endsAt),
+    cancelledAt: null,
   });
 
   it('sync ไม่ลบหรือแก้คาบสอบ ทั้งที่กล้องยังไม่เปิดและเปิดแล้ว', async () => {

@@ -52,6 +52,7 @@ interface RawSession {
   late_after_min: number | null;
   absent_after_min: number | null;
   out_of_room_limit_min: number | null;
+  cancelled_at?: string | null;
   rooms: { name: string } | null;
 }
 
@@ -192,7 +193,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
     let sessionQuery = this.db
       .from('sessions')
       .select(
-        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, rooms(name)',
+        'id, course_id, on_date, starts_at, ends_at, kind, title, late_after_min, absent_after_min, out_of_room_limit_min, cancelled_at, rooms(name)',
       )
       .eq('course_id', courseId)
       .order('starts_at', { ascending: true })
@@ -211,7 +212,8 @@ export class SupabaseReportsRepo implements ReportsRepo {
       sessionQuery = sessionQuery.lte('on_date', filter.endDate);
     }
 
-    const sessions = await allRows<RawSession>(sessionQuery);
+    // คาบที่ถูกลบไม่นับในรายงาน
+    const sessions = (await allRows<RawSession>(sessionQuery)).filter((s) => !s.cancelled_at);
 
     // 3. ดึง enrollments (รายชื่อนักศึกษา)
     let enrollmentQuery = this.db

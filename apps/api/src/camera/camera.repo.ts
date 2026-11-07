@@ -75,6 +75,7 @@ export class SupabaseCameraRepo implements CameraRepo {
       .from('sessions')
       .select('id, starts_at, ends_at, courses(code, name)')
       .eq('room_id', roomId)
+      .is('cancelled_at', null)
       .lte('starts_at', opensBy.toISOString())
       .gt('ends_at', now.toISOString())
       .order('starts_at')
