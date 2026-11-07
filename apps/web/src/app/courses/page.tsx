@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import type { Course, Me } from "@/lib/types";
+import { TodayAgenda } from "@/components/today-agenda";
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -41,9 +42,9 @@ export default function CoursesPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">วิชาของฉัน</h1>
+    <main className="space-y-8">
+      <header className="workspace-heading">
+        <div><h1>ตารางและงานของวันนี้</h1><p>รายวิชา กลุ่มเรียน และรายละเอียดการเข้าเรียน</p></div>
         <Link href="/live" className="ml-auto mr-4 text-sm text-blue-600 underline">
           กล้อง
         </Link>
@@ -52,53 +53,64 @@ export default function CoursesPage() {
         </Link>
       </header>
 
-      {error && <p className="text-red-600">{error}</p>}
-
+      {error && <p role="alert" className="surface-feedback text-red-600">{error}</p>}
+      <div className="workspace-columns">
+      <div className="workspace-primary">
+      <TodayAgenda />
+      <section className="work-surface" aria-labelledby="my-courses-title">
+      <div className="surface-heading"><h2 id="my-courses-title">รายวิชาของฉัน</h2><span className="tool-note">{courses ? `${courses.length} รายวิชา` : ""}</span></div>
       {courses === null ? (
-        <p>กำลังโหลด...</p>
+        <p role="status" className="surface-feedback text-gray-600">กำลังโหลดรายวิชา...</p>
       ) : courses.length === 0 ? (
-        <p className="text-gray-600">ยังไม่มีวิชา</p>
+        <p className="surface-feedback text-gray-600">ยังไม่มีวิชา</p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="course-grid">
           {courses.map((course) => (
-            <li key={course.id}>
+            <li key={course.id} className="course-card">
               <Link
                 href={`/courses/${course.id}/students`}
-                className="block px-4 py-3 hover:bg-gray-50"
+                className="course-entry"
               >
-                <span className="font-medium">{course.code}</span> {course.name}
-                {course.section && (
-                  <span className="text-gray-500"> · กลุ่ม {course.section}</span>
-                )}
+                <span className="course-code">{course.code}</span><span className="course-detail"><h2>{course.name}</h2>{course.section && <small>กลุ่ม {course.section}</small>}</span>
+                <span className="course-open" aria-hidden="true">&rsaquo;</span>
               </Link>
             </li>
           ))}
         </ul>
       )}
-
-      <form onSubmit={create} className="space-y-3 rounded-lg border p-4">
+      </section>
+      </div>
+      <aside className="workspace-tools" aria-label="เครื่องมือรายวิชา">
+      <section className="work-surface"><h2 className="mb-4">งานที่ต้องตรวจ</h2><Link href="/leave/review" className="tool-link">ตรวจคำขอลา<span aria-hidden="true">&rsaquo;</span></Link><Link href="/live" className="tool-link">คาบเรียนและกล้อง<span aria-hidden="true">&rsaquo;</span></Link><p className="tool-note mt-4">ผลรอตรวจต้องได้รับการยืนยันก่อนนับเป็นผลเข้าเรียน</p></section>
+      <form onSubmit={create} className="space-y-4 rounded-xl border p-6">
         <h2 className="font-medium">สร้างวิชา</h2>
-        <div className="grid gap-3 sm:grid-cols-[1fr_2fr_1fr]">
+        <div className="grid gap-4">
+          <label className="form-field"><span>รหัสวิชา</span>
           <input
             required
+            aria-label="รหัสวิชา"
             placeholder="รหัสวิชา เช่น CS101"
             value={form.code}
             onChange={(e) => setForm({ ...form, code: e.target.value })}
             className="rounded-lg border px-3 py-2"
-          />
+          /></label>
+          <label className="form-field"><span>ชื่อวิชา</span>
           <input
             required
+            aria-label="ชื่อวิชา"
             placeholder="ชื่อวิชา"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             className="rounded-lg border px-3 py-2"
-          />
+          /></label>
+          <label className="form-field"><span>กลุ่มเรียน</span>
           <input
+            aria-label="กลุ่มเรียน"
             placeholder="กลุ่มเรียน"
             value={form.section}
             onChange={(e) => setForm({ ...form, section: e.target.value })}
             className="rounded-lg border px-3 py-2"
-          />
+          /></label>
         </div>
         <button
           disabled={saving}
@@ -107,6 +119,8 @@ export default function CoursesPage() {
           {saving ? "กำลังสร้าง..." : "สร้างวิชา"}
         </button>
       </form>
+      </aside>
+      </div>
     </main>
   );
 }

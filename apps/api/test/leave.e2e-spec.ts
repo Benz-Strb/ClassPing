@@ -10,7 +10,7 @@ import type { App } from 'supertest/types.js';
 import { RolesGuard } from './../src/auth/roles.guard.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
-import { FaceClient } from './../src/face/face.client.js';
+import { LeaveOcrClient } from './../src/leave/leave-ocr.client.js';
 import { LeaveController } from './../src/leave/leave.controller.js';
 import {
   LEAVE_REPO,
@@ -184,7 +184,7 @@ describe('ระบบลา (e2e)', () => {
         LeaveService,
         { provide: LEAVE_REPO, useValue: repo },
         {
-          provide: FaceClient,
+          provide: LeaveOcrClient,
           useValue: {
             readLeaveDocument: async () => ({
               lines: [{ text: 'ใบลาป่วย', score: null }],
