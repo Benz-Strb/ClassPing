@@ -27,6 +27,18 @@ const same = (a: string, b: string) => {
   return x.length === y.length && timingSafeEqual(x, y);
 };
 
+// body มาจากข้างนอก ฟิลด์ที่ไม่ใช่ข้อความ (เช่น token เป็นตัวเลข) ให้ถือว่าไม่มี
+const FIELDS = ['user', 'password', 'token', 'ip', 'action', 'path', 'protocol', 'id', 'query'];
+function onlyStrings(body: unknown): MediaAuthRequest {
+  const out: Record<string, string> = {};
+  if (typeof body !== 'object' || body === null) return out;
+  for (const key of FIELDS) {
+    const value = (body as Record<string, unknown>)[key];
+    if (typeof value === 'string') out[key] = value;
+  }
+  return out;
+}
+
 @Injectable()
 export class MediaService {
   // token ดูสดที่ใช้ต่อสายไปแล้ว → เวลาหมดอายุ ใช้ซ้ำไม่ได้ เว็บขอ token ใหม่ทุกครั้งที่ต่อใหม่อยู่แล้ว
@@ -40,7 +52,8 @@ export class MediaService {
     @Inject(ViewerSessions) private readonly viewers: ViewerSessions,
   ) {}
 
-  async authorize(req: MediaAuthRequest): Promise<boolean> {
+  async authorize(body: MediaAuthRequest): Promise<boolean> {
+    const req = onlyStrings(body);
     switch (req.action) {
       case 'publish':
         return this.canPublish(req);
