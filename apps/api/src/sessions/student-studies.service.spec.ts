@@ -20,6 +20,7 @@ function query(rows: unknown[]) {
   const result = { data: rows, error: null };
   const builder = {
     select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(), lte: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
     range: vi.fn().mockResolvedValue(result),
   };

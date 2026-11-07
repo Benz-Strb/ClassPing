@@ -31,6 +31,7 @@ export interface LeaveSession {
   startsAt: string;
   endsAt: string;
   roomName: string;
+  cancelled: boolean;
 }
 
 export interface LeaveRequest {
