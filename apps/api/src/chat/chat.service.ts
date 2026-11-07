@@ -7,6 +7,9 @@ import { ChatRepository } from './chat.repo.js';
 import { CHAT_PROVIDER, type ChatProvider } from './chat.provider.js';
 
 const question = z.object({ message: z.string().trim().min(1).max(2000) });
+const studyQuestion = question.extend({
+  history: z.array(z.object({ question: z.string().trim().min(1).max(2000), answer: z.string().trim().min(1).max(2000) })).max(6).default([]),
+});
 const knowledge = z.object({
   key: z.string().trim().min(1).max(150).refine((key) => !key.startsWith('catalog:'), 'แก้แหล่งความรู้นี้ผ่านหน้าผู้ดูแล'), title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1).max(20000),
@@ -20,10 +23,13 @@ const knowledge = z.object({
 export class ChatService {
   constructor(private readonly repo: ChatRepository, @Inject(CHAT_PROVIDER) private readonly provider: ChatProvider) {}
   async ask(body: unknown, user: AppUser | null) {
+    if (user) {
+      const { message, history } = parseBody(studyQuestion, body);
+      return { ...await this.provider.study(message, history), mock: this.provider.mock, mode: 'study' as const, classroom: 'not_connected' as const };
+    }
     const { message } = parseBody(question, body);
     const embedding = await this.provider.embed(message, 'query');
-    const viewerId = user?.role === 'student' || user?.role === 'teacher' ? user.id : null;
-    const sources = await this.repo.search(embedding, viewerId, this.provider.model);
+    const sources = await this.repo.search(embedding, null, this.provider.model);
     const answer = sources.length ? await this.provider.answer(message, sources) :
       'ไม่พบข้อมูลที่รองรับคำถามนี้ในแหล่งข้อมูลที่คุณมีสิทธิ์เข้าถึง';
     return { answer, sources, mock: this.provider.mock };

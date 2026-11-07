@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../common/app-error.js';
 import { looksLike } from '../common/image-type.js';
-import { FaceClient } from '../face/face.client.js';
+import { LeaveOcrClient } from './leave-ocr.client.js';
 import type { AppUser } from '../users/users.service.js';
 import {
   LEAVE_REPO,
@@ -26,11 +26,79 @@ export interface LeaveEvidence {
   size: number;
 }
 
+export function extractLeaveReason(text: string): string {
+  if (!text) return '';
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const labelRegex =
+    /^(?:เหตุผล(?:การลา)?|สาเหตุ|เนื่องจาก|เนื่องด้วย|ขอลาเนื่องจาก|การวินิจฉัย(?:โรค)?|วินิจฉัย(?:โรค)?(?:ว่า)?|อาการ(?:สำคัญ)?(?:ที่พบ)?|โรค|ป่วยเป็น|ป่วยด้วย|มีความจำเป็นต้อง|Diagnosis|Dx|Symptoms|Reason)\s*[:：\-–—.]?\s*(.*)$/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(labelRegex);
+    if (match) {
+      let content = match[1]?.trim();
+      if (!content && i + 1 < lines.length) {
+        const next = lines[i + 1].trim();
+        if (
+          !/^(?:ชื่อ|รหัสนักศึกษา|รายวิชา|วันที่|แพทย์|โรงพยาบาล|ลงชื่อ|Date|Doctor|Hospital|Name)/i.test(
+            next,
+          )
+        ) {
+          content = next;
+        }
+      }
+      if (content) {
+        return content
+          .replace(/\s*(?:ClassPing|หน้า\s*\d+|Page\s*\d+).*$/i, '')
+          .trim();
+      }
+    }
+  }
+
+  // Check lines with recommendation / rest
+  for (const line of lines) {
+    const match = line.match(
+      /(?:สมควรให้|เห็นควรให้|ให้|แนะนำให้)(?:หยุดพักรักษาตัว|พักรักษาตัว|หยุดเรียน|พักฟื้น|หยุดงาน)\s*(.*)/i,
+    );
+    if (match) return line;
+  }
+
+  // Check illness keywords
+  const illnessRegex =
+    /(?:ไข้|หวัด|เจ็บคอ|ปวดท้อง|ท้องเสีย|อาหารเป็นพิษ|ปวดศีรษะ|ปวดหัว|คลื่นไส้|อาเจียน|อุบัติเหตุ|ผ่าตัด|ติดเชื้อ|กล้ามเนื้อ|กักตัว|โควิด|fever|headache|diarrhea|pharyngitis|gastroenteritis)/i;
+  for (const line of lines) {
+    if (
+      illnessRegex.test(line) &&
+      !/^(?:ข้อมูลสมมติ|หลักฐาน|ใบรับรองแพทย์|โรงพยาบาล|คลินิก|มหาวิทยาลัย|Medical)/i.test(
+        line,
+      )
+    ) {
+      return line
+        .replace(/\s*(?:ClassPing|หน้า\s*\d+|Page\s*\d+).*$/i, '')
+        .trim();
+    }
+  }
+
+  // Fallback: first non-header line
+  const filtered = lines.filter(
+    (l) =>
+      !/^(?:ข้อมูลสมมติ|หลักฐาน|มหาวิทยาลัย|โรงพยาบาล|คลินิก|ชื่อ|รหัสนักศึกษา|รายวิชา|วันที่|วันที่ลา|ClassPing|หน้า|Page)/i.test(
+        l,
+      ),
+  );
+  const fallback = filtered[0] || lines[0] || '';
+  return fallback.slice(0, 1000).trim();
+}
+
 @Injectable()
 export class LeaveService {
   constructor(
     @Inject(LEAVE_REPO) private readonly repo: LeaveRepo,
-    private readonly face: FaceClient,
+    private readonly ocr: LeaveOcrClient,
   ) {}
 
   private validateEvidence(
@@ -72,7 +140,7 @@ export class LeaveService {
         'SESSION_NOT_FOUND',
         'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้',
       );
-    const ocr = await this.face.readLeaveDocument(
+    const ocr = await this.ocr.readLeaveDocument(
       evidence.buffer,
       evidence.mimetype,
     );
@@ -80,7 +148,8 @@ export class LeaveService {
       .map((line) => line.text)
       .join('\n')
       .trim();
-    return { text, reason: text.slice(0, 1000) };
+    const reason = extractLeaveReason(text) || text.slice(0, 1000);
+    return { text, reason };
   }
 
   async submit(
@@ -111,10 +180,10 @@ export class LeaveService {
       );
     }
 
-    let ocr: Awaited<ReturnType<FaceClient['readLeaveDocument']>> | null = null;
+    let ocr: Awaited<ReturnType<LeaveOcrClient['readLeaveDocument']>> | null = null;
     let ocrStatus: 'completed' | 'failed' = 'failed';
     try {
-      ocr = await this.face.readLeaveDocument(
+      ocr = await this.ocr.readLeaveDocument(
         evidence.buffer,
         evidence.mimetype,
       );
