@@ -152,6 +152,7 @@ export class AttendanceService {
       SIGNED_URL_SECONDS,
     );
 
+    const now = this.now();
     const views = entries.map((entry): AttendanceView => {
       const row = entry.userId ? byUser.get(entry.userId) : undefined;
       return {
@@ -169,6 +170,7 @@ export class AttendanceService {
           limitMin,
           (entry.userId && tripsByUser.get(entry.userId)) || [],
           urls,
+          now,
         ),
       };
     });
@@ -214,19 +216,20 @@ export class AttendanceService {
     limitMin: number,
     trips: StoredTrip[],
     urls: Map<string, string>,
+    now: Date,
   ): AttendanceView['outOfRoom'] {
     // รอบที่จบก่อนคาบเริ่มอยู่นอกคาบ ไม่แสดงและไม่นับ
     const sorted = inSession(trips, session.startsAt).sort(
       (a, b) => a.outAt.getTime() - b.outAt.getTime(),
     );
     return {
-      ...outOfRoom(sorted, session.startsAt, session.endsAt, limitMin),
+      ...outOfRoom(sorted, session.startsAt, session.endsAt, limitMin, now),
       trips: sorted.map((t) => ({
         id: t.id,
         outAt: t.outAt.toISOString(),
         backAt: t.backAt?.toISOString() ?? null,
         backBy: t.backBy,
-        seconds: tripSeconds(t, session.startsAt, session.endsAt),
+        seconds: tripSeconds(t, session.startsAt, session.endsAt, now),
         imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
         suggestedBackAt: t.backAt
           ? null
