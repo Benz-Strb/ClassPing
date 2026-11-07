@@ -133,9 +133,11 @@ function setup() {
   const consented: string[] = [];
   const withdrawn: string[] = [];
   const identities: [string, number | null][] = [];
+  const studyInfos: unknown[] = [];
   const users = {
-    setIdentity: async (userId: string, score: number | null) => {
+    setIdentity: async (userId: string, score: number | null, info?: unknown) => {
       identities.push([userId, score]);
+      studyInfos.push(info);
     },
     setConsent: async (userId: string) => {
       consented.push(userId);
@@ -146,7 +148,7 @@ function setup() {
     },
   } as unknown as UsersService;
   const service = new EnrollmentService(repo, users, face as unknown as FaceClient, () => NOW);
-  return { repo, face, consented, withdrawn, identities, service };
+  return { repo, face, consented, withdrawn, identities, studyInfos, service };
 }
 
 describe('EnrollmentService.consent', () => {
@@ -290,6 +292,29 @@ describe('EnrollmentService.reset', () => {
 describe('EnrollmentService.verifyIdentity', () => {
   const unverified = (patch: Partial<AppUser> = {}) =>
     student({ identityVerifiedAt: null, ...patch });
+
+  it('ยืนยันผ่านแล้วเก็บคณะและสาขาจากบัตร อ่านไม่เจอก็ยังผ่าน', async () => {
+    const { service, face, studyInfos } = setup();
+    await service.verifyIdentity(unverified(), png(), jpeg());
+    expect(studyInfos).toEqual([{ faculty: null, major: null }]);
+
+    const other = setup();
+    other.face.card = {
+      ...other.face.card,
+      lines: [
+        ...face.card.lines,
+        { text: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี', score: 0.99 },
+        { text: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์', score: 1 },
+      ],
+    };
+    await other.service.verifyIdentity(unverified(), png(), jpeg());
+    expect(other.studyInfos).toEqual([
+      {
+        faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
+        major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+      },
+    ]);
+  });
 
   it('บัตรของตัวเอง หน้าตรงกับบัตร ผ่าน บันทึกหน้าตรงและคะแนน', async () => {
     const { service, repo, identities } = setup();

@@ -1,4 +1,4 @@
-import { checkCard, type CardLine } from './card-check.js';
+import { checkCard, readStudyInfo, type CardLine } from './card-check.js';
 
 // ข้อความที่ OCR อ่านได้จากบัตรจริงตอนวัด (ตัดชื่อภาษาไทยที่อ่านเพี้ยนออกบางส่วน)
 const CARD: CardLine[] = [
@@ -134,5 +134,37 @@ describe('checkCard', () => {
         : [l],
     );
     expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+});
+
+describe('readStudyInfo', () => {
+  it('อ่านคณะและสาขาจากบรรทัดบนบัตร', () => {
+    expect(
+      readStudyInfo([
+        ...CARD,
+        { text: ' วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี ', score: 0.99 },
+        { text: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์', score: 1 },
+      ]),
+    ).toEqual({
+      faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
+      major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+    });
+  });
+
+  it('บัตรที่ขึ้นต้นด้วยคณะหรือสถาบันก็อ่านได้', () => {
+    expect(readStudyInfo([{ text: 'คณะบริหารธุรกิจ', score: 0.95 }]).faculty).toBe('คณะบริหารธุรกิจ');
+    expect(readStudyInfo([{ text: 'สถาบันการเรียนรู้', score: 0.95 }]).faculty).toBe(
+      'สถาบันการเรียนรู้',
+    );
+  });
+
+  it('บรรทัดที่ OCR ไม่มั่นใจหรืออ่านไม่เจอ เก็บเป็นค่าว่าง', () => {
+    expect(
+      readStudyInfo([
+        { text: 'วิทยาลัยวิศวกรรมศาสตร์', score: 0.6 },
+        { text: 'สาขาวิชาคอมพิวเตอร์', score: 0.89 },
+      ]),
+    ).toEqual({ faculty: null, major: null });
+    expect(readStudyInfo(CARD)).toEqual({ faculty: null, major: null });
   });
 });

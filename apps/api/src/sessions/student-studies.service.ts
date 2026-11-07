@@ -43,6 +43,7 @@ export class StudentStudiesService {
       const { data, error } = await this.db.from('sessions')
         .select('id, course_id, kind, title, on_date, starts_at, ends_at, rooms(name)')
         .in('course_id', courses.map((course) => course.id))
+        .is('cancelled_at', null)
         .gte('on_date', from).lte('on_date', to)
         .order('starts_at').order('id').range(offset, offset + 499);
       if (error) throw dbError();

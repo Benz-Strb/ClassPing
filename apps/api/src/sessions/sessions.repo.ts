@@ -18,6 +18,8 @@ export interface SessionRow extends NewSessionRow {
   kind: 'class' | 'exam';
   title: string | null;
   roomName: string;
+  // มีค่า = ถูกลบคาบแล้ว แถวอยู่เพื่อเก็บผลเช็คชื่อและใบลา
+  cancelledAt: Date | null;
 }
 
 export interface SessionsRepo {
@@ -26,6 +28,11 @@ export interface SessionsRepo {
   insert(sessions: NewSessionRow[]): Promise<void>;
   update(id: string, patch: Pick<SessionRow, 'roomId' | 'startsAt' | 'endsAt'>): Promise<void>;
   remove(ids: string[]): Promise<void>;
+  // ทำเครื่องหมายว่าลบคาบ เก็บแถวไว้
+  cancel(ids: string[], at: Date): Promise<void>;
+  restore(ids: string[]): Promise<void>;
+  // id ที่มีใบลาผูกอยู่ ลบจริงไม่ได้
+  withLeaveRequests(ids: string[]): Promise<string[]>;
 }
 
 export const SESSIONS_REPO = Symbol('SESSIONS_REPO');
@@ -40,6 +47,7 @@ interface Row {
   on_date: string;
   starts_at: string;
   ends_at: string;
+  cancelled_at: string | null;
   rooms: { name: string } | null;
 }
 
@@ -54,6 +62,7 @@ const toSession = (row: Row): SessionRow => ({
   startsAt: new Date(row.starts_at),
   endsAt: new Date(row.ends_at),
   roomName: row.rooms?.name ?? '',
+  cancelledAt: row.cancelled_at ? new Date(row.cancelled_at) : null,
 });
 
 @Injectable()
@@ -64,7 +73,7 @@ export class SupabaseSessionsRepo implements SessionsRepo {
     const { data, error } = await this.db
       .from('sessions')
       .select(
-        'id, kind, title, schedule_id, course_id, room_id, on_date, starts_at, ends_at, rooms(name)',
+        'id, kind, title, schedule_id, course_id, room_id, on_date, starts_at, ends_at, cancelled_at, rooms(name)',
       )
       .eq('course_id', courseId)
       .gte('on_date', from)
@@ -118,5 +127,30 @@ export class SupabaseSessionsRepo implements SessionsRepo {
     if (!ids.length) return;
     const { error } = await this.db.from('sessions').delete().in('id', ids);
     if (error) throw dbError();
+  }
+
+  async cancel(ids: string[], at: Date): Promise<void> {
+    if (!ids.length) return;
+    const { error } = await this.db
+      .from('sessions')
+      .update({ cancelled_at: at.toISOString() })
+      .in('id', ids);
+    if (error) throw dbError();
+  }
+
+  async restore(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    const { error } = await this.db.from('sessions').update({ cancelled_at: null }).in('id', ids);
+    if (error) throw dbError();
+  }
+
+  async withLeaveRequests(ids: string[]): Promise<string[]> {
+    if (!ids.length) return [];
+    const { data, error } = await this.db
+      .from('leave_requests')
+      .select('session_id')
+      .in('session_id', ids);
+    if (error) throw dbError();
+    return [...new Set((data as { session_id: string }[]).map((r) => r.session_id))];
   }
 }

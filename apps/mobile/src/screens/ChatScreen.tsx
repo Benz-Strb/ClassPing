@@ -6,7 +6,6 @@ interface Reply {
   answer: string;
   sources: { id: string; title: string; content: string; url: string | null }[];
   mock: boolean;
-  classroom: 'not_connected';
 }
 interface Message { question: string; reply: Reply }
 

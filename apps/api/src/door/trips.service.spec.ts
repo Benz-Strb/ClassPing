@@ -40,6 +40,7 @@ const session: SessionInfo = {
   onDate: '2026-10-23',
   startsAt: START,
   endsAt: ENDS,
+  cancelled: false,
 };
 
 const roster = [
@@ -723,7 +724,7 @@ describe('TripsService.report', () => {
   });
 
   it('รวมวินาทีต่อคนต่อคาบ รอบที่ยังไม่กลับนับถึงหมดคาบ และติดป้ายตามเกณฑ์', async () => {
-    const { service, door } = setup();
+    const { service, door } = setup(ENDS);
     door.course = [
       row({ outAt: at(10), backAt: at(20) }), // 600
       row({ outAt: at(100), backAt: null }), // ถึง 05:00 = 80 นาที
@@ -765,6 +766,32 @@ describe('TripsService.report', () => {
     ]);
   });
 
+  it('รายงานที่มีทั้งคาบที่จบแล้วและคาบที่กำลังเรียน ติดป้ายถูกแต่ละคาบ', async () => {
+    const now = at(110);
+    const { service, door } = setup(now);
+    const past = { sessionId: 's0', onDate: '2026-10-20' };
+    door.course = [
+      // คาบที่จบแล้ว ไม่กลับ = ไม่กลับ นับถึงหมดคาบ
+      row({
+        ...past,
+        startsAt: new Date(START.getTime() - 3 * 86_400_000),
+        endsAt: new Date(ENDS.getTime() - 3 * 86_400_000),
+        outAt: new Date(at(100).getTime() - 3 * 86_400_000),
+        backAt: null,
+      }),
+      // คาบที่กำลังเรียน รอบที่กลับแล้ว 5 นาที กับรอบที่ยังไม่กลับ 5 นาที
+      row({ outAt: at(90), backAt: at(95) }),
+      row({ outAt: at(105), backAt: null }),
+      // คาบที่กำลังเรียน ออกมา 20 นาที เกินเกณฑ์
+      row({ studentCode: '66000002', outAt: at(90), backAt: null }),
+    ];
+    const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
+    const by = (s: string, c: string) => out.find((r) => r.sessionId === s && r.studentCode === c);
+    expect(by('s0', '66000001')).toMatchObject({ totalSeconds: 80 * 60, label: 'gone_no_return' });
+    expect(by('s1', '66000001')).toMatchObject({ totalSeconds: 600, label: 'out_now' });
+    expect(by('s1', '66000002')).toMatchObject({ totalSeconds: 20 * 60, label: 'gone' });
+  });
+
   it('คาบสอบใช้เกณฑ์ของคาบ', async () => {
     const { service, door } = setup();
     door.course = [row({ kind: 'exam', outOfRoomLimitMin: 5, outAt: at(10), backAt: at(17) })];
@@ -782,7 +809,7 @@ describe('TripsService.report', () => {
   });
 
   it('ออกก่อนคาบไม่กลับ นับถึงหมดคาบ ป้ายไม่กลับ', async () => {
-    const { service, door } = setup();
+    const { service, door } = setup(ENDS);
     door.course = [row({ outAt: at(-30), backAt: null })];
     const out = await service.report(teacher, 'c1', { from: '2026-10-01', to: '2026-10-31' });
     expect(out[0]).toMatchObject({ totalSeconds: 180 * 60, label: 'gone_no_return' });
