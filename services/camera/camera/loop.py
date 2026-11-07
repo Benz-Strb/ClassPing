@@ -62,6 +62,9 @@ class CameraLoop:
 
     def tick(self) -> float:
         now = self.now()
+        # ปิดก่อนถาม API ถ้า API ล่มกล้องจะได้ไม่เปิดค้างเกินคาบ
+        if self.session is not None and now >= self.session.ends_at:
+            self._switch(None)
         if self.next_poll is None or now >= self.next_poll:
             try:
                 self._switch(self.api.session())
@@ -76,8 +79,6 @@ class CameraLoop:
                 return RETRY_SECONDS
             self.next_poll = now + timedelta(seconds=POLL_SECONDS)
 
-        if self.session is not None and now >= self.session.ends_at:
-            self._switch(None)
         if self.session is None:
             return max((self.next_poll - now).total_seconds(), 0) if self.next_poll else 0
 

@@ -33,6 +33,7 @@ const SESSION: LeaveSessionOption = {
   startsAt: '2026-10-28T02:00:00.000Z',
   endsAt: '2026-10-28T05:00:00.000Z',
   roomName: 'LAB 1',
+  cancelled: false,
 };
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);

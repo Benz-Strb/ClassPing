@@ -43,15 +43,15 @@ export class ClipsController {
   ) {}
 
   @Get(':token/index.m3u8')
-  playlist(@Param('token') token: string, @Res() res: Response): void {
-    const clip = this.recording.openClip(token);
+  async playlist(@Param('token') token: string, @Res() res: Response): Promise<void> {
+    const clip = await this.recording.openClip(token);
     res.setHeader('Cache-Control', 'private, no-store');
     res.type('application/vnd.apple.mpegurl').send(hlsPlaylist(clip.duration));
   }
 
   @Get(':token/init.mp4')
   async init(@Param('token') token: string, @Res() res: Response): Promise<void> {
-    const clip = this.recording.openClip(token);
+    const clip = await this.recording.openClip(token);
     const first = await this.fetch(clip.path, clip.start, Math.min(1, clip.duration));
     this.sendMp4(res, splitInit(first).init);
   }
@@ -62,7 +62,7 @@ export class ClipsController {
     @Param('n') n: string,
     @Res() res: Response,
   ): Promise<void> {
-    const clip = this.recording.openClip(token);
+    const clip = await this.recording.openClip(token);
     const seg = /^\d+$/.test(n) ? hlsSegments(clip.duration)[Number(n)] : undefined;
     if (!seg) throw new AppError(404, 'NO_RECORDING', 'ไม่มีไฟล์อัดช่วงนี้');
     const start = new Date(clip.start.getTime() + seg.offset * 1000);
@@ -73,7 +73,7 @@ export class ClipsController {
 
   @Get(':token')
   async download(@Param('token') token: string, @Res() res: Response): Promise<void> {
-    const clip = this.recording.openClip(token);
+    const clip = await this.recording.openClip(token);
     // ลิงก์ดูย้อนหลังใช้ได้แค่ทีละท่อน คนที่ไม่มีสิทธิ์ดาวน์โหลดจะได้ไม่ได้ไฟล์ทั้งคลิป
     if (!clip.download) {
       throw new AppError(
