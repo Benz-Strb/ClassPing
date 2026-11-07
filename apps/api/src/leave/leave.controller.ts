@@ -6,12 +6,14 @@ import {
   Param,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import { AppError } from '../common/app-error.js';
 import type { AppUser } from '../users/users.service.js';
+import { PreviewLimitGuard } from './preview-limit.guard.js';
 import { LeaveService, MAX_EVIDENCE_BYTES, type LeaveEvidence } from './leave.service.js';
 
 @Controller('leave-requests')
@@ -57,6 +59,7 @@ export class LeaveController {
 
   @Post('preview')
   @HttpCode(200)
+  @UseGuards(PreviewLimitGuard)
   @UseInterceptors(
     FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
   )

@@ -11,7 +11,9 @@ import { RolesGuard } from './../src/auth/roles.guard.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
 import { FaceClient } from './../src/face/face.client.js';
+import { CLOCK } from './../src/common/clock.js';
 import { LeaveController } from './../src/leave/leave.controller.js';
+import { PreviewLimitGuard } from './../src/leave/preview-limit.guard.js';
 import {
   LEAVE_REPO,
   type LeaveRepo,
@@ -182,6 +184,8 @@ describe('ระบบลา (e2e)', () => {
       controllers: [LeaveController],
       providers: [
         LeaveService,
+        PreviewLimitGuard,
+        { provide: CLOCK, useValue: () => new Date() },
         { provide: LEAVE_REPO, useValue: repo },
         {
           provide: FaceClient,
@@ -250,6 +254,20 @@ describe('ระบบลา (e2e)', () => {
         .expect(413);
     }
     expect(repo.requests).toHaveLength(0);
+  });
+
+  it('อ่านร่างเกิน 10 ครั้งต่อนาทีได้ 429 แยกตามผู้ใช้', async () => {
+    const server = app.getHttpServer();
+    const preview = (user: string) =>
+      request(server)
+        .post('/leave-requests/preview')
+        .set('x-role', 'student')
+        .set('x-user', user)
+        .field('sessionId', SESSION.id)
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+    for (let i = 0; i < 10; i++) await preview('limit-a').expect(200);
+    await preview('limit-a').expect(429);
+    await preview('limit-b').expect(200);
   });
 
   it('นักศึกษาเลือกคาบ ยื่นหลักฐาน และอาจารย์อนุมัติจน attendance เป็น leave', async () => {
