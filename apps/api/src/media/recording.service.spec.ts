@@ -4,7 +4,7 @@ import type { LiveRepo } from './live.repo.js';
 import { verifyMediaToken } from './media-token.js';
 import type { PlaybackClient } from './playback.client.js';
 import { RecordingService } from './recording.service.js';
-import type { WatchableSession } from './video-access.js';
+import { latestUse, type WatchableSession } from './video-access.js';
 
 const SECRET = 't'.repeat(32);
 const NOW = new Date('2026-10-24T11:00:00Z');
@@ -46,12 +46,15 @@ function setup(
     segments?: { start: Date; duration: number }[];
     secret?: boolean;
     previousEnd?: Date | null;
+    cancelledAt?: Date;
+    gone?: boolean;
   } = {},
 ) {
   const views: string[] = [];
   const listed: { path: string; from: Date; to: Date }[] = [];
   const repo = {
-    session: async (id: string) => (id === S1 ? session : null),
+    session: async (id: string) =>
+      id === S1 && !opts.gone ? { ...session, cancelledAt: opts.cancelledAt ?? null } : null,
     sessionsOnDate: async () => [],
     previousEndInRoom: async () => opts.previousEnd ?? null,
     logView: async (sid: string, uid: string, kind: string) => void views.push(`${kind} ${uid}`),
@@ -79,6 +82,51 @@ async function rejection(promise: Promise<unknown>) {
   }
   throw new Error('คาดว่าจะ throw แต่ไม่ throw');
 }
+
+describe('RecordingService กับคาบที่ถูกลบ', () => {
+  const cancelledAt = new Date('2026-10-24T10:30:00Z'); // ลบตอน 17:30 ระหว่างคาบ
+
+  it('ดูได้ถึงตอนที่ลบ ภาพหลังจากนั้นอาจเป็นของวิชาอื่น', async () => {
+    const { service, listed } = setup({
+      cancelledAt,
+      segments: [{ start: new Date('2026-10-24T10:20:00Z'), duration: 3600 }],
+    });
+    const result = await service.list(owner, S1);
+    expect(listed[0].to).toEqual(cancelledAt);
+    expect(result.segments).toEqual([{ start: '2026-10-24T10:20:00.000Z', duration: 600 }]);
+  });
+
+  it('ขอลิงก์ช่วงหลังลบไม่ได้', async () => {
+    const { service } = setup({ cancelledAt });
+    expect(
+      await rejection(
+        service.link(owner, S1, { start: '2026-10-24T10:40:00.000Z', duration: 60, download: false }),
+      ),
+    ).toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('ลบก่อนกล้องเปิด ไม่มีภาพให้ดูและไม่ถามไฟล์', async () => {
+    const { service, listed } = setup({ cancelledAt: new Date('2026-10-23T00:00:00Z') });
+    await expect(service.list(owner, S1)).resolves.toMatchObject({ segments: [] });
+    expect(listed).toEqual([]);
+  });
+});
+
+describe('latestUse', () => {
+  it('คาบที่ถูกลบกลางทางนับถึงตอนที่ลบ คาบปกตินับถึงเวลาจบ', () => {
+    const endsAt = new Date('2026-10-24T10:00:00Z');
+    const early = new Date('2026-10-24T09:00:00Z');
+    expect(latestUse([])).toBeNull();
+    expect(latestUse([{ endsAt, cancelledAt: null }])).toEqual(endsAt);
+    expect(latestUse([{ endsAt, cancelledAt: early }])).toEqual(early);
+    expect(
+      latestUse([
+        { endsAt, cancelledAt: early },
+        { endsAt: new Date('2026-10-24T09:30:00Z'), cancelledAt: null },
+      ]),
+    ).toEqual(new Date('2026-10-24T09:30:00Z'));
+  });
+});
 
 describe('RecordingService.list', () => {
   it('ถามไฟล์ช่วงกล้องเปิดถึงหมดคาบ ตัดส่วนที่เลยช่วงออก และบอกวันที่จะถูกลบ', async () => {
@@ -182,7 +230,7 @@ describe('RecordingService.openClip', () => {
   it('token ถูกต้องได้ path ช่วงเวลา และชื่อไฟล์ตอนดาวน์โหลด', async () => {
     const { service } = setup();
     const { url } = await service.link(owner, S1, body({ download: true }));
-    const clip = service.openClip(url.slice('/clips/'.length));
+    const clip = await service.openClip(url.slice('/clips/'.length));
     expect(clip).toEqual({
       path: `cam/${CAM}`,
       start: new Date('2026-10-24T10:20:00.000Z'),
@@ -194,8 +242,33 @@ describe('RecordingService.openClip', () => {
 
   it('token หมดอายุ แก้ไข หรือเป็น token ดูสด ได้ 401', async () => {
     const { service } = setup();
-    expect((await rejection(Promise.resolve().then(() => service.openClip('abc')))).status).toBe(
-      401,
-    );
+    expect((await rejection(service.openClip('abc'))).status).toBe(401);
+  });
+
+  // คลิป 17:20-17:30
+  it('ลิงก์ที่ออกก่อนลบคาบ เปิดไม่ได้ถ้าคลิปเลยเวลาที่ลบ แต่ช่วงก่อนลบยังเปิดได้', async () => {
+    const opts: { cancelledAt?: Date } = {};
+    const { service } = setup(opts);
+    const { url } = await service.link(owner, S1, body());
+    const token = url.slice('/clips/'.length);
+
+    opts.cancelledAt = new Date('2026-10-24T10:25:00Z');
+    expect(await rejection(service.openClip(token))).toMatchObject({
+      status: 401,
+      code: 'LINK_EXPIRED',
+    });
+
+    opts.cancelledAt = new Date('2026-10-24T10:40:00Z');
+    await expect(service.openClip(token)).resolves.toMatchObject({ duration: 600 });
+  });
+
+  it('ลิงก์ของคาบที่ไม่มีแล้วเปิดไม่ได้', async () => {
+    const opts: { gone?: boolean } = {};
+    const { service } = setup(opts);
+    const { url } = await service.link(owner, S1, body());
+    opts.gone = true;
+    expect(await rejection(service.openClip(url.slice('/clips/'.length)))).toMatchObject({
+      status: 401,
+    });
   });
 });

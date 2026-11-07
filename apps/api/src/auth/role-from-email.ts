@@ -8,7 +8,10 @@ export interface ClassifiedEmail {
 
 const ALLOWED_DOMAIN = 'dpu.ac.th';
 
-// บัญชีใหม่เริ่มด้วยสิทธิ์นักศึกษา อาจารย์ต้องได้รับมอบหมายบทบาทจากแอดมิน
+// เมลอาจารย์เป็น ชื่อ.นามสกุล 3 ตัวแรก
+const TEACHER_LOCAL = /^[a-z]+\.[a-z]{3}$/;
+
+// แบบอื่นที่ไม่ใช่เลขรหัสเริ่มเป็นนักศึกษาไว้ก่อน แอดมินเปลี่ยนให้ได้
 export function classifyEmail(
   rawEmail: string,
   adminEmails: string[],
@@ -28,5 +31,5 @@ export function classifyEmail(
     return { email, role: 'admin', studentId };
   }
 
-  return { email, role: 'student', studentId };
+  return { email, role: TEACHER_LOCAL.test(local) ? 'teacher' : 'student', studentId };
 }

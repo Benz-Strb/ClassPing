@@ -8,6 +8,7 @@ import { RosterService } from '../courses/roster.service.js';
 import { DoorEntries } from '../door/door-entries.js';
 import { DOOR_REPO, type DoorRepo, type StoredTrip } from '../door/door.repo.js';
 import { inSession, outOfRoom, tripSeconds, type OutLabel } from '../door/out-of-room.js';
+import { statusWithoutRow } from '../reports/report-status.js';
 import type { SessionView } from '../sessions/sessions.service.js';
 import type { AppUser } from '../users/users.service.js';
 import {
@@ -25,6 +26,8 @@ export interface AttendanceView {
   faceEnrolled: boolean;
   // null = กล้องยังไม่เห็น
   status: AttendanceStatus | null;
+  // ไม่มีแถวและเลยเวลาตัดขาดแล้ว รายงานนับเป็นขาด
+  absentByTime: boolean;
   firstSeenAt: string | null;
   confidence: number | null;
   imageUrl: string | null;
@@ -52,7 +55,8 @@ export interface TripView {
 }
 
 export interface SessionAttendance {
-  session: SessionView & { outOfRoomLimitMin: number };
+  // recorded = false คือยังไม่มีแถวของใครเลย รายงานไม่นับคาบนี้
+  session: SessionView & { outOfRoomLimitMin: number; recorded: boolean };
   rows: AttendanceView[];
   unknown: { imageUrl: string; seenAt: string }[];
   // รอบนอกห้องที่กล้องไม่แน่ใจว่าใคร รออาจารย์ตรวจ
@@ -110,8 +114,9 @@ export class AttendanceService {
 
   async view(user: AppUser, sessionId: string): Promise<SessionAttendance> {
     const session = await this.owned(user, sessionId);
-    const [entries, rows, unknown, trips, courseRules] = await Promise.all([
+    const [entries, addedDates, rows, unknown, trips, courseRules] = await Promise.all([
       this.roster.entries(session.courseId),
+      this.roster.addedDates(session.courseId),
       this.repo.listBySession(sessionId),
       this.repo.recentUnknown(sessionId, UNKNOWN_LIMIT),
       this.door.listTrips(sessionId),
@@ -152,6 +157,7 @@ export class AttendanceService {
       SIGNED_URL_SECONDS,
     );
 
+    const now = this.now();
     const views = entries.map((entry): AttendanceView => {
       const row = entry.userId ? byUser.get(entry.userId) : undefined;
       return {
@@ -159,6 +165,12 @@ export class AttendanceService {
         fullName: entry.fullName,
         faceEnrolled: entry.faceEnrolled,
         status: row?.status ?? null,
+        absentByTime:
+          !row &&
+          statusWithoutRow(session, courseRules, now, {
+            addedAt: addedDates.get(entry.studentCode),
+            sessionHasRows: rows.length > 0,
+          }) === 'absent',
         firstSeenAt: row?.firstSeenAt?.toISOString() ?? null,
         confidence: row?.confidence ?? null,
         imageUrl: row?.imagePath ? (urls.get(row.imagePath) ?? null) : null,
@@ -169,6 +181,7 @@ export class AttendanceService {
           limitMin,
           (entry.userId && tripsByUser.get(entry.userId)) || [],
           urls,
+          now,
         ),
       };
     });
@@ -180,7 +193,11 @@ export class AttendanceService {
     );
 
     return {
-      session: { ...this.sessionView(session), outOfRoomLimitMin: limitMin },
+      session: {
+        ...this.sessionView(session),
+        outOfRoomLimitMin: limitMin,
+        recorded: rows.length > 0,
+      },
       rows: views,
       unknown: unknown.flatMap((u) => {
         const imageUrl = urls.get(u.imagePath);
@@ -214,19 +231,20 @@ export class AttendanceService {
     limitMin: number,
     trips: StoredTrip[],
     urls: Map<string, string>,
+    now: Date,
   ): AttendanceView['outOfRoom'] {
     // รอบที่จบก่อนคาบเริ่มอยู่นอกคาบ ไม่แสดงและไม่นับ
     const sorted = inSession(trips, session.startsAt).sort(
       (a, b) => a.outAt.getTime() - b.outAt.getTime(),
     );
     return {
-      ...outOfRoom(sorted, session.startsAt, session.endsAt, limitMin),
+      ...outOfRoom(sorted, session.startsAt, session.endsAt, limitMin, now),
       trips: sorted.map((t) => ({
         id: t.id,
         outAt: t.outAt.toISOString(),
         backAt: t.backAt?.toISOString() ?? null,
         backBy: t.backBy,
-        seconds: tripSeconds(t, session.startsAt, session.endsAt),
+        seconds: tripSeconds(t, session.startsAt, session.endsAt, now),
         imageUrl: (t.imagePath && urls.get(t.imagePath)) || null,
         suggestedBackAt: t.backAt
           ? null
@@ -337,6 +355,7 @@ export class AttendanceService {
       startsAt: session.startsAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
       status: session.endsAt <= now ? 'ended' : session.startsAt <= now ? 'live' : 'upcoming',
+      cancelled: session.cancelled,
     };
   }
 }
