@@ -129,7 +129,12 @@ export class SessionsService implements SessionSyncer {
 
     for (const row of existing) {
       const wanted = row.scheduleId ? planned.get(keyOf(row)) : undefined;
-      if (cameraOpened(row.startsAt, now, this.config?.cameraOpenBeforeMin) || (wanted && sameSlot(row, wanted))) {
+      if (
+        cameraOpened(row.startsAt, now, this.config?.cameraOpenBeforeMin) ||
+        (wanted && sameSlot(row, wanted)) ||
+        // เวลาใหม่จบไปแล้ว ย้ายไปคาบจะหายทั้งคาบ คงเวลาเดิมของวันนี้ไว้
+        (wanted && wanted.endsAt <= now)
+      ) {
         taken.set(row.id, row.startsAt.getTime());
       } else if (!wanted) {
         toRemove.push(row.id);
