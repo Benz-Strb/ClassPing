@@ -202,7 +202,7 @@ export function ExamsView() {
   };
 
   return (
-    <section className="space-y-8">
+    <section className="exams-view space-y-8">
       {error && <p className="text-red-600">{error}</p>}
 
       <div className="space-y-3">

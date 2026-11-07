@@ -1,12 +1,7 @@
+import { colors } from '../ui/theme';
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Pressable, Text } from '../ui/primitives';
 import { ApiError, apiFetch } from "../lib/api";
 import { discardCard } from "../lib/face";
 import { supabase } from "../lib/supabase";
@@ -15,12 +10,8 @@ import { ConsentScreen } from "./ConsentScreen";
 import { StudentNavigator } from "./StudentNavigator";
 import { EnrollScreen } from "./EnrollScreen";
 import { IdentityScreen } from "./IdentityScreen";
-
-const ROLE_LABEL: Record<Me["role"], string> = {
-  student: "นักศึกษา",
-  teacher: "อาจารย์",
-  admin: "ผู้ดูแลระบบ",
-};
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AccountScreen } from './AccountScreen';
 
 interface Props {
   // เด้งกลับหน้า login พร้อมข้อความ
@@ -61,42 +52,42 @@ export function MeScreen({ onRejected }: Props) {
 
   if (error) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
         <Text style={styles.error}>{error}</Text>
         <Pressable style={styles.button} onPress={signOut}>
           <Text>ออกจากระบบ</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     );
   }
   if (!me) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator />
-      </View>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
+        <ActivityIndicator color={colors.action} />
+      </SafeAreaView>
     );
   }
 
   if (me.studentId && !me.pdpaConsentAt) {
-    return <ConsentScreen onAccepted={setMe} onSignOut={signOut} />;
+    return <SafeAreaView edges={['bottom']} style={styles.screen}><ConsentScreen onAccepted={setMe} onSignOut={signOut} /></SafeAreaView>;
   }
 
   if (face && !face.verified && !card) {
     return (
-      <IdentityScreen
+      <SafeAreaView edges={['bottom']} style={styles.screen}><IdentityScreen
         error={cardError}
         onPicked={(uri) => {
           setCard(uri);
           setCardError(null);
         }}
         onSignOut={signOut}
-      />
+      /></SafeAreaView>
     );
   }
 
   if (face && !face.complete) {
     return (
-      <EnrollScreen
+      <SafeAreaView edges={['bottom']} style={styles.screen}><EnrollScreen
         // ท่าที่ถ่ายไว้ก่อนยืนยันบัตรจะถูกล้าง เริ่มจากหน้าตรงใหม่
         done={face.verified ? face.done : []}
         card={face.verified ? null : card}
@@ -112,7 +103,7 @@ export function MeScreen({ onRejected }: Props) {
           onRejected(message);
         }}
         onSignOut={signOut}
-      />
+      /></SafeAreaView>
     );
   }
 
@@ -121,50 +112,35 @@ export function MeScreen({ onRejected }: Props) {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{me.fullName ?? me.email}</Text>
-      <Text>{me.email}</Text>
-      <Text>บทบาท: {ROLE_LABEL[me.role]}</Text>
-      {me.studentId && <Text>รหัสนักศึกษา: {me.studentId}</Text>}
-      {face ? (
-        <Text style={face.complete ? styles.ok : styles.pending}>
-          {face.complete ? "ลงทะเบียนใบหน้าแล้ว" : "ยังไม่ได้ลงทะเบียนใบหน้า"}
-        </Text>
-      ) : (
-        <Text style={styles.pending}>บัญชีนี้ใช้งานบนเว็บ</Text>
-      )}
-      <Pressable style={styles.button} onPress={signOut}>
-        <Text>ออกจากระบบ</Text>
-      </Pressable>
-    </ScrollView>
+    <SafeAreaView edges={['bottom']} style={styles.screen}><AccountScreen me={me} face={face} onSignOut={signOut} /></SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  screen: { flex: 1, backgroundColor: colors.surface },
   content: { flexGrow: 1, padding: 24, gap: 10 },
   container: {
     flex: 1,
     justifyContent: "center",
     padding: 24,
     gap: 10,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
   title: { fontSize: 20, fontWeight: "600" },
-  error: { color: "#dc2626" },
-  ok: { color: "#15803d", marginTop: 8 },
-  pending: { color: "#6b7280", marginTop: 8 },
+  error: { color: colors.danger },
+  ok: { color: colors.action, marginTop: 8 },
+  pending: { color: colors.muted, marginTop: 8 },
   primary: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
+    backgroundColor: colors.action,
+    borderRadius: 12,
     padding: 12,
     alignItems: "center",
     marginTop: 8,
   },
-  primaryText: { color: "#fff", fontSize: 16 },
+  primaryText: { color: colors.surface, fontSize: 16 },
   button: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     alignItems: "center",
     marginTop: 8,

@@ -1,0 +1,129 @@
+.app-shell { background: var(--cp-bg); }
+.app-content > main { max-width: 1320px; margin-inline: auto; padding: clamp(24px, 3.4vw, 48px); }
+.app-content { font-size: 15px; }
+.app-content h1 { font-size: clamp(26px, 2.3vw, 32px); line-height: 1.45; font-weight: 600; color: #352647; }
+.app-content h2 { font-size: 20px; line-height: 1.5; font-weight: 500; }
+.app-content h3 { font-weight: 500; }
+.app-content :where(input, select, textarea) { border-color: #b2a6bd; border-radius: 10px; }
+.app-content :where(button) { border-radius: 10px; font-weight: 500; }
+.app-content :where(button:not(:disabled)):active { transform: translateY(1px); }
+.app-content :where(label) { line-height: 1.6; }
+.app-content :where(form.rounded-lg, form.rounded-xl) { border-radius: 16px; background: #fff; padding: 24px; }
+.app-content :where(.rounded-lg.border, .rounded-xl.border) { border-radius: 12px; }
+.app-content :where(ul.border) { background: #fff; overflow: hidden; }
+.app-content :where(table) { background: #fff; width: 100%; font-variant-numeric: tabular-nums; }
+.app-content :where(th) { background: #f1ecf7; color: #5e4a72; font-size: 13px; white-space: nowrap; padding: 13px 16px; }
+.app-content :where(td) { padding: 16px; border-bottom: 1px solid var(--cp-border); }
+.app-content :where(tbody tr:last-child td) { border-bottom: 0; }
+.app-content :where(tbody tr:hover) { background: #fcfaff; }
+.app-content :where(dialog) { width: min(560px, calc(100vw - 32px)); border: 1px solid var(--cp-border); border-radius: 16px; padding: 24px; }
+.app-content :where(dialog)::backdrop { background: #28233066; }
+.app-content :where(a) { text-underline-offset: 4px; }
+.app-content :where([role=alert]) { border-radius: 12px; padding: 14px 16px; background: #fff0ee; color: #ae2929; }
+.app-content :where([role=status]) { color: var(--cp-muted); }
+.app-navigation { padding: 16px 24px; border-color: var(--cp-border); }
+.navigation-brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; color: #4d3282; letter-spacing: -.035em; }
+.brand-mark { display: grid; place-items: center; width: 32px; height: 32px; background: #7652c5; color: white; border-radius: 9px; font-size: 22px; line-height: 1; letter-spacing: -.06em; }
+.navigation-role { margin-top: 8px; font-size: 12px; color: #71647d; }
+.navigation-links { gap: 6px; }
+.navigation-link { min-height: 48px; padding: 12px 14px; border-radius: 10px; color: #685e74; font-weight: 400; }
+.navigation-link:hover { background: #f3eef9; color: #4d3282; }
+.navigation-link[aria-current=page] { background: #7652c5; color: #fff; font-weight: 500; }
+.navigation-footer { font-size: 11px; padding-top: 16px; }
+.navigation-account { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; color: #352647; min-height: 48px; }
+.navigation-account > span:last-child { min-width: 0; }
+.navigation-account strong { display: block; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.navigation-account small { color: #71647d; font-size: 11px; }
+.navigation-avatar { display: grid; flex: 0 0 36px; height: 36px; place-items: center; border-radius: 50%; background: #eee8f7; color: #4d3282; font-weight: 600; }
+.navigation-toggle { border-color: var(--cp-border); border-radius: 10px; font-size: 14px; }
+.course-tabs, .admin-tabs { display: flex; align-items: stretch; gap: 20px; overflow-x: auto; border-bottom: 1px solid var(--cp-border); padding-bottom: 0; scrollbar-width: thin; }
+.course-tabs a, .admin-tab { display: flex; align-items: center; flex-shrink: 0; min-height: 48px; border-radius: 0; padding: 10px 2px; border-bottom: 2px solid transparent; color: #71647d; font-size: 14px; text-decoration: none; }
+.course-tabs a[aria-current=page], .admin-tab[aria-current=page] { border-bottom-color: #7652c5; color: #5d3c9e; background: transparent; font-weight: 500; }
+.course-heading { padding-bottom: 8px; }
+.back-link { display: inline-flex; align-items: center; min-height: 44px; color: #5d3c9e; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+.workspace-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.workspace-heading p { color: var(--cp-muted); margin-top: 6px; }
+.workspace-columns { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 28px; }
+.workspace-primary { display: grid; min-width: 0; gap: 28px; }
+.workspace-tools { display: grid; gap: 24px; min-width: 0; }
+.work-surface { padding: 24px; background: #fff; border: 1px solid var(--cp-border); border-radius: 16px; min-width: 0; }
+.surface-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.surface-heading > a { display: flex; align-items: center; min-height: 44px; color: #5d3c9e; font-size: 13px; }
+.agenda-list { display: grid; }
+.agenda-row { display: grid; grid-template-columns: 68px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 20px 0; border-top: 1px solid var(--cp-border); }
+.agenda-time { display: grid; gap: 4px; font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 500; }
+.agenda-time small { font-size: 12px; font-weight: 400; color: var(--cp-muted); }
+.agenda-description { display: grid; gap: 5px; min-width: 0; }
+.agenda-description strong { font-weight: 500; overflow-wrap: anywhere; }
+.agenda-description p { color: var(--cp-muted); font-size: 13px; }
+.agenda-state { background: #eee8f7; color: #5d3c9e; border-radius: 6px; padding: 4px 8px; font-size: 12px; white-space: nowrap; }
+.agenda-state[data-state=upcoming], .agenda-state[data-state=ended] { background: #f4f1f7; color: #6d6477; }
+.course-grid { display: block; }
+.course-card { border: 0; border-bottom: 1px solid var(--cp-border); border-radius: 0; padding: 0; gap: 0; background: transparent; }
+.course-card:last-child { border-bottom: 0; }
+.course-card > a { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 20px 0; text-decoration: none; }
+.course-card:hover { background: #fcfaff; }
+.course-card h2 { font-size: 16px; font-weight: 500; }
+.course-code { color: #5d3c9e; font-size: 14px; font-weight: 600; }
+.course-detail { display: grid; gap: 4px; }
+.course-detail small { font-size: 12px; color: var(--cp-muted); }
+.course-open { color: #7652c5; font-size: 20px; }
+.tool-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; border-top: 1px solid var(--cp-border); color: #4d3282; min-height: 52px; }
+.tool-note { color: var(--cp-muted); font-size: 13px; line-height: 1.7; }
+.admin-directory { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; padding: 8px 24px; border: 1px solid var(--cp-border); border-radius: 16px; background: white; }
+.directory-link { display: block; min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--cp-border); }
+.directory-link:hover h3 { text-decoration: underline; text-underline-offset: 4px; }
+.directory-link h3 { font-size: 17px; }
+.directory-link p { margin-top: 4px; }
+.system-totals { display: flex; flex-wrap: wrap; gap: 24px 48px; padding: 20px 0; border-top: 1px solid var(--cp-border); }
+.system-total { display: flex; align-items: baseline; gap: 16px; }
+.system-total dd { font-size: 24px; font-weight: 500; color: #4d3282; }
+.account-page { max-width: 800px !important; }
+.login-layout { background: #faf8f4; }
+.app-content > main.login-layout { max-width: none; }
+.login-panel { border-radius: 16px; padding: 40px; }
+.app-content > main.welcome-layout { display: grid; place-items: center; min-height: 100dvh; }
+.welcome-panel { width: 100%; max-width: 560px; }
+.welcome-action { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 16px; border-radius: 10px; background: #7652c5; color: #fff; text-align: center; }
+.welcome-action:hover { background: #5d3c9e; }
+.login-brand { color: #7652c5; font-size: 24px; }
+.surface-feedback { background: #f7f3fb; border-color: #e6dfeb; color: #6d6477; font-size: 14px; }
+@media (min-width: 64rem) {
+  .app-navigation { padding: 32px 20px 24px; }
+  .navigation-links, .navigation-links[data-open=false] { padding-top: 40px; }
+}
+@media (max-width: 74.99rem) {
+  .workspace-columns { grid-template-columns: minmax(0, 1fr); }
+  .workspace-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 39.99rem) {
+  .app-content > main { padding: 24px 20px 32px; }
+  .app-navigation { padding: 12px 20px; }
+  .navigation-role { margin-top: 4px; }
+  .work-surface, .app-content :where(form.rounded-lg, form.rounded-xl), .login-panel { padding: 20px; }
+  .workspace-tools, .admin-directory { grid-template-columns: minmax(0, 1fr); }
+  .workspace-columns, .workspace-primary { gap: 20px; }
+  .agenda-row { grid-template-columns: 56px minmax(0, 1fr); gap: 12px; }
+  .agenda-state { grid-column: 2; justify-self: start; }
+  .course-card > a { grid-template-columns: 58px minmax(0, 1fr) 16px; gap: 10px; }
+  .course-code { font-size: 12px; }
+  .course-card h2 { font-size: 15px; }
+  .account-profile { align-items: flex-start; padding: 20px; gap: 16px; }
+}
+.date-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 0; }
+.date-toolbar h2 { font-size: 16px; font-weight: 500; }
+.session-list { background: #fff; border: 1px solid var(--cp-border); border-radius: 16px; overflow: hidden; }
+.session-list > li + li { border-top: 1px solid var(--cp-border); }
+.session-link { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; min-height: 100px; padding: 20px 24px; }
+.session-link:hover { background: #fcfaff; }
+.session-description { flex: 1; min-width: 160px; display: grid; gap: 5px; }
+.session-description strong { font-weight: 500; }
+.session-description small { color: var(--cp-muted); font-size: 13px; }
+.roster-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
+.roster-create { max-width: 720px; }
+.rules-view { max-width: 800px; }
+.live-viewer video, .recording-view video { border-radius: 12px; background: #17131e; }
+@media (max-width: 39.99rem) {
+  .session-link { gap: 12px; padding: 16px; }
+  .session-link > .ml-auto { flex-basis: 100%; margin-left: 0; }
+}
