@@ -283,7 +283,10 @@ export class SupabaseReportsRepo implements ReportsRepo {
       const paths = [
         ...new Set(
           [...attendanceMap.values()].flatMap((row) =>
-            row.student_id === selectedUser.id && row.image_path
+            row.student_id === selectedUser.id &&
+            row.image_path &&
+            // แถวรอตรวจอาจเป็นรูปหน้าของคนอื่น ไม่ส่งให้นักศึกษา
+            row.status !== 'pending'
               ? [row.image_path]
               : [],
           ),
@@ -384,9 +387,10 @@ export class SupabaseReportsRepo implements ReportsRepo {
           roomName: s.rooms?.name ?? '-',
           ...(includeImages
             ? {
-                imageUrl: att?.image_path
-                  ? (imageUrls.get(att.image_path) ?? null)
-                  : null,
+                imageUrl:
+                  att?.image_path && att.status !== 'pending'
+                    ? (imageUrls.get(att.image_path) ?? null)
+                    : null,
               }
             : {}),
         });

@@ -160,11 +160,12 @@ describe('SupabaseReportsRepo', () => {
         : 0;
       expect(report?.summary.attendanceRate).toBe(expectedRate);
       expect(report?.students[0]?.attendanceRate).toBe(expectedRate);
+      // รอตรวจอาจเป็นหน้าของคนอื่น นักศึกษาเห็นแค่สถานะและเวลา
       expect(report?.students[0]?.sessions[0]).toMatchObject({
         status,
-        imageUrl: 'https://storage.test/own.jpg',
+        imageUrl: status === 'pending' ? null : 'https://storage.test/own.jpg',
       });
-      expect(signedPaths).toEqual([['own.jpg']]);
+      expect(signedPaths).toEqual(status === 'pending' ? [] : [['own.jpg']]);
     },
   );
   it('ไม่นับขาดคาบก่อนเข้ารายชื่อและคาบที่กล้องไม่ได้บันทึก ส่วนรอตรวจไม่นับเป็นตัวหาร', async () => {
