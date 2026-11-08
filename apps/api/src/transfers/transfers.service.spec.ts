@@ -11,6 +11,7 @@ const student = {
   role: 'student',
   studentId: '66000001',
 } as AppUser;
+const teacher = { id: 'teacher-1', role: 'teacher' } as AppUser;
 const admin = { id: 'admin-1', role: 'admin' } as AppUser;
 const file = {
   buffer: Buffer.from('%PDF-1.7\n%%EOF'),
@@ -159,18 +160,69 @@ describe('TransfersService', () => {
     ).rejects.toMatchObject({ status: 404 });
     expect(repo.sign).not.toHaveBeenCalled();
   });
-  it('ไม่ให้ teacher เข้าถึงคำขอ แม้ id ตรงกับเจ้าของ', async () => {
+  it('ไม่ให้ admin เข้าถึงคำขอ แม้ id ตรงกับเจ้าของ', async () => {
     await expect(
-      service.documentUrl({ ...student, role: 'teacher' }, ID, 'request'),
+      service.documentUrl({ ...student, role: 'admin' }, ID, 'request'),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it('อาจารย์เห็นคำขอทุกคนและเปิดหลักฐานได้ นักศึกษาเห็นเฉพาะของตัวเอง', async () => {
+    await service.list(teacher);
+    expect(repo.listRequests).toHaveBeenLastCalledWith(undefined);
+    await service.list(student);
+    expect(repo.listRequests).toHaveBeenLastCalledWith(student.id);
+    repo.sign.mockResolvedValue('signed');
+    await expect(
+      service.documentUrl(teacher, ID, 'request'),
+    ).resolves.toEqual({ url: 'signed' });
+  });
+  it('อาจารย์ดูเอกสารหลักสูตรที่ปิดแล้วได้ นักศึกษาดูไม่ได้', async () => {
+    repo.getCurriculumDocument.mockResolvedValue({
+      id: DOC,
+      curriculumId: ID,
+      active: false,
+      path: 'curriculum.pdf',
+    });
+    repo.sign.mockResolvedValue('signed');
+    await expect(
+      service.curriculumDocumentUrl(teacher, DOC),
+    ).resolves.toEqual({ url: 'signed' });
+    await expect(
+      service.curriculumDocumentUrl(student, DOC),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it.each([
+    ['curricula', (u: AppUser) => service.curricula(u)],
+    ['mappings', (u: AppUser) => service.mappings(u)],
+    ['list', (u: AppUser) => service.list(u)],
+    ['saveMapping', (u: AppUser) => service.saveMapping(u, {})],
+    ['setMappingActive', (u: AppUser) => service.setMappingActive(u, ID, { active: false })],
+    ['uploadCurriculum', (u: AppUser) => service.uploadCurriculum(u, ID, file)],
+    ['curriculumDocumentUrl', (u: AppUser) => service.curriculumDocumentUrl(u, DOC)],
+    ['review', (u: AppUser) => service.review(u, ID, { decisions: [] })],
+  ])('admin ใช้ %s ไม่ได้', async (_name, call) => {
+    await expect(call(admin)).rejects.toMatchObject({ status: 403 });
+    expect(repo.upload).not.toHaveBeenCalled();
+    expect(repo.review).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['saveMapping', (u: AppUser) => service.saveMapping(u, {})],
+    ['uploadCurriculum', (u: AppUser) => service.uploadCurriculum(u, ID, file)],
+    ['review', (u: AppUser) => service.review(u, ID, { decisions: [] })],
+  ])('นักศึกษาใช้ %s ไม่ได้', async (_name, call) => {
+    await expect(call(student)).rejects.toMatchObject({ status: 403 });
+  });
+  it('อาจารย์ยื่นคำขอแทนไม่ได้', async () => {
+    await expect(
+      service.submit({ ...teacher, studentId: '66000001' } as AppUser, input, file),
     ).rejects.toMatchObject({ status: 403 });
   });
   it('ตัดสินครบทุกวิชา และส่ง reviewer จากผู้เข้าสู่ระบบ', async () => {
-    await service.review(admin, ID, {
+    await service.review(teacher, ID, {
       decisions: [
         { itemId: ITEM, decision: 'approved', note: 'ตรวจเอกสารแล้ว' },
       ],
     });
-    expect(repo.review).toHaveBeenCalledWith(ID, admin.id, [
+    expect(repo.review).toHaveBeenCalledWith(ID, teacher.id, [
       { itemId: ITEM, decision: 'approved', note: 'ตรวจเอกสารแล้ว' },
     ]);
   });
@@ -180,7 +232,7 @@ describe('TransfersService', () => {
       items: [{ ...pending.items[0], match: null }],
     });
     await expect(
-      service.review(admin, ID, {
+      service.review(teacher, ID, {
         decisions: [{ itemId: ITEM, decision: 'approved', note: '' }],
       }),
     ).rejects.toMatchObject({ status: 400 });
@@ -188,18 +240,18 @@ describe('TransfersService', () => {
   });
   it('ห้ามตัดสินซ้ำหรือส่งผลไม่ครบ', async () => {
     await expect(
-      service.review(admin, ID, { decisions: [] }),
+      service.review(teacher, ID, { decisions: [] }),
     ).rejects.toMatchObject({ status: 400 });
     repo.getRequest.mockResolvedValue({ ...pending, status: 'approved' });
     await expect(
-      service.review(admin, ID, {
+      service.review(teacher, ID, {
         decisions: [{ itemId: ITEM, decision: 'approved', note: '' }],
       }),
     ).rejects.toMatchObject({ status: 409 });
   });
   it('การปฏิเสธต้องมีเหตุผล', async () => {
     await expect(
-      service.review(admin, ID, {
+      service.review(teacher, ID, {
         decisions: [{ itemId: ITEM, decision: 'rejected', note: '' }],
       }),
     ).rejects.toMatchObject({ status: 400 });
