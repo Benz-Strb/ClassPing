@@ -99,6 +99,23 @@ describe('SupabaseDoorRepo.closeTrip', () => {
   });
 });
 
+describe('SupabaseDoorRepo.demotePendingTrip', () => {
+  it('เปลี่ยนเฉพาะรอบ pending ที่ยังไม่กลับเป็น unknown และถอดชื่อออก', async () => {
+    const { db, calls } = recordingDb({ data: [{ id: 't1' }] });
+    await expect(new SupabaseDoorRepo(db).demotePendingTrip('s1', 'u1')).resolves.toBe('t1');
+    expect(calls).toContainEqual(['update', [{ status: 'unknown', student_id: null }]]);
+    expect(calls).toContainEqual(['eq', ['session_id', 's1']]);
+    expect(calls).toContainEqual(['eq', ['student_id', 'u1']]);
+    expect(calls).toContainEqual(['eq', ['status', 'pending']]);
+    expect(calls).toContainEqual(['is', ['back_at', null]]);
+  });
+
+  it('ไม่มีรอบ pending คืน null', async () => {
+    const { db } = recordingDb({ data: [] });
+    await expect(new SupabaseDoorRepo(db).demotePendingTrip('s1', 'u1')).resolves.toBeNull();
+  });
+});
+
 describe('SupabaseDoorRepo.unknownTripsBefore', () => {
   it('เลือกเฉพาะ status unknown ที่ออกก่อนเวลาที่ให้ รอบที่รู้ว่าใครไม่ถูกเลือก', async () => {
     const { db, calls } = recordingDb({
