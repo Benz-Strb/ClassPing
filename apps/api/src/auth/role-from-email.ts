@@ -8,10 +8,10 @@ export interface ClassifiedEmail {
 
 const ALLOWED_DOMAIN = 'dpu.ac.th';
 
-// เมลอาจารย์เป็น ชื่อ.นามสกุล 3 ตัวแรก
-const TEACHER_LOCAL = /^[a-z]+\.[a-z]{3}$/;
+// เมลนักศึกษาเป็นเลขรหัส เมลที่ไม่มีตัวเลขเลยเป็นอาจารย์
+// ตัวเลขปนตัวอักษรบอกไม่ได้ เป็นนักศึกษาไว้ก่อน แอดมินเปลี่ยนให้ได้
+const TEACHER_LOCAL = /^[^\d]+$/;
 
-// แบบอื่นที่ไม่ใช่เลขรหัสเริ่มเป็นนักศึกษาไว้ก่อน แอดมินเปลี่ยนให้ได้
 export function classifyEmail(
   rawEmail: string,
   adminEmails: string[],

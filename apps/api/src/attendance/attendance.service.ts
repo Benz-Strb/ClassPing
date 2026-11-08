@@ -123,6 +123,8 @@ export class AttendanceService {
       this.repo.rules(session.courseId),
     ]);
     const byUser = new Map(rows.map((r) => [r.userId, r]));
+    // แถวลาจากการอนุมัติไม่ได้มาจากกล้อง ไม่นับว่าคาบนี้มีข้อมูล (ตรงกับรายงาน)
+    const cameraRan = rows.some((r) => r.status !== 'leave');
     const limitMin = rulesFor(session, courseRules).outOfRoomLimitMin;
 
     const tripsByUser = new Map<string, StoredTrip[]>();
@@ -169,7 +171,7 @@ export class AttendanceService {
           !row &&
           statusWithoutRow(session, courseRules, now, {
             addedAt: addedDates.get(entry.studentCode),
-            sessionHasRows: rows.length > 0,
+            sessionHasRows: cameraRan,
           }) === 'absent',
         firstSeenAt: row?.firstSeenAt?.toISOString() ?? null,
         confidence: row?.confidence ?? null,
@@ -196,7 +198,7 @@ export class AttendanceService {
       session: {
         ...this.sessionView(session),
         outOfRoomLimitMin: limitMin,
-        recorded: rows.length > 0,
+        recorded: cameraRan,
       },
       rows: views,
       unknown: unknown.flatMap((u) => {
@@ -263,6 +265,15 @@ export class AttendanceService {
     const { status } = parseBody(statusSchema, body);
     const session = await this.owned(user, sessionId);
     const student = await this.student(session.courseId, code);
+    const rows = await this.repo.listBySession(sessionId);
+    if (rows.find((r) => r.userId === student)?.status === 'pending') {
+      // รูปอาจเป็นของคนอื่น ตั้งสถานะตรง ๆ จะเก็บรูปนั้นไว้กับคนนี้
+      throw new AppError(
+        409,
+        'PENDING_REVIEW',
+        'รายการนี้รอตรวจอยู่ ให้ใช้ปุ่มยืนยัน เปลี่ยนคน หรือไม่ใช่นักศึกษาวิชานี้',
+      );
+    }
     await this.repo.setStatus(sessionId, student, status, user.id);
     return this.view(user, sessionId);
   }
@@ -284,11 +295,12 @@ export class AttendanceService {
     }
 
     if (input.action === 'reject') {
+      // ลบก่อน ถ้าแถวไม่ได้ pending แล้วจะได้ไม่เก็บรูปไว้ซ้ำ
+      await this.repo.deleteRow(sessionId, userId);
       // รูปยังเก็บไว้ในหน้าที่ไม่รู้จัก แล้วลบเองตามรอบ
       if (row.imagePath) {
         await this.repo.insertUnknown(sessionId, row.imagePath, row.firstSeenAt ?? this.now());
       }
-      await this.repo.deleteRow(sessionId, userId);
       // แถว spoof ไม่ล็อกคนนี้ ถ้าตัวจริงเข้ามากล้องจะบันทึกให้ใหม่
       if (row.reviewReason !== 'spoof') this.rejected.reject(sessionId, userId, session.endsAt);
       return this.view(user, sessionId);
@@ -303,6 +315,8 @@ export class AttendanceService {
         throw new AppError(409, 'ALREADY_RECORDED', 'นักศึกษาคนนี้มีผลเช็คชื่อในคาบนี้แล้ว');
       }
       await this.repo.moveRow(sessionId, userId, toUserId, status, user.id);
+      // คนที่กล้องเดาผิดจะไม่กลับมารอตรวจในชื่อเดิมทันที เหมือนกด "ไม่ใช่"
+      if (row.reviewReason !== 'spoof') this.rejected.reject(sessionId, userId, session.endsAt);
     }
     return this.view(user, sessionId);
   }

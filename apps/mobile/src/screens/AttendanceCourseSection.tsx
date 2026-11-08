@@ -3,10 +3,14 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, View } from 'react-native';
 import { Pressable, Text, TextInput } from '../ui/primitives';
 import { apiFetch } from "../lib/api";
+import { formatBuddhistDate, formatOutOfRoom, formatRate, parseFilterDate } from "../lib/attendance";
+import type { AttendanceCounts } from "../lib/types";
 
 interface CourseAttendance {
   student: {
+    counts: AttendanceCounts;
     attendanceRate: number;
+    outOfRoomSeconds?: number;
     sessions: {
       sessionId: string;
       onDate: string;
@@ -17,6 +21,7 @@ interface CourseAttendance {
       roomName?: string;
       firstSeenAt?: string | null;
       imageUrl?: string | null;
+      outOfRoomSeconds?: number;
       status:
         "present" | "late" | "absent" | "leave" | "pending" | "unrecorded";
     }[];
@@ -42,6 +47,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
   const [kind, setKind] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [filterError, setFilterError] = useState<string | null>(null);
   const [query, setQuery] = useState("kind=all");
   const [reload, setReload] = useState(0);
   const [data, setData] = useState<CourseAttendance | null>(null);
@@ -96,7 +102,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       </View>
       <TextInput
         accessibilityLabel="วันที่เริ่มต้น"
-        placeholder="ตั้งแต่ YYYY-MM-DD"
+        placeholder="ตั้งแต่ ปปปป-ดด-วว (พ.ศ. หรือ ค.ศ.)"
         value={startDate}
         onChangeText={setStartDate}
         autoCapitalize="none"
@@ -104,7 +110,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       />
       <TextInput
         accessibilityLabel="วันที่สิ้นสุด"
-        placeholder="ถึง YYYY-MM-DD"
+        placeholder="ถึง ปปปป-ดด-วว (พ.ศ. หรือ ค.ศ.)"
         value={endDate}
         onChangeText={setEndDate}
         autoCapitalize="none"
@@ -113,22 +119,38 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       <Pressable
         accessibilityRole="button"
         onPress={() => {
+          const start = parseFilterDate(startDate);
+          const end = parseFilterDate(endDate);
+          const invalid = !start.ok ? start : !end.ok ? end : null;
+          if (invalid) {
+            setFilterError(invalid.message);
+            return;
+          }
+          if (start.ok && end.ok && start.value && end.value && start.value > end.value) {
+            setFilterError("วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด");
+            return;
+          }
+          setFilterError(null);
           const params = new URLSearchParams({ kind });
-          if (startDate.trim()) params.set("startDate", startDate.trim());
-          if (endDate.trim()) params.set("endDate", endDate.trim());
+          if (start.ok && start.value) params.set("startDate", start.value);
+          if (end.ok && end.value) params.set("endDate", end.value);
           setQuery(params.toString());
           setReload((value) => value + 1);
         }}
       >
         <Text style={{ color: colors.action, padding: 8 }}>แสดงผล / โหลดใหม่</Text>
       </Pressable>
+      {filterError && <Text style={{ color: "#dc2626" }}>{filterError}</Text>}
       {error ? (
         <Text style={{ color: colors.danger }}>{error}</Text>
       ) : !data ? (
         <ActivityIndicator accessibilityLabel="กำลังโหลดรายละเอียด" />
       ) : (
         <>
-          <Text>อัตราการเข้าเรียน: {data.student.attendanceRate}%</Text>
+          <Text>อัตราการเข้าเรียน: {formatRate(data.student.counts, data.student.attendanceRate)}</Text>
+          {formatOutOfRoom(data.student.outOfRoomSeconds ?? 0) && (
+            <Text>รวมทุกคาบ {formatOutOfRoom(data.student.outOfRoomSeconds ?? 0)}</Text>
+          )}
           {data.student.sessions.length === 0 && (
             <Text>ไม่มีคาบตามตัวกรองนี้</Text>
           )}
@@ -143,7 +165,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
               }}
             >
               <Text>
-                {session.onDate} ·{" "}
+                {formatBuddhistDate(session.onDate)} ·{" "}
                 {session.kind === "exam" ? "คาบสอบ" : "คาบเรียน"}
                 {session.title ? ` · ${session.title}` : ""}
               </Text>
@@ -152,6 +174,9 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
                 {session.roomName ?? "-"}
               </Text>
               <Text>{STATUS[session.status]}</Text>
+              {formatOutOfRoom(session.outOfRoomSeconds ?? 0) && (
+                <Text>{formatOutOfRoom(session.outOfRoomSeconds ?? 0)}</Text>
+              )}
               <Text>
                 พบครั้งแรก:{" "}
                 {session.firstSeenAt ? time(session.firstSeenAt) : "-"}

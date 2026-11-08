@@ -21,6 +21,15 @@ export function formatDate(date: string): string {
   });
 }
 
+const MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+// YYYY-MM-DD (ค.ศ. จาก API) แสดงเป็น พ.ศ. เช่น 7 พ.ย. 2569
+export function formatBuddhistDate(date: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return date;
+  return `${Number(match[3])} ${MONTHS[Number(match[2]) - 1] ?? match[2]} ${Number(match[1]) + 543}`;
+}
+
 export function formatTime(iso: string): string {
   return new Date(new Date(iso).getTime() + OFFSET_MS).toISOString().slice(11, 16);
 }

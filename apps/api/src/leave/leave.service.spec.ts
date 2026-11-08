@@ -5,6 +5,7 @@ import type { AppUser } from '../users/users.service.js';
 import { LeaveController } from './leave.controller.js';
 import type { LeaveRepo, LeaveSessionOption } from './leave.repo.js';
 import { LeaveService, extractLeaveReason } from './leave.service.js';
+import { PreviewLimitGuard, SubmitLimitGuard } from './preview-limit.guard.js';
 
 const student: AppUser = {
   id: 'student-user',
@@ -45,6 +46,7 @@ function setup() {
     listStatuses: vi.fn(async () => []),
     listEligibleSessions: vi.fn(async () => [session]),
     studentCanRequest: vi.fn(async () => true),
+    hasActiveRequest: vi.fn(async () => false),
     createRequest: vi.fn(async () => ({ id: 'leave-1' })),
     deleteRequest: vi.fn(async () => undefined),
     uploadEvidence: vi.fn(async () => undefined),
@@ -221,6 +223,25 @@ describe('LeaveService', () => {
     });
   });
 
+  it('มีคำขอที่ยังไม่ถูกปฏิเสธอยู่แล้ว ตอบ 409 โดยไม่เรียก OCR', async () => {
+    const { service, repo, ocr } = setup();
+    repo.hasActiveRequest.mockResolvedValue(true);
+
+    await expect(
+      service.submit(student, SESSION_ID, 'ป่วย', evidence),
+    ).rejects.toMatchObject({ status: 409, code: 'LEAVE_REQUEST_DUPLICATE' });
+    expect(repo.hasActiveRequest).toHaveBeenCalledWith('student-user', SESSION_ID);
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
+    expect(repo.createRequest).not.toHaveBeenCalled();
+  });
+
+  it('อ่านร่างกับยื่นลามีเพดานของตัวเอง ไม่นับรวมกัน', () => {
+    const guards = (name: 'preview' | 'submit') =>
+      Reflect.getMetadata('__guards__', LeaveController.prototype[name]) as unknown[];
+    expect(guards('preview')).toEqual([PreviewLimitGuard]);
+    expect(guards('submit')).toEqual([SubmitLimitGuard]);
+  });
+
   it('Typhoon ล้มเหลวแล้วยังบันทึกคำขอและหลักฐานเพื่อให้อาจารย์ตรวจเอง', async () => {
     const { service, repo, ocr } = setup();
     ocr.readLeaveDocument.mockRejectedValue(new Error('typhoon unavailable'));
@@ -271,6 +292,29 @@ describe('LeaveService', () => {
     });
     expect(repo.reviewRequest).not.toHaveBeenCalled();
     expect(repo.signedEvidenceUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('LeaveService.review หมายเหตุ', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+
+  it.each([123, { a: 1 }, ['x'], true, 'x'.repeat(1001)])(
+    'หมายเหตุที่ไม่ถูกต้องได้ 400 ไม่เรียกฐาน (%s)',
+    async (note) => {
+      const { service, repo } = setup();
+      await expect(service.review(teacher, id, 'approved', note)).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(repo.reviewRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it('ตัดช่องว่าง ว่างหรือไม่ส่งเป็น null', async () => {
+    const { service, repo } = setup();
+    await service.review(teacher, id, 'approved', '  ok  ');
+    await service.review(teacher, id, 'rejected', '   ');
+    await service.review(teacher, id, 'rejected');
+    expect((repo.reviewRequest.mock.calls as unknown[][]).map((c) => c[3])).toEqual(['ok', null, null]);
   });
 });
 

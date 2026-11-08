@@ -29,3 +29,20 @@ export async function readAdminText(file: File): Promise<string> {
     throw new Error("อ่านไฟล์ไม่ได้ กรุณาบันทึกไฟล์เป็น UTF-8");
   }
 }
+
+export interface VideoView {
+  viewedAt: string;
+  // ดูต่อเนื่องถึงเวลานี้
+  until: string;
+  kind: "live" | "playback" | "download";
+  viewerName: string | null;
+  viewerEmail: string;
+  courseCode: string;
+  courseName: string;
+  roomName: string;
+  startsAt: string;
+  endsAt: string;
+  sessionKind: "class" | "exam";
+  sessionTitle: string | null;
+  isTeacherOfCourse: boolean;
+}

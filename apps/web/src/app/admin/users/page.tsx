@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { RetryButton } from "@/components/retry-button";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -45,6 +46,36 @@ export default function AdminUsersPage() {
           null,
       );
       setStatus(`เปลี่ยนบทบาทของ ${user.fullName ?? user.email} แล้ว`);
+    } catch (value) {
+      setError(await handleApiError(value, router));
+    } finally {
+      setBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(user.id);
+        return next;
+      });
+    }
+  }
+
+  async function withdrawConsent(user: AdminUser) {
+    if (
+      !window.confirm(
+        `ถอนความยินยอมของ ${user.fullName ?? user.email}? ระบบจะลบข้อมูลใบหน้าและความยินยอม และผู้ใช้ต้องให้ความยินยอมใหม่ก่อนลงทะเบียนใบหน้าอีกครั้ง`,
+      )
+    )
+      return;
+    setBusyIds((current) => new Set(current).add(user.id));
+    setError(null);
+    setStatus(null);
+    try {
+      await apiFetch(`/users/${user.id}/face?withdraw=1`, { method: "DELETE" });
+      setUsers(
+        (current) =>
+          current?.map((item) =>
+            item.id === user.id ? { ...item, hasFace: false } : item,
+          ) ?? null,
+      );
+      setStatus(`ถอนความยินยอมของ ${user.fullName ?? user.email} แล้ว`);
     } catch (value) {
       setError(await handleApiError(value, router));
     } finally {
@@ -101,7 +132,7 @@ export default function AdminUsersPage() {
       )}
       {status && <p role="status">{status}</p>}
       {users === null ? (
-        <p role="status">กำลังโหลดผู้ใช้...</p>
+        error ? <RetryButton /> : <p role="status">กำลังโหลดผู้ใช้...</p>
       ) : users.length === 0 ? (
         <p className="text-gray-600">ยังไม่มีผู้ใช้</p>
       ) : (
@@ -163,6 +194,14 @@ export default function AdminUsersPage() {
                       className="rounded-md border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       รีเซ็ตใบหน้า
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyIds.has(user.id)}
+                      onClick={() => void withdrawConsent(user)}
+                      className="ml-2 rounded-md border border-red-300 px-3 py-1.5 text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      ถอนความยินยอม
                     </button>
                   </td>
                 </tr>
