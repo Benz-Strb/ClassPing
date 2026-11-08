@@ -6,12 +6,15 @@ import {
   Param,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import { AppError } from '../common/app-error.js';
+import { EvidenceUploadErrorsInterceptor } from '../enrollment/upload-errors.interceptor.js';
 import type { AppUser } from '../users/users.service.js';
+import { PreviewLimitGuard, SubmitLimitGuard } from './preview-limit.guard.js';
 import { LeaveService, MAX_EVIDENCE_BYTES, type LeaveEvidence } from './leave.service.js';
 
 @Controller('leave-requests')
@@ -57,8 +60,10 @@ export class LeaveController {
 
   @Post('preview')
   @HttpCode(200)
+  @UseGuards(PreviewLimitGuard)
   @UseInterceptors(
-    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
+    EvidenceUploadErrorsInterceptor,
+    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),
   )
   preview(
     @CurrentUser() user: AppUser,
@@ -70,8 +75,10 @@ export class LeaveController {
 
   @Post()
   @HttpCode(201)
+  @UseGuards(SubmitLimitGuard)
   @UseInterceptors(
-    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES } }),
+    EvidenceUploadErrorsInterceptor,
+    FileInterceptor('evidence', { limits: { fileSize: MAX_EVIDENCE_BYTES }, defParamCharset: 'utf8' }),
   )
   submit(
     @CurrentUser() user: AppUser,
@@ -89,7 +96,7 @@ export class LeaveController {
     @CurrentUser() user: AppUser,
     @Param('id') id: string,
     @Body('decision') decision: 'approved' | 'rejected',
-    @Body('reviewNote') reviewNote?: string,
+    @Body('reviewNote') reviewNote?: unknown,
   ) {
     if (decision !== 'approved' && decision !== 'rejected') {
       throw new AppError(
