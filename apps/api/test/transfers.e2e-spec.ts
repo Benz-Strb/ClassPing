@@ -161,7 +161,7 @@ describe('Transfers HTTP flow', () => {
   async function prepare() {
     await request(app.getHttpServer())
       .post(`/transfers/curricula/${C}/document`)
-      .set('x-role', 'admin')
+      .set('x-role', 'teacher')
       .attach('document', PDF, {
         filename: 'curriculum.pdf',
         contentType: 'application/pdf',
@@ -169,7 +169,7 @@ describe('Transfers HTTP flow', () => {
       .expect(201);
     await request(app.getHttpServer())
       .post('/transfers/mappings')
-      .set('x-role', 'admin')
+      .set('x-role', 'teacher')
       .send(mapping)
       .expect(201);
   }
@@ -231,13 +231,13 @@ describe('Transfers HTTP flow', () => {
     expect(upload).toHaveBeenCalledTimes(2);
     await request(app.getHttpServer())
       .post('/transfers/mappings')
-      .set('x-role', 'admin')
+      .set('x-role', 'teacher')
       .send({ ...mapping, targetCode: 'NEW999' })
       .expect(201);
     await request(app.getHttpServer())
       .post(`/transfers/requests/${row.id}/review`)
-      .set('x-role', 'admin')
-      .set('x-user', 'admin-1')
+      .set('x-role', 'teacher')
+      .set('x-user', 'teacher-1')
       .send({
         decisions: [
           {
@@ -257,11 +257,12 @@ describe('Transfers HTTP flow', () => {
       .get('/transfers/requests')
       .expect(200);
     expect(result.body.data[0].status).toBe('partially_approved');
+    expect(result.body.data[0].reviewedBy).toBe('teacher-1');
     expect(result.body.data[0].items[0].match.targetCode).toBe('IT101');
     expect(result.body.data[0].items[1].note).toBe('ไม่มีคู่เทียบ');
     await request(app.getHttpServer())
       .post(`/transfers/requests/${row.id}/review`)
-      .set('x-role', 'admin')
+      .set('x-role', 'teacher')
       .send({
         decisions: row.items.map((item: { id: string }) => ({
           itemId: item.id,
@@ -271,7 +272,7 @@ describe('Transfers HTTP flow', () => {
       })
       .expect(409);
   });
-  it('student เห็นเฉพาะคำขอและเอกสารของตนเอง admin เปิดได้ teacher เข้าไม่ได้', async () => {
+  it('student เห็นเฉพาะคำขอและเอกสารของตนเอง teacher เปิดได้ admin เข้าไม่ได้', async () => {
     await prepare();
     const { body } = await submit();
     const id = body.data.id;
@@ -294,23 +295,32 @@ describe('Transfers HTTP flow', () => {
     expect(mine.body.data).toEqual([]);
     await request(app.getHttpServer())
       .get(`/transfers/requests/${id}/documents/request`)
-      .set('x-role', 'admin')
+      .set('x-role', 'teacher')
       .expect(200);
     await request(app.getHttpServer())
       .get(`/transfers/requests/${id}/documents/request`)
-      .set('x-role', 'teacher')
+      .set('x-role', 'admin')
       .expect(403);
   });
   it.each([
     ['get', '/transfers/mappings', 'student'],
-    ['get', '/transfers/requests', 'teacher'],
     ['post', '/transfers/mappings', 'student'],
     ['post', `/transfers/curricula/${C}/document`, 'student'],
     ['post', `/transfers/requests/${C}/review`, 'student'],
+    ['post', '/transfers/requests', 'teacher'],
+    ['get', '/transfers/curricula', 'admin'],
+    ['get', `/transfers/curricula/${D}/document`, 'admin'],
+    ['get', '/transfers/requests', 'admin'],
+    ['get', `/transfers/requests/${C}/documents/request`, 'admin'],
     ['post', '/transfers/requests', 'admin'],
+    ['get', '/transfers/mappings', 'admin'],
+    ['post', '/transfers/mappings', 'admin'],
+    ['patch', `/transfers/mappings/${C}`, 'admin'],
+    ['post', `/transfers/curricula/${C}/document`, 'admin'],
+    ['post', `/transfers/requests/${C}/review`, 'admin'],
   ])('ปฏิเสธ %s %s สำหรับ %s', async (method, path, role) => {
     const agent = request(app.getHttpServer());
-    await (method === 'get' ? agent.get(path) : agent.post(path))
+    await agent[method as 'get'](path)
       .set('x-role', role)
       .send({})
       .expect(403);
@@ -340,7 +350,7 @@ describe('Transfers HTTP flow', () => {
     await prepare();
     await request(app.getHttpServer())
       .patch(`/transfers/mappings/${mappings[0].id}`)
-      .set('x-role', 'admin')
+      .set('x-role', 'teacher')
       .send({ active: false })
       .expect(200);
     const { body } = await submit();
