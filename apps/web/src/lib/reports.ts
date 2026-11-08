@@ -16,3 +16,11 @@ export function buildReportQuery(filters: ReportFilters): string {
   const query = params.toString();
   return query ? `?${query}` : '';
 }
+
+// ยังไม่มีคาบที่ตัดสินผล (ไม่นับรอตรวจ) แสดง - แทน 0%
+export function formatRate(
+  counts: { total: number; pending: number },
+  rate: number,
+): string {
+  return counts.total - counts.pending > 0 ? `${rate}%` : '-';
+}

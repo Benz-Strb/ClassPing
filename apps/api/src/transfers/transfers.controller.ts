@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
+import { DocumentUploadErrorsInterceptor } from '../enrollment/upload-errors.interceptor.js';
 import type { AppUser } from '../users/users.service.js';
 import { TransfersService } from './transfers.service.js';
 import type { TransferFile } from './transfers.types.js';
@@ -34,7 +35,8 @@ export class TransfersController {
   @Post('requests')
   @Roles('student')
   @UseInterceptors(
-    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 } }),
+    DocumentUploadErrorsInterceptor,
+    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }),
   )
   submit(
     @CurrentUser() user: AppUser,
@@ -64,7 +66,8 @@ export class TransfersController {
   @Post('curricula/:id/document')
   @Roles('admin')
   @UseInterceptors(
-    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 } }),
+    DocumentUploadErrorsInterceptor,
+    FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }),
   )
   uploadCurriculum(
     @CurrentUser() user: AppUser,
