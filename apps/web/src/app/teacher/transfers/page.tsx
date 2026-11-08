@@ -24,7 +24,7 @@ const blank = {
   targetCredits: "3",
 };
 
-export default function AdminTransfersPage() {
+export default function TeacherTransfersPage() {
   const router = useRouter();
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [docs, setDocs] = useState<TransferCurriculum[]>([]);
@@ -38,7 +38,7 @@ export default function AdminTransfersPage() {
   const [error, setError] = useState<string | null>(null);
   async function load() {
     const [c, d, m, r] = await Promise.all([
-      apiFetch<CatalogEntry[]>("/admin/catalog/curricula"),
+      apiFetch<CatalogEntry[]>("/teacher/curricula"),
       apiFetch<TransferCurriculum[]>("/transfers/curricula"),
       apiFetch<TransferMapping[]>("/transfers/mappings"),
       apiFetch<TransferRequest[]>("/transfers/requests"),
@@ -50,7 +50,7 @@ export default function AdminTransfersPage() {
   }
   useEffect(() => {
     Promise.all([
-      apiFetch<CatalogEntry[]>("/admin/catalog/curricula"),
+      apiFetch<CatalogEntry[]>("/teacher/curricula"),
       apiFetch<TransferCurriculum[]>("/transfers/curricula"),
       apiFetch<TransferMapping[]>("/transfers/mappings"),
       apiFetch<TransferRequest[]>("/transfers/requests"),
@@ -88,7 +88,7 @@ export default function AdminTransfersPage() {
         <h3 className="font-semibold">หลักสูตรและชุดจับคู่</h3>
         <p>
           เลือกหลักสูตรจาก{" "}
-          <Link href="/admin/curricula" className="text-blue-700 underline">
+          <Link href="/teacher/curricula" className="text-blue-700 underline">
             หน้าจัดการหลักสูตร
           </Link>{" "}
           แล้วแนบเอกสารหลักสูตร ก่อนให้นักศึกษายื่นคำขอ
@@ -263,7 +263,7 @@ export default function AdminTransfersPage() {
             <TransferRequestCard
               key={r.id}
               request={r}
-              admin
+              reviewer
               onReviewed={load}
             />
           ))
