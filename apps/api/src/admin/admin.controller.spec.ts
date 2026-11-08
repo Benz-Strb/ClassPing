@@ -26,14 +26,14 @@ describe('AdminController', () => {
 
   it('ส่ง roomId ไปสร้าง token และคืน token จาก service', async () => {
     const service = {
-      createCameraToken: async (roomId: string) => ({
+      createCameraToken: async (roomId: string, _body?: unknown) => ({
         cameraId: 'camera-1',
         roomId,
         token: 'camera-token',
       }),
     } as unknown as AdminService;
     const controller = new AdminController(service);
-    await expect(controller.createCameraToken('room-1')).resolves.toEqual({
+    await expect(controller.createCameraToken('room-1', undefined)).resolves.toEqual({
       cameraId: 'camera-1',
       roomId: 'room-1',
       token: 'camera-token',

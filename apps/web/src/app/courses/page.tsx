@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import type { Course, Me } from "@/lib/types";
+import { RetryButton } from "@/components/retry-button";
 import { TodayAgenda } from "@/components/today-agenda";
 
 export default function CoursesPage() {
@@ -60,7 +61,7 @@ export default function CoursesPage() {
       <section className="work-surface" aria-labelledby="my-courses-title">
       <div className="surface-heading"><h2 id="my-courses-title">รายวิชาของฉัน</h2><span className="tool-note">{courses ? `${courses.length} รายวิชา` : ""}</span></div>
       {courses === null ? (
-        <p role="status" className="surface-feedback text-gray-600">กำลังโหลดรายวิชา...</p>
+        error ? <RetryButton /> : <p role="status" className="surface-feedback text-gray-600">กำลังโหลดรายวิชา...</p>
       ) : courses.length === 0 ? (
         <p className="surface-feedback text-gray-600">ยังไม่มีวิชา</p>
       ) : (
