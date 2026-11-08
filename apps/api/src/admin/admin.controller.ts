@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { Roles } from '../auth/auth.decorators.js';
-import type { AdminUser, CameraView, RoomView } from './admin.repo.js';
+import type { AdminUser, CameraView, RoomView, VideoViewRow } from './admin.repo.js';
 import { AdminService } from './admin.service.js';
 
 @Controller('admin')
@@ -29,6 +29,11 @@ export class AdminController {
   @Post('rooms')
   createRoom(@Body() body: unknown): Promise<RoomView> {
     return this.admin.createRoom(body);
+  }
+
+  @Get('video-views')
+  listVideoViews(@Query() query: unknown): Promise<VideoViewRow[]> {
+    return this.admin.listVideoViews(query);
   }
 
   @Get('cameras')
