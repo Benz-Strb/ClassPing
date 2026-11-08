@@ -68,7 +68,7 @@ describe('Admin HTTP RBAC', () => {
     await request(app.getHttpServer()).post('/admin/cameras/room/token').set('x-role', 'admin').expect(201);
     expect(catalog.importCsv).toHaveBeenCalledWith('reference', { csv: 'example' });
     expect(catalog.update).toHaveBeenCalledWith('knowledge', 'entry', { name: 'FAQ' });
-    expect(admin.createCameraToken).toHaveBeenCalledWith('room');
+    expect(admin.createCameraToken).toHaveBeenCalledWith('room', undefined);
   });
 });
 
