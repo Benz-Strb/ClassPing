@@ -53,14 +53,17 @@ describe('Chat HTTP authorization and envelopes', () => {
     await request(app.getHttpServer()).delete('/chat/knowledge/test').set('Authorization', 'Bearer student').expect(403);
     expect(repo.replace).not.toHaveBeenCalled(); expect(repo.remove).not.toHaveBeenCalled();
   });
-  it('private retrieval uses the authenticated identity', async () => {
-    await request(app.getHttpServer()).post('/chat/student').set('Authorization', 'Bearer student').send({ message: 'ทุน', userId: 'other' }).expect(200);
-    expect(repo.search).toHaveBeenCalledWith(expect.any(Array), 'student', 'mock-trigram-v1');
+  it('signed-in chat uses study mode and never searches private sources', async () => {
+    const res = await request(app.getHttpServer()).post('/chat/student').set('Authorization', 'Bearer student')
+      .send({ message: 'ทุน', userId: 'other' }).expect(200);
+    expect(res.body.data).toMatchObject({ mode: 'study', classroom: 'not_connected' });
+    expect(repo.search).not.toHaveBeenCalled();
   });
-  it('admin can only retrieve public knowledge even when requesting another identity', async () => {
-    await request(app.getHttpServer()).post('/chat/student').set('Authorization', 'Bearer admin')
+  it('admin chat ignores a supplied identity and uses study mode', async () => {
+    const res = await request(app.getHttpServer()).post('/chat/student').set('Authorization', 'Bearer admin')
       .send({ message: 'ข้อมูลนักศึกษา', userId: 'student', role: 'student' }).expect(200);
-    expect(repo.search).toHaveBeenCalledWith(expect.any(Array), null, 'mock-trigram-v1');
+    expect(res.body.data.mode).toBe('study');
+    expect(repo.search).not.toHaveBeenCalled();
   });
 
   it('invalid input uses Thai shared error envelope', async () => {

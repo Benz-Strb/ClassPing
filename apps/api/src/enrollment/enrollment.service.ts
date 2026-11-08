@@ -4,6 +4,7 @@ import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
 import { dbError } from '../common/db-error.js';
 import { looksLike } from '../common/image-type.js';
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { FaceClient, type EnrollResult } from '../face/face.client.js';
 import { UsersService, type AppUser } from '../users/users.service.js';
 import { CARD_MATCH_MIN, checkCard, readStudyInfo } from './card-check.js';
@@ -33,6 +34,8 @@ export interface FaceStatus {
   verified: boolean;
 }
 
+const OTHER_USERS_PAGE = 50;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const alreadyEnrolled = () =>
@@ -56,6 +59,7 @@ export class EnrollmentService {
     private readonly users: UsersService,
     private readonly face: FaceClient,
     @Inject(CLOCK) private readonly now: Clock,
+    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'matchAcceptMin'>,
   ) {}
 
   async consent(user: AppUser): Promise<AppUser> {
@@ -117,6 +121,8 @@ export class EnrollmentService {
       );
     }
 
+    await this.checkNotEnrolledElsewhere(user.id, result);
+
     // บันทึกหน้าตรงใหม่ก่อน แล้วค่อยล้างท่าอื่น บันทึกพังกลางทางท่าเดิมยังอยู่
     await this.store(
       user.id,
@@ -128,6 +134,27 @@ export class EnrollmentService {
     await this.removeQuietly(await this.repo.deleteByUser(user.id, 'front'));
     await this.users.setIdentity(user.id, score, readStudyInfo(read.lines));
     return { done: ['front'], complete: false, verified: true };
+  }
+
+  // หน้านี้ใกล้กับบัญชีอื่นที่ยืนยันบัตรแล้ว = อาจสวมรอยหรือลงทะเบียนซ้ำ ใช้เกณฑ์เดียวกับที่กล้องใช้รับว่าเป็นคนเดียวกัน
+  // เกณฑ์นี้ยังไม่ได้วัดกับงานนี้ และฝาแฝดอาจถูกปฏิเสธโดยไม่ใช่การสวมรอย
+  private async checkNotEnrolledElsewhere(userId: string, result: EnrollResult) {
+    for (let offset = 0; ; offset += OTHER_USERS_PAGE) {
+      const page = await this.repo.verifiedEmbeddings(
+        userId,
+        result.model,
+        offset,
+        OTHER_USERS_PAGE,
+      );
+      if (page.embeddings.some((e) => cosine(e, result.embedding) >= this.config.matchAcceptMin)) {
+        throw new AppError(
+          409,
+          'FACE_ALREADY_ENROLLED',
+          'หน้านี้ลงทะเบียนในบัญชีอื่นแล้ว ติดต่อผู้ดูแลระบบ',
+        );
+      }
+      if (page.users < OTHER_USERS_PAGE) return;
+    }
   }
 
   // ถ่ายทีละท่า ท่าเดิมถ่ายซ้ำได้จนกว่าจะครบ รูปที่ไม่ผ่านไม่ถูกเก็บ
