@@ -26,6 +26,21 @@ export interface LeaveEvidence {
   size: number;
 }
 
+const MAX_REVIEW_NOTE = 1000;
+
+// หมายเหตุเป็นข้อความเท่านั้น ว่างถือว่าไม่มี
+function parseReviewNote(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw new AppError(400, 'BAD_REQUEST', 'หมายเหตุต้องเป็นข้อความ');
+  }
+  const note = value.trim();
+  if (note.length > MAX_REVIEW_NOTE) {
+    throw new AppError(400, 'BAD_REQUEST', `หมายเหตุยาวเกิน ${MAX_REVIEW_NOTE} ตัวอักษร`);
+  }
+  return note || null;
+}
+
 export function extractLeaveReason(text: string): string {
   if (!text) return '';
   const lines = text
@@ -180,6 +195,15 @@ export class LeaveService {
       );
     }
 
+    // ซ้ำอยู่แล้วไม่ต้องเสีย OCR ตัวกันจริงคือ unique index ตอนสร้างคำขอ
+    if (await this.repo.hasActiveRequest(user.id, sessionId)) {
+      throw new AppError(
+        409,
+        'LEAVE_REQUEST_DUPLICATE',
+        'ส่งคำขอลาสำหรับคาบนี้แล้ว',
+      );
+    }
+
     let ocr: Awaited<ReturnType<LeaveOcrClient['readLeaveDocument']>> | null = null;
     let ocrStatus: 'completed' | 'failed' = 'failed';
     try {
@@ -246,11 +270,12 @@ export class LeaveService {
     user: AppUser,
     requestId: string,
     decision: 'approved' | 'rejected',
-    reviewNote?: string,
+    rawNote?: unknown,
   ) {
     if (user.role !== 'teacher') {
       throw new AppError(403, 'FORBIDDEN', 'ไม่มีสิทธิ์ตรวจคำขอลา');
     }
+    const reviewNote = parseReviewNote(rawNote);
     if (!UUID.test(requestId))
       throw new AppError(404, 'LEAVE_REQUEST_NOT_FOUND', 'ไม่พบคำขอลา');
     try {
@@ -258,7 +283,7 @@ export class LeaveService {
         requestId,
         user.id,
         decision,
-        reviewNote?.trim() || null,
+        reviewNote,
       );
     } catch (error) {
       if (

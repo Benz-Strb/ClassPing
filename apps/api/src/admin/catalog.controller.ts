@@ -9,7 +9,7 @@ import { CatalogService } from './catalog.service.js';
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
   @Post('knowledge/extract')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: KNOWLEDGE_FILE_LIMIT, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: KNOWLEDGE_FILE_LIMIT, files: 1, fields: 0 }, defParamCharset: 'utf8' }))
   extract(@UploadedFile() file?: { originalname: string; buffer: Buffer }) { return extractKnowledgeFile(file); }
   @Get(':kind')
   list(@Param('kind') kind: string) { return this.catalog.list(kind); }
