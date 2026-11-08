@@ -80,6 +80,10 @@ class FakeDoorRepo implements DoorRepo {
   async closeTrip() {
     return false;
   }
+  async demotePendingTrip() {
+    return null;
+  }
+  async restorePendingTrip() {}
   async unknownTripsBefore() {
     return [];
   }
