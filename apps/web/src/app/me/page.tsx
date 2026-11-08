@@ -71,6 +71,11 @@ export default function MePage() {
           ยื่นคำขอลาและดูสถานะ
         </Link>
       )}
+      {me.role === "student" && (
+        <Link href="/transfers" className="block text-blue-700 underline">
+          เทียบโอนรายวิชา
+        </Link>
+      )}
       {me.role === "teacher" && (
         <Link href="/leave/review" className="block text-blue-700 underline">
           ตรวจคำขอลา

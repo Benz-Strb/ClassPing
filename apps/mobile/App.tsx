@@ -19,10 +19,15 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); setShowChat(false); });
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      setSession(next);
+      setShowChat(false);
+      if (event === 'SIGNED_IN') setLoginError(null);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
+  const onSignedOut = useCallback(() => setLoginError(null), []);
   const onRejected = useCallback((message: string) => setLoginError(message), []);
 
   return (
@@ -36,7 +41,7 @@ export default function App() {
       ) : !session && showChat ? (
         <SafeAreaView edges={['bottom']} style={styles.screen}><ChatScreen key="public" authenticated={false} /></SafeAreaView>
       ) : session ? (
-        <MeScreen key={session.user.id} onRejected={onRejected} />
+        <MeScreen key={session.user.id} onRejected={onRejected} onSignedOut={onSignedOut} />
       ) : (
         <SafeAreaView edges={['bottom']} style={styles.screen}><LoginScreen key={loginError ?? ''} error={loginError} onDpuChat={() => setShowChat(true)} /></SafeAreaView>
       )}

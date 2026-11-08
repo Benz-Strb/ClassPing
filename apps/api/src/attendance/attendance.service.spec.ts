@@ -206,6 +206,41 @@ describe('AttendanceService.view ตรงกับรายงาน', () => {
     expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
   });
 
+  it('มีแต่แถวลาจากการอนุมัติ กล้องไม่ได้ทำงาน ไม่นับใครขาด', async () => {
+    const { service, repo } = setup(afterClass);
+    repo.rows.set('u2', {
+      userId: 'u2',
+      status: 'leave',
+      firstSeenAt: null,
+      confidence: null,
+      imagePath: null,
+      updatedBy: null,
+      updatedByName: null,
+      reviewReason: null,
+    });
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.recorded).toBe(false);
+    expect(view.rows.find((r) => r.studentCode === '66000002')?.status).toBe('leave');
+    expect(view.rows.every((r) => !r.absentByTime)).toBe(true);
+  });
+
+  it('แถวที่อาจารย์ตั้งเองยังนับว่าคาบมีข้อมูล', async () => {
+    const { service, repo } = setup(afterClass);
+    repo.rows.set('u2', {
+      userId: 'u2',
+      status: 'present',
+      firstSeenAt: null,
+      confidence: null,
+      imagePath: null,
+      updatedBy: 't1',
+      updatedByName: 'อาจารย์',
+      reviewReason: null,
+    });
+    const view = await service.view(teacher, SESSION_ID);
+    expect(view.session.recorded).toBe(true);
+    expect(view.rows.find((r) => r.studentCode === '66000001')?.absentByTime).toBe(true);
+  });
+
   it('ระหว่างคาบยังไม่ขาด', async () => {
     const { service, pending } = setup(at(30));
     pending('u2');
@@ -289,6 +324,18 @@ describe('AttendanceService.setStatus', () => {
     }
   });
 
+  it('แถวรอตรวจตั้งสถานะตรง ๆ ไม่ได้ ต้องใช้ปุ่มตรวจ 409 PENDING_REVIEW', async () => {
+    const { service, repo, pending } = setup();
+    pending('u1');
+    await expect(
+      service.setStatus(teacher, SESSION_ID, '66000001', { status: 'present' }),
+    ).rejects.toMatchObject({ status: 409, code: 'PENDING_REVIEW' });
+    expect(repo.rows.get('u1')).toMatchObject({
+      status: 'pending',
+      imagePath: `${SESSION_ID}/u1-x.jpg`,
+    });
+  });
+
   it('รหัสไม่อยู่ในวิชาได้ 404 / ยังไม่เคย login ได้ 409 NO_ACCOUNT', async () => {
     const { service } = setup();
     await expect(
@@ -356,6 +403,26 @@ describe('AttendanceService.review', () => {
     expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(true);
   });
 
+  it('เปลี่ยนคน: กล้องจำว่าคนเดิมถูกปฏิเสธ ไม่เดาซ้ำ', async () => {
+    const { service, pending, rejected } = setup();
+    pending('u1', 5);
+    await service.review(teacher, SESSION_ID, '66000001', {
+      action: 'reassign',
+      toCode: '66000003',
+    });
+    expect(rejected.isRejected(SESSION_ID, 'u1')).toBe(true);
+  });
+
+  it('เปลี่ยนคนแถว spoof: ไม่จำว่าปฏิเสธ', async () => {
+    const { service, pending, rejected } = setup();
+    pending('u2', 5, 'spoof');
+    await service.review(teacher, SESSION_ID, '66000002', {
+      action: 'reassign',
+      toCode: '66000003',
+    });
+    expect(rejected.isRejected(SESSION_ID, 'u2')).toBe(false);
+  });
+
   it('ไม่ใช่แถว spoof: ลบแถว เก็บรูป แต่ไม่จำว่าปฏิเสธ กล้องเห็นตัวจริงทีหลังบันทึกได้', async () => {
     const { service, repo, pending, rejected } = setup();
     pending('u1', 5, 'spoof');
@@ -376,9 +443,7 @@ describe('AttendanceService.review', () => {
       toCode: '66000003',
     });
     expect(repo.rows.get('u3')).toMatchObject({ status: 'present', reviewReason: null });
-    pending('u2', 5, 'spoof');
-    await service.setStatus(teacher, SESSION_ID, '66000002', { status: 'present' });
-    expect(repo.rows.get('u2')?.reviewReason).toBeNull();
+    expect(repo.rows.get('u2')).toBeUndefined();
   });
 
   it('แถวที่ไม่ได้รอตรวจได้ 409 NOT_PENDING', async () => {

@@ -80,18 +80,41 @@ export class DoorProcessor {
       return 'unknown';
     }
 
-    if (await this.openTrips.has(sessionId, verdict.userId)) return 'duplicate';
+    let demotedTrip: string | null = null;
+    if (await this.openTrips.has(sessionId, verdict.userId)) {
+      // รอบ pending เป็นแค่การเดา ผลที่มั่นใจมาทีหลังมาแทน ส่วนรอบ confirmed เดิมยังนับเป็น duplicate
+      demotedTrip =
+        verdict.kind === 'match'
+          ? await this.repo.demotePendingTrip(sessionId, verdict.userId)
+          : null;
+      if (!demotedTrip) return 'duplicate';
+      await this.openTrips.remove(sessionId, verdict.userId);
+    }
     const status = verdict.kind === 'match' ? 'confirmed' : 'pending';
     const crop = candidate?.crop ? Buffer.from(candidate.crop, 'base64') : undefined;
     const imagePath = await this.upload(`${sessionId}/door/${verdict.userId}`, crop);
-    const inserted = await this.insert({
-      sessionId,
-      userId: verdict.userId,
-      status,
-      outAt,
-      confidence: verdict.score,
-      imagePath,
-    });
+    let inserted: boolean;
+    try {
+      inserted = await this.insert({
+        sessionId,
+        userId: verdict.userId,
+        status,
+        outAt,
+        confidence: verdict.score,
+        imagePath,
+      });
+    } catch (error) {
+      // บันทึกรอบใหม่ไม่สำเร็จ รอบเดิมต้องไม่เสียชื่อที่เดาไว้
+      if (demotedTrip) {
+        await this.repo
+          .restorePendingTrip(demotedTrip, verdict.userId)
+          .then(() => this.openTrips.add(sessionId, verdict.userId))
+          .catch((restoreError: unknown) =>
+            this.logger.warn(`คืนรอบรอตรวจไม่สำเร็จ: ${String(restoreError)}`),
+          );
+      }
+      throw error;
+    }
     // มีรอบเปิดอยู่แล้ว (คำขอซ้อนกัน หรือแคชเก่า) จดไว้กันถามฐานข้อมูลอีก
     await this.openTrips.add(sessionId, verdict.userId);
     return inserted ? status : 'duplicate';
@@ -107,8 +130,18 @@ export class DoorProcessor {
 
     let found: Candidate | null = null;
     let gallery: GalleryEntry[] | null = null;
+    let failures = 0;
+    let lastError: unknown;
     for (const image of images) {
-      const { faces } = await this.deps.detect(image, 'image/jpeg', { crops: true });
+      let faces: Awaited<ReturnType<FrameDeps['detect']>>['faces'];
+      try {
+        ({ faces } = await this.deps.detect(image, 'image/jpeg', { crops: true }));
+      } catch (error) {
+        // รูปเดียวพังไม่ควรทิ้งผลจากรูปอื่น
+        failures++;
+        lastError = error;
+        continue;
+      }
       if (!faces.length) continue;
       gallery ??= await this.cached(this.galleries, context.courseId, () =>
         loadCourseGallery(this.attendance, this.deps, context.courseId),
@@ -120,6 +153,8 @@ export class DoorProcessor {
         }
       }
     }
+    // ทุกรูปตรวจไม่สำเร็จ ให้ผู้เรียกจดเป็น unknown เหมือนเดิม
+    if (failures === images.length) throw lastError;
     return found;
   }
 

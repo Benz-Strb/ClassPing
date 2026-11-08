@@ -4,6 +4,7 @@ import type {
   CameraView,
   RoomView,
 } from './admin.repo.js';
+import type { AppConfig } from '../config/config.js';
 import { AdminService } from './admin.service.js';
 
 function fakeRepo() {
@@ -22,6 +23,7 @@ function fakeRepo() {
   ];
   const cameras: CameraView[] = [];
   const repo: AdminRepo = {
+    listVideoViews: async () => [],
     listUsers: async () => users,
     updateUserRole: async (id, role) => {
       const user = users.find((item) => item.id === id);
@@ -37,6 +39,7 @@ function fakeRepo() {
     },
     findRoom: async (id) => rooms.find((room) => room.id === id) ?? null,
     listCameras: async () => cameras,
+    findUser: async (id) => users.find((item) => item.id === id) ?? null,
     saveCameraToken: async (roomId) => ({
       id: '44444444-4444-4444-8444-444444444444',
       roomId,
@@ -109,6 +112,46 @@ describe('AdminService', () => {
     expect(savedHash).not.toBe(result.token);
   });
 
+  it('ออก token กล้องประตูได้ และไม่ระบุชนิดคือกล้องหน้าห้อง', async () => {
+    const { repo } = fakeRepo();
+    const kinds: string[] = [];
+    repo.saveCameraToken = async (roomId, _hash, kind) => {
+      kinds.push(kind);
+      return { id: '44444444-4444-4444-8444-444444444444', roomId };
+    };
+    const service = new AdminService(repo);
+    const room = '22222222-2222-4222-8222-222222222222';
+    await service.createCameraToken(room, { kind: 'door' });
+    await service.createCameraToken(room, undefined);
+    await service.createCameraToken(room, {});
+    expect(kinds).toEqual(['door', 'front', 'front']);
+  });
+
+  it('ชนิดกล้องที่ไม่รู้จักได้ 400', async () => {
+    const { repo } = fakeRepo();
+    await expect(
+      new AdminService(repo).createCameraToken(
+        '22222222-2222-4222-8222-222222222222',
+        { kind: 'side' },
+      ),
+    ).rejects.toMatchObject({ status: 400, code: 'BAD_REQUEST' });
+  });
+
+  it('ไม่เปลี่ยนบทบาทของเมลใน ADMIN_EMAILS เพราะจะถูกยกกลับเป็นแอดมินทุกคำขอ', async () => {
+    const { repo, users } = fakeRepo();
+    users[0].email = 'boss@dpu.ac.th';
+    const service = new AdminService(repo, {
+      adminEmails: ['boss@dpu.ac.th'],
+    } as AppConfig);
+    await expect(
+      service.changeRole(users[0].id, { role: 'teacher' }),
+    ).rejects.toMatchObject({ status: 400, code: 'ADMIN_EMAIL_LOCKED' });
+    expect(users[0].role).toBe('student');
+    await expect(
+      service.changeRole(users[0].id, { role: 'admin' }),
+    ).resolves.toMatchObject({ role: 'admin' });
+  });
+
   it('ไม่สร้าง token ให้ห้องที่ไม่มีอยู่', async () => {
     const { repo } = fakeRepo();
     await expect(
@@ -122,5 +165,26 @@ describe('AdminService', () => {
     const { repo, rooms } = fakeRepo();
     await expect(new AdminService(repo).listRooms()).resolves.toEqual(rooms);
     await expect(new AdminService(repo).listCameras()).resolves.toEqual([]);
+  });
+  it('ประวัติดูกล้อง: ไม่ส่งวันที่ = 7 วันล่าสุดตามเวลาไทย', async () => {
+    const { repo } = fakeRepo();
+    const spy = vi.spyOn(repo, 'listVideoViews');
+    // 17:00Z วันที่ 7 = เช้าวันที่ 8 ของไทย
+    vi.useFakeTimers({ now: new Date('2026-11-07T17:00:00Z') });
+    try {
+      await new AdminService(repo).listVideoViews({});
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(spy).toHaveBeenCalledWith('2026-11-02T00:00:00+07:00', '2026-11-09T00:00:00+07:00');
+  });
+
+  it('ประวัติดูกล้อง: ช่วงเกิน 31 วันหรือวันที่ผิดได้ 400', async () => {
+    const { repo } = fakeRepo();
+    const service = new AdminService(repo);
+    await expect(service.listVideoViews({ from: '2026-10-01', to: '2026-11-01' })).rejects.toMatchObject({ status: 400, code: 'RANGE_TOO_LONG' });
+    await expect(service.listVideoViews({ from: '2026-11-05', to: '2026-11-01' })).rejects.toMatchObject({ status: 400 });
+    await expect(service.listVideoViews({ from: 'x' })).rejects.toMatchObject({ status: 400 });
+    await expect(service.listVideoViews({ from: '2026-10-02', to: '2026-11-01' })).resolves.toEqual([]);
   });
 });

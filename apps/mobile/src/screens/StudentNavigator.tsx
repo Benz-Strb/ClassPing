@@ -1,6 +1,6 @@
 import { layout, colors } from '../ui/theme';
 import { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, BackHandler, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable, ScrollView, Text } from '../ui/primitives';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,11 +14,25 @@ import { AccountScreen } from './AccountScreen';
 import {StudentTabBar, TABS, type Tab} from '../ui/StudentTabBar';
 
 
-export function StudentNavigator({ me, face, onSignOut }: {
+export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
   me: Me;
   face: FaceStatus | null;
+  // กลับไปขั้นลงทะเบียนใบหน้า (ถามยินยอมก่อนถ้ายังไม่ยินยอม)
+  onEnroll: () => void;
+  // ดึงข้อมูลบัญชีและสถานะใบหน้าใหม่
+  onRefresh: () => void;
   onSignOut: () => void;
 }) {
+  // เพิ่มทุกครั้งที่แอปกลับมาเปิด ให้แต่ละแท็บโหลดข้อมูลใหม่
+  const [focusTick, setFocusTick] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const [pullTick, setPullTick] = useState(0);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setFocusTick((value) => value + 1);
+    });
+    return () => subscription.remove();
+  }, []);
   const [tab, setTab] = useState<Tab>('home');
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set(['home']));
   const { width, height } = useWindowDimensions();
@@ -28,6 +42,18 @@ export function StudentNavigator({ me, face, onSignOut }: {
     setVisited((previous) => new Set([...previous, next]));
     setTab(next);
   };
+
+  // เปิดหน้าบัญชีหรือกลับเข้าแอป ดึงสถานะใหม่ เช่นแอดมินรีเซ็ตใบหน้า
+  useEffect(() => {
+    if (tab === 'account') onRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, focusTick]);
+
+  const needsFace = !!face && !face.complete;
+  const enrollBanner = needsFace && <View style={styles.banner}>
+    <Text style={styles.secondary}>{me.pdpaConsentAt ? 'ยังลงทะเบียนใบหน้าไม่ครบ กล้องในห้องเรียนจะยังเช็คชื่อให้คุณไม่ได้' : 'ยังไม่ได้ยินยอมให้ใช้ข้อมูลใบหน้า อาจารย์จะเช็คชื่อให้แทน'}</Text>
+    <Pressable accessibilityRole="button" style={styles.action} onPress={onEnroll}><Text style={styles.actionText}>ลงทะเบียนใบหน้า</Text></Pressable>
+  </View>;
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -45,14 +71,15 @@ export function StudentNavigator({ me, face, onSignOut }: {
         <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatar}><Text allowFontScaling={false} style={styles.avatarText}>{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</Text></Pressable>
       </View>
       {TABS.map(({ key }) => visited.has(key) && <View key={key} style={[styles.scene, tab !== key && styles.hidden]} accessibilityElementsHidden={tab !== key} importantForAccessibility={tab === key ? 'auto' : 'no-hide-descendants'}>
-        {key === 'home' && <ScrollView contentContainerStyle={styles.content}>
+        {key === 'home' && <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={pulling} tintColor={colors.action} onRefresh={() => { setPulling(true); setPullTick((value) => value + 1); }} />}>
           <View style={styles.greeting}>
             <Text accessibilityRole="header" maxFontSizeMultiplier={1.8} style={styles.homeName}>ตารางและงานของวันนี้</Text>
             <Text style={styles.secondary}>{me.fullName ?? me.studentId}</Text>
           </View>
+          {enrollBanner}
           <View style={[styles.dashboard, wide && styles.dashboardWide]}>
-            <View style={[styles.panel, styles.schedulePanel, wide && styles.widePanel]}><HomeStudies onOpenCourses={() => navigate('courses')} onOpenAccount={() => navigate('account')} /></View>
-            <View style={[styles.panel, wide && styles.widePanel]}><AttendanceSummarySection onOpenAccount={() => navigate('account')} /></View>
+            <View style={[styles.panel, styles.schedulePanel, wide && styles.widePanel]}><HomeStudies refreshTick={focusTick + pullTick} onOpenCourses={() => navigate('courses')} onOpenAccount={() => navigate('account')} /></View>
+            <View style={[styles.panel, wide && styles.widePanel]}><AttendanceSummarySection active={tab === 'home'} refreshTick={focusTick + pullTick} onSettled={() => setPulling(false)} onOpenAccount={() => navigate('account')} /></View>
           </View>
           <View style={styles.shortcuts}>
             {(['courses', 'leave'] as const).map((key) => <Pressable key={key} onPress={() => navigate(key)} style={[styles.shortcut, key === 'courses' && styles.primaryShortcut]}>
@@ -63,9 +90,9 @@ export function StudentNavigator({ me, face, onSignOut }: {
           <View style={styles.tip}><Text style={styles.tipTitle}>เข้าเรียนได้โดยไม่ต้องกดเช็กชื่อ</Text><Text style={styles.tipText}>กล้องในห้องเรียนบันทึกการเข้าเรียนให้คุณ ตรวจสอบผลย้อนหลังได้ที่รายวิชา</Text></View>
         </ScrollView>}
         {key === 'courses' && <CoursesScreen active={tab === 'courses'} />}
-        {key === 'leave' && <LeaveScreen />}
+        {key === 'leave' && <LeaveScreen active={tab === 'leave'} focusTick={focusTick} />}
         {key === 'chat' && <ChatScreen authenticated />}
-        {key === 'account' && <AccountScreen me={me} face={face} onSignOut={onSignOut} />}
+        {key === 'account' && <AccountScreen me={me} face={face} banner={enrollBanner} onSignOut={onSignOut} />}
       </View>)}
     </View>
     <StudentTabBar tab={tab} wide={wide} bottom={bottom} onNavigate={navigate} />
@@ -102,4 +129,7 @@ const styles = StyleSheet.create({
   tipTitle: { fontSize: 14, fontWeight: '500' },
   tipText: { fontSize: 13, lineHeight: 21, color: colors.muted },
   secondary: { fontSize: 16, color: colors.muted, lineHeight: 24 },
+  banner: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: colors.subtle, borderWidth: 1, borderColor: colors.border },
+  action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
+  actionText: { fontSize: 16, color: colors.onAction, fontWeight: '500' },
 });
