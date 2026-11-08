@@ -4,6 +4,7 @@ import type {
   CameraView,
   RoomView,
 } from './admin.repo.js';
+import type { AppConfig } from '../config/config.js';
 import { AdminService } from './admin.service.js';
 
 function fakeRepo() {
@@ -37,6 +38,7 @@ function fakeRepo() {
     },
     findRoom: async (id) => rooms.find((room) => room.id === id) ?? null,
     listCameras: async () => cameras,
+    findUser: async (id) => users.find((item) => item.id === id) ?? null,
     saveCameraToken: async (roomId) => ({
       id: '44444444-4444-4444-8444-444444444444',
       roomId,
@@ -107,6 +109,46 @@ describe('AdminService', () => {
     expect(result.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(savedHash).toMatch(/^[a-f0-9]{64}$/);
     expect(savedHash).not.toBe(result.token);
+  });
+
+  it('ออก token กล้องประตูได้ และไม่ระบุชนิดคือกล้องหน้าห้อง', async () => {
+    const { repo } = fakeRepo();
+    const kinds: string[] = [];
+    repo.saveCameraToken = async (roomId, _hash, kind) => {
+      kinds.push(kind);
+      return { id: '44444444-4444-4444-8444-444444444444', roomId };
+    };
+    const service = new AdminService(repo);
+    const room = '22222222-2222-4222-8222-222222222222';
+    await service.createCameraToken(room, { kind: 'door' });
+    await service.createCameraToken(room, undefined);
+    await service.createCameraToken(room, {});
+    expect(kinds).toEqual(['door', 'front', 'front']);
+  });
+
+  it('ชนิดกล้องที่ไม่รู้จักได้ 400', async () => {
+    const { repo } = fakeRepo();
+    await expect(
+      new AdminService(repo).createCameraToken(
+        '22222222-2222-4222-8222-222222222222',
+        { kind: 'side' },
+      ),
+    ).rejects.toMatchObject({ status: 400, code: 'BAD_REQUEST' });
+  });
+
+  it('ไม่เปลี่ยนบทบาทของเมลใน ADMIN_EMAILS เพราะจะถูกยกกลับเป็นแอดมินทุกคำขอ', async () => {
+    const { repo, users } = fakeRepo();
+    users[0].email = 'boss@dpu.ac.th';
+    const service = new AdminService(repo, {
+      adminEmails: ['boss@dpu.ac.th'],
+    } as AppConfig);
+    await expect(
+      service.changeRole(users[0].id, { role: 'teacher' }),
+    ).rejects.toMatchObject({ status: 400, code: 'ADMIN_EMAIL_LOCKED' });
+    expect(users[0].role).toBe('student');
+    await expect(
+      service.changeRole(users[0].id, { role: 'admin' }),
+    ).resolves.toMatchObject({ role: 'admin' });
   });
 
   it('ไม่สร้าง token ให้ห้องที่ไม่มีอยู่', async () => {
