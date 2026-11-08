@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/admin/users", label: "ผู้ใช้" },
   { href: "/admin/rooms", label: "ห้องเรียน" },
   { href: "/admin/cameras", label: "กล้องประจำห้อง" },
+  { href: "/admin/video-views", label: "ประวัติการดูกล้อง" },
   { href: "/admin/courses", label: "รายวิชาและตารางเรียน" },
   { href: "/admin/curricula", label: "หลักสูตร" },
   { href: "/admin/transfers", label: "เทียบโอน" },
