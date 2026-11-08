@@ -25,11 +25,11 @@ class FakeAuth implements CanActivate {
 
 describe('Admin HTTP RBAC', () => {
   let app: INestApplication<App>;
-  const admin = { listUsers: vi.fn(async () => []), listRooms: vi.fn(async () => []), listCameras: vi.fn(async () => []), createRoom: vi.fn(), createCameraToken: vi.fn(), changeRole: vi.fn() };
+  const admin = { listUsers: vi.fn(async () => []), listRooms: vi.fn(async () => []), listCameras: vi.fn(async () => []), listVideoViews: vi.fn(async () => []), createRoom: vi.fn(), createCameraToken: vi.fn(), changeRole: vi.fn() };
   const catalog = { list: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), importCsv: vi.fn() };
   const routes = [
     ['get', '/admin/users'], ['get', '/admin/rooms'], ['post', '/admin/rooms'],
-    ['get', '/admin/cameras'], ['post', '/admin/cameras/room/token'], ['patch', '/admin/users/user/role'],
+    ['get', '/admin/cameras'], ['get', '/admin/video-views'], ['post', '/admin/cameras/room/token'], ['patch', '/admin/users/user/role'],
     ...['curricula', 'reference', 'knowledge'].flatMap((kind) => [
       ['get', `/admin/catalog/${kind}`], ['post', `/admin/catalog/${kind}`],
       ['put', `/admin/catalog/${kind}/entry`], ['post', `/admin/catalog/${kind}/import`],
@@ -65,6 +65,8 @@ describe('Admin HTTP RBAC', () => {
     await request(app.getHttpServer()).get('/admin/catalog/curricula').set('x-role', 'admin').expect(200);
     await request(app.getHttpServer()).post('/admin/catalog/reference/import').set('x-role', 'admin').send({ csv: 'example' }).expect(201);
     await request(app.getHttpServer()).put('/admin/catalog/knowledge/entry').set('x-role', 'admin').send({ name: 'FAQ' }).expect(200);
+    await request(app.getHttpServer()).get('/admin/video-views?from=2026-11-01&to=2026-11-02').set('x-role', 'admin').expect(200);
+    expect(admin.listVideoViews).toHaveBeenCalledWith({ from: '2026-11-01', to: '2026-11-02' });
     await request(app.getHttpServer()).post('/admin/cameras/room/token').set('x-role', 'admin').expect(201);
     expect(catalog.importCsv).toHaveBeenCalledWith('reference', { csv: 'example' });
     expect(catalog.update).toHaveBeenCalledWith('knowledge', 'entry', { name: 'FAQ' });
