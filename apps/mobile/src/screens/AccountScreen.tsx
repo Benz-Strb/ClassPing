@@ -1,3 +1,4 @@
+import type {ReactNode} from 'react';
 import {StyleSheet, View} from 'react-native';
 import {Pressable, ScrollView, Text} from '../ui/primitives';
 import {colors} from '../ui/theme';
@@ -5,7 +6,7 @@ import type {FaceStatus, Me} from '../lib/types';
 
 const ROLE = {student: 'นักศึกษา', teacher: 'อาจารย์', admin: 'ผู้ดูแลระบบ'};
 
-export function AccountScreen({me, face, onSignOut}: {me: Me; face: FaceStatus | null; onSignOut: () => void}) {
+export function AccountScreen({me, face, banner, onSignOut}: {me: Me; face: FaceStatus | null; banner?: ReactNode; onSignOut: () => void}) {
   return <ScrollView contentContainerStyle={styles.content}>
     <Text accessibilityRole="header" style={styles.title}>บัญชีของฉัน</Text>
     <View style={styles.profile}>
@@ -15,6 +16,7 @@ export function AccountScreen({me, face, onSignOut}: {me: Me; face: FaceStatus |
     <View style={styles.details}>
       {[["บทบาท", ROLE[me.role]], ...(me.studentId ? [["รหัสนักศึกษา", me.studentId], ["ลงทะเบียนใบหน้า", face?.complete ? 'เรียบร้อยแล้ว' : 'ยังไม่ครบ']] : [])].map(([label, value]) => <View key={label} style={styles.row}><Text style={styles.muted}>{label}</Text><Text selectable style={styles.value}>{value}</Text></View>)}
     </View>
+    {banner}
     {me.role !== 'student' && <Text style={styles.muted}>จัดการรายวิชาและข้อมูลระบบผ่านเว็บไซต์ ClassPing</Text>}
     <Pressable style={styles.signOut} onPress={onSignOut}><Text style={styles.signOutText}>ออกจากระบบ</Text></Pressable>
   </ScrollView>;
