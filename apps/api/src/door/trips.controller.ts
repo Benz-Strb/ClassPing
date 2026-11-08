@@ -5,7 +5,7 @@ import type { AppUser } from '../users/users.service.js';
 import { TripsService } from './trips.service.js';
 
 @Controller('sessions/:id/trips')
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class TripsController {
   constructor(private readonly trips: TripsService) {}
 
