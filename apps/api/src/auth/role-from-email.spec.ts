@@ -9,7 +9,7 @@ describe('classifyEmail', () => {
     });
   });
 
-  it('เมลแบบชื่อ.นามสกุล 3 ตัวเป็นอาจารย์', () => {
+  it('เมลที่ไม่มีตัวเลขเป็นอาจารย์', () => {
     expect(classifyEmail('Somsak.Kit@dpu.ac.th', [])).toEqual({
       email: 'somsak.kit@dpu.ac.th',
       role: 'teacher',
@@ -17,12 +17,13 @@ describe('classifyEmail', () => {
     });
   });
 
-  it.each(['somsak', 'somsak.ki', 'somsak.kitt', 'som.sak.kit', 's0msak.kit', 'somsak.k1t'])(
-    '%s ไม่ตรงรูปแบบอาจารย์ เป็นนักศึกษาไว้ก่อน',
-    (local) => {
-      expect(classifyEmail(`${local}@dpu.ac.th`, [])?.role).toBe('student');
-    },
-  );
+  it.each(['somsak', 'somsak.kitt', 'som.sak.kit', 'somsak_k'])('%s เป็นอาจารย์', (local) => {
+    expect(classifyEmail(`${local}@dpu.ac.th`, [])?.role).toBe('teacher');
+  });
+
+  it.each(['s0msak.kit', 'somsak2'])('%s มีตัวเลขปน เป็นนักศึกษาไว้ก่อน', (local) => {
+    expect(classifyEmail(`${local}@dpu.ac.th`, [])?.role).toBe('student');
+  });
 
   it('ตัดช่องว่างและแปลงเป็นตัวเล็ก', () => {
     expect(classifyEmail('  66112106@DPU.AC.TH ', [])?.email).toBe(

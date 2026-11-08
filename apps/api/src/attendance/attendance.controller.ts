@@ -4,7 +4,7 @@ import type { AppUser } from '../users/users.service.js';
 import { AttendanceService, type SessionAttendance } from './attendance.service.js';
 
 @Controller('sessions/:id/attendance')
-@Roles('teacher')
+@Roles('teacher', 'admin')
 export class AttendanceController {
   constructor(private readonly attendance: AttendanceService) {}
 

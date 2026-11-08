@@ -11,7 +11,9 @@ import {
   type AdminUser,
   type CameraView,
   type RoomView,
+  type VideoViewRow,
 } from './admin.repo.js';
+import { addDays, bangkokDate, daysBetween, TZ_OFFSET } from '../sessions/plan-day.js';
 
 const uuid = z.uuid({ error: 'รหัสไม่ถูกต้อง' });
 const roleSchema = z.object({ role: z.enum(['student', 'teacher', 'admin']) });
@@ -28,12 +30,36 @@ const roomSchema = z.object({
     .max(100, { error: 'ชื่อห้องยาวเกิน 100 ตัว' }),
 });
 
+const MAX_VIEW_DAYS = 31;
+const viewRangeSchema = z
+  .object({
+    from: z.iso.date({ error: 'วันที่เริ่มต้นต้องเป็นรูปแบบ YYYY-MM-DD' }).optional(),
+    to: z.iso.date({ error: 'วันที่สิ้นสุดต้องเป็นรูปแบบ YYYY-MM-DD' }).optional(),
+  })
+  .refine((r) => !r.from || !r.to || r.from <= r.to, {
+    error: 'วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด',
+  });
+
 @Injectable()
 export class AdminService {
   constructor(
     @Inject(ADMIN_REPO) private readonly repo: AdminRepo,
     @Inject(APP_CONFIG) private readonly config?: AppConfig,
   ) {}
+
+  // ไม่ส่งวันที่ = 7 วันล่าสุดตามเวลาไทย เลือกได้ไม่เกิน 31 วัน
+  async listVideoViews(query: unknown): Promise<VideoViewRow[]> {
+    const input = parseBody(viewRangeSchema, query ?? {});
+    const to = input.to ?? (input.from ? addDays(input.from, 6) : bangkokDate(new Date()));
+    const from = input.from ?? addDays(to, -6);
+    if (daysBetween(from, to) + 1 > MAX_VIEW_DAYS) {
+      throw new AppError(400, 'RANGE_TOO_LONG', `เลือกช่วงวันที่ได้ไม่เกิน ${MAX_VIEW_DAYS} วัน`);
+    }
+    return this.repo.listVideoViews(
+      `${from}T00:00:00${TZ_OFFSET}`,
+      `${addDays(to, 1)}T00:00:00${TZ_OFFSET}`,
+    );
+  }
 
   listUsers(): Promise<AdminUser[]> {
     return this.repo.listUsers();
