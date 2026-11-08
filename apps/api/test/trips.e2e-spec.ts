@@ -3,6 +3,7 @@ import type { CanActivate, ExecutionContext, INestApplication } from '@nestjs/co
 import { APP_GUARD } from '@nestjs/core';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import { AppError } from './../src/common/app-error.js';
 import { RolesGuard } from './../src/auth/roles.guard.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
@@ -16,7 +17,7 @@ class FakeAuth implements CanActivate {
     const req = context
       .switchToHttp()
       .getRequest<{ headers: Record<string, string>; user?: unknown }>();
-    req.user = { id: 'u1', role: req.headers['x-role'] };
+    req.user = { id: req.headers['x-user'] ?? 'u1', role: req.headers['x-role'] };
     return true;
   }
 }
@@ -37,7 +38,9 @@ describe('รอบนอกห้อง (สิทธิ์และรูป�
         {
           provide: TripsService,
           useValue: {
-            setBack: async (_u: unknown, s: string, t: string, body: unknown) => {
+            setBack: async (u: { id: string }, s: string, t: string, body: unknown) => {
+              // อาจารย์วิชาอื่นได้ 404 เหมือน service จริง
+              if (u.id === 'other') throw new AppError(404, 'SESSION_NOT_FOUND', 'ไม่พบคาบนี้');
               calls.push(['setBack', s, t, body]);
               return { session: {}, rows: [] };
             },
@@ -69,7 +72,7 @@ describe('รอบนอกห้อง (สิทธิ์และรูป�
     await app.close();
   });
 
-  it.each(['student', 'admin'])('%s ได้ 403 ทุก route ของรอบ และไม่ถึง service', async (role) => {
+  it.each(['student'])('%s ได้ 403 ทุก route ของรอบ และไม่ถึง service', async (role) => {
     const server = app.getHttpServer();
     await request(server)
       .patch(`/sessions/${SESSION}/trips/${TRIP}`)
@@ -85,6 +88,32 @@ describe('รอบนอกห้อง (สิทธิ์และรูป�
       .set('x-role', role)
       .send({ action: 'reject' })
       .expect(403);
+    expect(calls).toEqual([]);
+  });
+
+  it('แอดมิน PATCH, DELETE, review ได้ และส่งค่าถึง service', async () => {
+    const server = app.getHttpServer();
+    await request(server)
+      .patch(`/sessions/${SESSION}/trips/${TRIP}`)
+      .set('x-role', 'admin')
+      .send({ backAt: '2026-10-23T03:00:00Z' })
+      .expect(200);
+    await request(server).delete(`/sessions/${SESSION}/trips/${TRIP}`).set('x-role', 'admin').expect(200);
+    await request(server)
+      .post(`/sessions/${SESSION}/trips/${TRIP}/review`)
+      .set('x-role', 'admin')
+      .send({ action: 'confirm' })
+      .expect(200);
+    expect(calls.map((c) => c[0])).toEqual(['setBack', 'remove', 'review']);
+  });
+
+  it('อาจารย์วิชาอื่นได้ 404', async () => {
+    await request(app.getHttpServer())
+      .patch(`/sessions/${SESSION}/trips/${TRIP}`)
+      .set('x-role', 'teacher')
+      .set('x-user', 'other')
+      .send({ backAt: '2026-10-23T03:00:00Z' })
+      .expect(404);
     expect(calls).toEqual([]);
   });
 
