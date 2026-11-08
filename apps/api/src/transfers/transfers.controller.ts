@@ -17,7 +17,7 @@ import { TransfersService } from './transfers.service.js';
 import type { TransferFile } from './transfers.types.js';
 
 @Controller('transfers')
-@Roles('student', 'admin')
+@Roles('student', 'teacher')
 export class TransfersController {
   constructor(private readonly transfers: TransfersService) {}
   @Get('curricula') curricula(@CurrentUser() user: AppUser) {
@@ -54,7 +54,7 @@ export class TransfersController {
     return this.transfers.documentUrl(user, id, kind);
   }
   @Post('requests/:id/review')
-  @Roles('admin')
+  @Roles('teacher')
   @HttpCode(200)
   review(
     @CurrentUser() user: AppUser,
@@ -64,7 +64,7 @@ export class TransfersController {
     return this.transfers.review(user, id, body);
   }
   @Post('curricula/:id/document')
-  @Roles('admin')
+  @Roles('teacher')
   @UseInterceptors(
     DocumentUploadErrorsInterceptor,
     FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }),
@@ -76,16 +76,16 @@ export class TransfersController {
   ) {
     return this.transfers.uploadCurriculum(user, id, file);
   }
-  @Get('mappings') @Roles('admin') mappings(@CurrentUser() user: AppUser) {
+  @Get('mappings') @Roles('teacher') mappings(@CurrentUser() user: AppUser) {
     return this.transfers.mappings(user);
   }
-  @Post('mappings') @Roles('admin') saveMapping(
+  @Post('mappings') @Roles('teacher') saveMapping(
     @CurrentUser() user: AppUser,
     @Body() body: unknown,
   ) {
     return this.transfers.saveMapping(user, body);
   }
-  @Patch('mappings/:id') @Roles('admin') setMappingActive(
+  @Patch('mappings/:id') @Roles('teacher') setMappingActive(
     @CurrentUser() user: AppUser,
     @Param('id') id: string,
     @Body() body: unknown,
