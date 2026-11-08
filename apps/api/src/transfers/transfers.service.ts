@@ -62,7 +62,7 @@ export class TransfersService {
   constructor(@Inject(TRANSFERS_REPO) private readonly repo: TransfersRepo) {}
 
   async curricula(user: AppUser) {
-    allow(user, ['student', 'admin']);
+    allow(user, ['student', 'teacher']);
     const [docs, mappings] = await Promise.all([
       this.repo.listCurricula(),
       this.repo.listMappings(),
@@ -79,24 +79,24 @@ export class TransfersService {
     }));
   }
   async mappings(user: AppUser) {
-    allow(user, ['admin']);
+    allow(user, ['teacher']);
     return this.repo.listMappings();
   }
   async curriculumDocumentUrl(user: AppUser, documentId: string) {
-    allow(user, ['student', 'admin']);
+    allow(user, ['student', 'teacher']);
     const doc = await this.repo.getCurriculumDocument(id(documentId));
     if (!doc || (user.role === 'student' && !doc.active)) throw missing();
     return { url: await this.repo.sign(doc.path) };
   }
   async saveMapping(user: AppUser, value: unknown) {
-    allow(user, ['admin']);
+    allow(user, ['teacher']);
     const input = parseBody(mappingSchema, value);
     if (!(await this.repo.catalogCurriculum(input.curriculumId)))
       throw missing();
     return this.repo.saveMapping(input);
   }
   async setMappingActive(user: AppUser, mappingId: string, value: unknown) {
-    allow(user, ['admin']);
+    allow(user, ['teacher']);
     const { active } = parseBody(z.object({ active: z.boolean() }), value);
     return this.repo.setMappingActive(id(mappingId), active);
   }
@@ -105,7 +105,7 @@ export class TransfersService {
     curriculumId: string,
     file?: TransferFile,
   ) {
-    allow(user, ['admin']);
+    allow(user, ['teacher']);
     id(curriculumId);
     validateFile(file);
     if (!(await this.repo.catalogCurriculum(curriculumId))) throw missing();
@@ -119,7 +119,7 @@ export class TransfersService {
     }
   }
   async list(user: AppUser) {
-    allow(user, ['student', 'admin']);
+    allow(user, ['student', 'teacher']);
     return (
       await this.repo.listRequests(
         user.role === 'student' ? user.id : undefined,
@@ -188,7 +188,7 @@ export class TransfersService {
     }
   }
   async documentUrl(user: AppUser, requestId: string, kind: string) {
-    allow(user, ['student', 'admin']);
+    allow(user, ['student', 'teacher']);
     parseBody(z.enum(['request', 'curriculum']), kind);
     const request = await this.repo.getRequest(id(requestId));
     if (!request || (user.role === 'student' && request.studentId !== user.id))
@@ -202,7 +202,7 @@ export class TransfersService {
     return { url: await this.repo.sign(path) };
   }
   async review(user: AppUser, requestId: string, value: unknown) {
-    allow(user, ['admin']);
+    allow(user, ['teacher']);
     const input = parseBody(reviewSchema, value);
     const request = await this.repo.getRequest(id(requestId));
     if (!request) throw missing();
