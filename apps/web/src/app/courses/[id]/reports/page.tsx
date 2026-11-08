@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
-import { buildReportQuery, type ReportFilters } from "@/lib/reports";
+import { buildReportQuery, formatRate, type ReportFilters } from "@/lib/reports";
 import { supabase } from "@/lib/supabase";
+import { bangkokDate, formatBuddhistDate } from "@/lib/time";
 
 interface AttendanceCounts {
   present: number;
@@ -33,6 +34,7 @@ interface StudentReport {
   counts: AttendanceCounts;
   totalSessions: number;
   attendanceRate: number;
+  outOfRoomSeconds: number;
   sessions: StudentSessionStatus[];
 }
 
@@ -183,7 +185,7 @@ export default function CourseReportsPage() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
-      a.download = `attendance-report-${data?.course.code ?? id}-${new Date().toISOString().slice(0, 10)}.${type}`;
+      a.download = `attendance-report-${data?.course.code ?? id}-${bangkokDate(new Date())}.${type}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -252,7 +254,7 @@ export default function CourseReportsPage() {
               .filter((session) => kind === "all" || session.kind === kind)
               .map((session) => (
                 <option key={session.sessionId} value={session.sessionId}>
-                  {session.onDate} · {session.kind === "exam" ? session.title ?? "สอบ" : "คาบเรียน"}
+                  {formatBuddhistDate(session.onDate)} · {session.kind === "exam" ? session.title ?? "สอบ" : "คาบเรียน"}
                 </option>
               ))}
           </select>
@@ -320,10 +322,10 @@ export default function CourseReportsPage() {
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <span className="text-xs font-medium text-gray-500">อัตราเข้าเรียน</span>
               <p className="mt-1 text-2xl font-bold text-gray-900">
-                {data.summary.attendanceRate}%
+                {formatRate(data.summary.counts, data.summary.attendanceRate)}
               </p>
               <span className="text-xs text-gray-400">
-                {data.summary.totalStudents} คน · {data.summary.totalSessions} คาบ
+                {data.summary.totalStudents} คน · {data.summary.totalSessions} คาบที่เริ่มแล้ว
               </span>
             </div>
 
@@ -383,12 +385,13 @@ export default function CourseReportsPage() {
                     <th className="px-3 py-2.5 text-center text-blue-700">ลา</th>
                     <th className="px-3 py-2.5 text-center text-orange-700">รอตรวจ</th>
                     <th className="px-4 py-2.5 text-right">อัตราเข้าเรียน</th>
+                    <th className="px-4 py-2.5 text-right">นอกห้อง (นาที)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {data.students.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-gray-400">
+                      <td colSpan={9} className="py-8 text-center text-gray-400">
                         ไม่พบข้อมูลนักศึกษาที่ตรงตามเงื่อนไข
                       </td>
                     </tr>
@@ -421,15 +424,20 @@ export default function CourseReportsPage() {
                         <td className="px-4 py-2.5 text-right font-semibold">
                           <span
                             className={
-                              student.attendanceRate >= 80
+                              student.counts.total - student.counts.pending <= 0
+                                ? "text-gray-400"
+                                : student.attendanceRate >= 80
                                 ? "text-green-600"
                                 : student.attendanceRate >= 50
                                   ? "text-yellow-600"
                                   : "text-red-600"
                             }
                           >
-                            {student.attendanceRate}%
+                            {formatRate(student.counts, student.attendanceRate)}
                           </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-gray-600">
+                          {Math.floor(student.outOfRoomSeconds / 60)}
                         </td>
                       </tr>
                     ))
@@ -465,7 +473,7 @@ export default function CourseReportsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {data.sessions.map((sess) => (
                       <tr key={sess.sessionId} className="hover:bg-gray-50/80">
-                        <td className="px-4 py-2.5 font-medium text-gray-900">{sess.onDate}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-900">{formatBuddhistDate(sess.onDate)}</td>
                         <td className="px-4 py-2.5">
                           {sess.kind === "exam" ? (
                             <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">

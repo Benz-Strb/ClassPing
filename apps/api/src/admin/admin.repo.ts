@@ -30,6 +30,7 @@ export interface CameraView {
 
 export interface AdminRepo {
   listUsers(): Promise<AdminUser[]>;
+  findUser(id: string): Promise<AdminUser | null>;
   updateUserRole(id: string, role: Role): Promise<AdminUser | null>;
   listRooms(): Promise<RoomView[]>;
   createRoom(name: string): Promise<RoomView>;
@@ -38,6 +39,7 @@ export interface AdminRepo {
   saveCameraToken(
     roomId: string,
     tokenHash: string,
+    kind: 'front' | 'door',
   ): Promise<{ id: string; roomId: string }>;
 }
 
@@ -61,17 +63,45 @@ const toUser = (row: UserRow): AdminUser => ({
   hasFace: (row.face_profiles?.length ?? 0) > 0,
 });
 
+async function allRows<T>(query: {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: unknown[] | null; error: unknown }>;
+}): Promise<T[]> {
+  const rows: T[] = [];
+  while (true) {
+    const { data, error } = await query.range(rows.length, rows.length + 999);
+    if (error) throw dbError();
+    if (!data?.length) return rows;
+    rows.push(...(data as T[]));
+  }
+}
+
 @Injectable()
 export class SupabaseAdminRepo implements AdminRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
 
   async listUsers(): Promise<AdminUser[]> {
+    // เรียงด้วย id ต่อท้ายให้ลำดับคงที่ตอนแบ่งหน้า
+    const rows = await allRows<UserRow>(
+      this.db
+        .from('users')
+        .select('id, email, full_name, role, student_id, face_profiles(id)')
+        .order('email')
+        .order('id'),
+    );
+    return rows.map(toUser);
+  }
+
+  async findUser(id: string): Promise<AdminUser | null> {
     const { data, error } = await this.db
       .from('users')
       .select('id, email, full_name, role, student_id, face_profiles(id)')
-      .order('email');
+      .eq('id', id)
+      .maybeSingle();
     if (error) throw dbError();
-    return (data as unknown as UserRow[]).map(toUser);
+    return data ? toUser(data as unknown as UserRow) : null;
   }
 
   async updateUserRole(id: string, role: Role): Promise<AdminUser | null> {
@@ -155,11 +185,12 @@ export class SupabaseAdminRepo implements AdminRepo {
   async saveCameraToken(
     roomId: string,
     tokenHash: string,
+    kind: 'front' | 'door',
   ): Promise<{ id: string; roomId: string }> {
     const result = await this.db
       .from('cameras')
       .upsert(
-        { room_id: roomId, kind: 'front', token_hash: tokenHash },
+        { room_id: roomId, kind, token_hash: tokenHash },
         { onConflict: 'room_id,kind' },
       )
       .select('id, room_id')
