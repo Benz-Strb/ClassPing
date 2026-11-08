@@ -2,13 +2,13 @@ import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import type { CallHandler, ExecutionContext } from '@nestjs/common';
 import { firstValueFrom, throwError } from 'rxjs';
 import { AppError } from '../common/app-error.js';
-import { UploadErrorsInterceptor } from './upload-errors.interceptor.js';
+import { DocumentUploadErrorsInterceptor, EvidenceUploadErrorsInterceptor, UploadErrorsInterceptor } from './upload-errors.interceptor.js';
 
-async function mapped(error: Error) {
+async function mapped(error: Error, interceptor: UploadErrorsInterceptor = new UploadErrorsInterceptor()) {
   const next: CallHandler = { handle: () => throwError(() => error) };
   try {
     await firstValueFrom(
-      new UploadErrorsInterceptor().intercept({} as ExecutionContext, next),
+      interceptor.intercept({} as ExecutionContext, next),
     );
   } catch (e) {
     return e;
@@ -33,5 +33,18 @@ describe('UploadErrorsInterceptor', () => {
   it('AppError ส่งต่อตามเดิม', async () => {
     const original = new AppError(422, 'MULTIPLE_FACES', 'มีหลายคนในรูป');
     expect(await mapped(original)).toBe(original);
+  });
+
+  it('หลักฐานการลาเกินขนาดได้ข้อความไทยที่บอกว่าเป็นไฟล์', async () => {
+    const e = (await mapped(new PayloadTooLargeException('File too large'), new EvidenceUploadErrorsInterceptor())) as AppError;
+    expect(e.getStatus()).toBe(413);
+    expect(e.code).toBe('EVIDENCE_TOO_LARGE');
+    expect(e.message).toBe('ไฟล์หลักฐานใหญ่เกิน 25 MB');
+  });
+
+  it('เอกสารเทียบโอนเกินขนาดได้ข้อความไทย', async () => {
+    const e = (await mapped(new PayloadTooLargeException('File too large'), new DocumentUploadErrorsInterceptor())) as AppError;
+    expect(e.code).toBe('DOCUMENT_SIZE');
+    expect(e.message).toBe('ไฟล์เอกสารใหญ่เกิน 10 MB');
   });
 });

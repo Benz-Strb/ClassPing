@@ -1,17 +1,21 @@
-import { Body, Controller, Delete, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, Public, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
+import { PublicChatLimitGuard } from './public-chat.guard.js';
+import { StudyChatLimitGuard } from './study-chat.guard.js';
 import { ChatService } from './chat.service.js';
 
 @Controller('chat')
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
   @Public()
+  @UseGuards(PublicChatLimitGuard)
   @Post('public')
   @HttpCode(200)
   publicAsk(@Body() body: unknown) { return this.chat.ask(body, null); }
   @Post('student')
   @Roles('student', 'teacher', 'admin')
+  @UseGuards(StudyChatLimitGuard)
   @HttpCode(200)
   studentAsk(@CurrentUser() user: AppUser, @Body() body: unknown) { return this.chat.ask(body, user); }
   @Roles('admin')
