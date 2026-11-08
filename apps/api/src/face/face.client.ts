@@ -73,11 +73,14 @@ const USER_FACING_CODES = new Set([
   'IMAGE_TOO_LARGE',
 ]);
 
-const unavailable = () =>
+// code เดิมคงไว้ แต่ข้อความของเส้นทาง OCR ใบลาไม่พูดถึงใบหน้า
+const unavailable = (path = '') =>
   new AppError(
     503,
     'FACE_SERVICE_UNAVAILABLE',
-    'ระบบตรวจใบหน้าใช้งานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง',
+    path === '/leave/ocr'
+      ? 'อ่านข้อความจากหลักฐานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง'
+      : 'ระบบตรวจใบหน้าใช้งานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง',
   );
 
 // เรียก face service (Python) ที่รันแยกอยู่ ผลที่ผู้ใช้ควรรู้ (เช่น MULTIPLE_FACES) ส่งต่อตามเดิม
@@ -147,7 +150,7 @@ export class FaceClient {
       });
     } catch (error) {
       this.logger.warn(`เรียก face service ไม่ได้: ${String(error)}`);
-      throw unavailable();
+      throw unavailable(path);
     }
 
     const payload = (await res.json().catch(() => null)) as {
@@ -159,7 +162,7 @@ export class FaceClient {
     // ถ้าส่ง 401 ต่อไป เว็บ/แอปจะสั่งออกจากระบบโดยไม่จำเป็น
     if (res.status >= 500 || res.status === 401 || !payload) {
       this.logger.warn(`face service ตอบ ${res.status} ที่ ${path}`);
-      throw unavailable();
+      throw unavailable(path);
     }
     if (!res.ok) {
       const code = payload.error?.code;
@@ -167,12 +170,12 @@ export class FaceClient {
         throw new AppError(res.status, code, payload.error?.message ?? 'ตรวจใบหน้าไม่สำเร็จ');
       }
       this.logger.error(`face service ตอบ ${res.status} ${code ?? ''} ที่ ${path}`);
-      throw unavailable();
+      throw unavailable(path);
     }
     // ตอบสำเร็จแต่ไม่มี data แปลว่า service ผิดปกติ (หรือ URL ชี้ไปผิดที่)
     if (payload.data === undefined) {
       this.logger.warn(`face service ตอบ ${res.status} แต่ไม่มี data ที่ ${path}`);
-      throw unavailable();
+      throw unavailable(path);
     }
     return payload.data;
   }

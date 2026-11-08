@@ -1,5 +1,6 @@
 import base64
 import hmac
+import logging
 import os
 
 import numpy as np
@@ -17,6 +18,8 @@ from app.matching import match
 from app.ocr import PaddleTextReader, TextReader
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
 from app.typhoon_ocr import TyphoonTextReader
+
+logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {"/health"}
 
@@ -231,9 +234,18 @@ def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
     return vectors
 
 
+def make_leave_reader(env) -> TyphoonTextReader | None:
+    """ไม่มี TYPHOON_OCR_API_KEY ก็เปิด service ได้ /leave/ocr จะใช้ตัวอ่านหลักแทน"""
+    key = env.get("TYPHOON_OCR_API_KEY", "").strip()
+    if not key:
+        logger.warning("ไม่ได้ตั้ง TYPHOON_OCR_API_KEY อ่านใบลาด้วย Typhoon ไม่ได้ ใช้ตัวอ่านหลักแทน")
+        return None
+    return TyphoonTextReader(key)
+
+
 def build_app() -> FastAPI:
     """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
     settings = load_settings(os.environ)
     liveness = InsightFaceLiveness(settings) if settings.liveness_model else None
     return create_app(settings, InsightFaceEngine(settings), PaddleTextReader(),
-                      leave_reader=TyphoonTextReader(), liveness=liveness)
+                      leave_reader=make_leave_reader(os.environ), liveness=liveness)
