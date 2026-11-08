@@ -2,6 +2,7 @@ import { Body, Controller, Delete, HttpCode, Param, Post, UseGuards } from '@nes
 import { CurrentUser, Public, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
 import { PublicChatLimitGuard } from './public-chat.guard.js';
+import { StudyChatLimitGuard } from './study-chat.guard.js';
 import { ChatService } from './chat.service.js';
 
 @Controller('chat')
@@ -14,6 +15,7 @@ export class ChatController {
   publicAsk(@Body() body: unknown) { return this.chat.ask(body, null); }
   @Post('student')
   @Roles('student', 'teacher', 'admin')
+  @UseGuards(StudyChatLimitGuard)
   @HttpCode(200)
   studentAsk(@CurrentUser() user: AppUser, @Body() body: unknown) { return this.chat.ask(body, user); }
   @Roles('admin')

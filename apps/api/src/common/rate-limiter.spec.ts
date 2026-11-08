@@ -8,6 +8,7 @@ import {
   PREVIEW_LIMIT,
   PreviewLimitGuard,
 } from '../leave/preview-limit.guard.js';
+import { STUDY_CHAT_LIMIT, StudyChatLimitGuard } from '../chat/study-chat.guard.js';
 import { ipKey, RateLimiter } from './rate-limiter.js';
 
 let now = new Date('2026-11-07T02:00:00Z');
@@ -111,5 +112,18 @@ describe('PreviewLimitGuard', () => {
       expect.objectContaining({ status: 429 }),
     );
     expect(guard.canActivate(ctx({ user: { id: 'u2' } }))).toBe(true);
+  });
+});
+
+describe('StudyChatLimitGuard', () => {
+  it('ผู้ช่วยเรียนนับต่อผู้ใช้ เกินเพดานได้ 429 แล้วผ่านใหม่เมื่อหมดช่วง', () => {
+    const guard = new StudyChatLimitGuard(clock);
+    for (let i = 0; i < STUDY_CHAT_LIMIT; i++) guard.canActivate(ctx({ user: { id: 'u1' } }));
+    expect(() => guard.canActivate(ctx({ user: { id: 'u1' } }))).toThrowError(
+      expect.objectContaining({ status: 429, code: 'RATE_LIMITED' }),
+    );
+    expect(guard.canActivate(ctx({ user: { id: 'u2' } }))).toBe(true);
+    now = new Date(now.getTime() + 60_000);
+    expect(guard.canActivate(ctx({ user: { id: 'u1' } }))).toBe(true);
   });
 });
