@@ -11,6 +11,7 @@ import { RolesGuard } from '../src/auth/roles.guard.js';
 import { CLOCK } from '../src/common/clock.js';
 import { EnvelopeInterceptor } from '../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
+import { DOOR_REPO } from '../src/door/door.repo.js';
 import { CoursesService } from '../src/courses/courses.service.js';
 import { COURSES_REPO } from '../src/courses/courses.repo.js';
 import {
@@ -36,6 +37,7 @@ const student = {
   counts,
   totalSessions: 2,
   attendanceRate: 50,
+  outOfRoomSeconds: 0,
   sessions: [
     {
       sessionId: 'session-1',
@@ -66,8 +68,23 @@ class FakeAuth implements CanActivate {
 describe('Student reports (e2e)', () => {
   let app: INestApplication;
   const getAttendanceReport = vi.fn();
+  const courseTrips = vi.fn();
 
   beforeEach(async () => {
+    const trip = (studentCode: string, minutes: number) => ({
+      sessionId: 'session-1',
+      onDate: '2026-11-01',
+      kind: 'exam',
+      startsAt: new Date('2026-11-01T02:00:00Z'),
+      endsAt: new Date('2026-11-01T05:00:00Z'),
+      lateAfterMin: null,
+      absentAfterMin: null,
+      outOfRoomLimitMin: null,
+      studentCode,
+      outAt: new Date('2026-11-01T03:00:00Z'),
+      backAt: new Date(Date.parse('2026-11-01T03:00:00Z') + minutes * 60_000),
+    });
+    courseTrips.mockReset().mockResolvedValue([trip('66000001', 20), trip('other', 40)]);
     getAttendanceReport.mockReset().mockResolvedValue({
       course: { id: courseId, code: 'CS101', name: 'วิชาทดสอบ', section: '1' },
       filter: { kind: 'all' },
@@ -96,6 +113,7 @@ describe('Student reports (e2e)', () => {
           },
         },
         { provide: REPORTS_REPO, useValue: { getAttendanceReport } },
+        { provide: DOOR_REPO, useValue: { courseTrips } },
         { provide: CLOCK, useValue: () => new Date('2026-11-01T06:00:00Z') },
         { provide: APP_GUARD, useClass: FakeAuth },
         { provide: APP_GUARD, useClass: RolesGuard },
@@ -117,7 +135,11 @@ describe('Student reports (e2e)', () => {
         `/me/reports/attendance/${courseId}?kind=exam&startDate=2026-11-01&endDate=2026-11-30&studentCode=other`,
       )
       .expect(200);
-    expect(response.body.data.student).toEqual(student);
+    expect(response.body.data.student).toEqual({
+      ...student,
+      outOfRoomSeconds: 1200,
+      sessions: [{ ...student.sessions[0], outOfRoomSeconds: 1200 }],
+    });
     expect(JSON.stringify(response.body)).not.toContain('ข้อมูลคนอื่น');
     expect(getAttendanceReport.mock.calls[0]?.[1]).toEqual({
       kind: 'exam',

@@ -64,6 +64,7 @@ export interface LeaveRepo {
   listStatuses(): Promise<LeaveStatusView[]>;
   listEligibleSessions(studentId: string): Promise<LeaveSessionOption[]>;
   studentCanRequest(studentId: string, sessionId: string): Promise<boolean>;
+  hasActiveRequest(studentId: string, sessionId: string): Promise<boolean>;
   createRequest(input: LeaveRequestInput): Promise<LeaveRequestRecord>;
   deleteRequest(id: string): Promise<void>;
   uploadEvidence(path: string, bytes: Buffer, mime: string): Promise<void>;
@@ -228,6 +229,18 @@ export class SupabaseLeaveRepo implements LeaveRepo {
       .maybeSingle();
     if (enrollmentError) throw dbError();
     return enrollment !== null;
+  }
+
+  async hasActiveRequest(studentId: string, sessionId: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from('leave_requests')
+      .select('id')
+      .eq('student_id', studentId)
+      .eq('session_id', sessionId)
+      .neq('status', 'rejected')
+      .limit(1);
+    if (error) throw dbError();
+    return (data ?? []).length > 0;
   }
 
   async createRequest(input: LeaveRequestInput): Promise<LeaveRequestRecord> {

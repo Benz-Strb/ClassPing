@@ -10,8 +10,10 @@ import type { App } from 'supertest/types.js';
 import { RolesGuard } from './../src/auth/roles.guard.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
+import { CLOCK } from './../src/common/clock.js';
 import { LeaveOcrClient } from './../src/leave/leave-ocr.client.js';
 import { LeaveController } from './../src/leave/leave.controller.js';
+import { PreviewLimitGuard, SubmitLimitGuard } from './../src/leave/preview-limit.guard.js';
 import {
   LEAVE_REPO,
   type LeaveRepo,
@@ -73,11 +75,22 @@ class MemoryLeaveRepo implements LeaveRepo {
     return sessionId === SESSION.id;
   }
 
+  async hasActiveRequest(_studentId: string, sessionId: string) {
+    return this.requests.some(
+      (item) => item.sessionId === sessionId && item.status !== 'rejected',
+    );
+  }
+
   async createRequest(input: LeaveRequestInput) {
-    if (this.requests.some((item) => item.sessionId === input.sessionId)) {
+    // เหมือน partial unique index: คำขอที่ถูกปฏิเสธไม่นับว่าซ้ำ
+    if (
+      this.requests.some(
+        (item) => item.sessionId === input.sessionId && item.status !== 'rejected',
+      )
+    ) {
       throw new Error('LEAVE_REQUEST_DUPLICATE');
     }
-    const id = '22222222-2222-4222-8222-222222222222';
+    const id = `22222222-2222-4222-8222-${String(222222222222 + this.requests.length)}`;
     this.requests.push({
       id,
       sessionId: input.sessionId,
@@ -182,6 +195,9 @@ describe('ระบบลา (e2e)', () => {
       controllers: [LeaveController],
       providers: [
         LeaveService,
+        PreviewLimitGuard,
+        SubmitLimitGuard,
+        { provide: CLOCK, useValue: () => new Date() },
         { provide: LEAVE_REPO, useValue: repo },
         {
           provide: LeaveOcrClient,
@@ -242,14 +258,80 @@ describe('ระบบลา (e2e)', () => {
     expect(repo.requests).toHaveLength(1);
   });
 
+  it('เก็บชื่อไฟล์ภาษาไทยให้ถูกต้อง', async () => {
+    await request(app.getHttpServer()).post('/leave-requests').set('x-role', 'student')
+      .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+      .attach('evidence', PNG, { filename: 'ใบรับรองแพทย์.png', contentType: 'image/png' })
+      .expect(201);
+    expect(repo.requests[0].attachments[0].fileName).toBe('ใบรับรองแพทย์.png');
+  });
+
+  it('ยื่นคาบเดิมซ้ำได้ 409 แต่ยื่นใหม่ได้หลังถูกปฏิเสธ', async () => {
+    const server = app.getHttpServer();
+    const submit = () =>
+      request(server).post('/leave-requests').set('x-role', 'student')
+        .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+    await submit().expect(201);
+    await submit().expect(409);
+    await request(server).post(`/leave-requests/${repo.requests[0].id}/review`)
+      .set('x-role', 'teacher').send({ decision: 'rejected' }).expect(200);
+    await submit().expect(201);
+    expect(repo.requests).toHaveLength(2);
+  });
+
+  it('ยื่นลาเกิน 10 ครั้งต่อนาทีได้ 429 แม้ชน 409', async () => {
+    const server = app.getHttpServer();
+    const submit = () =>
+      request(server).post('/leave-requests').set('x-role', 'student').set('x-user', 'limit-s')
+        .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+    await submit().expect(201);
+    for (let i = 0; i < 9; i++) await submit().expect(409);
+    await submit().expect(429);
+  });
+
   it('ปฏิเสธหลักฐานเกิน 25 MB ทั้งอ่านร่างและยื่นลา', async () => {
     for (const path of ['/leave-requests/preview', '/leave-requests']) {
       await request(app.getHttpServer()).post(path).set('x-role', 'student')
         .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
         .attach('evidence', Buffer.alloc(25 * 1024 * 1024 + 1), { filename: 'leave.png', contentType: 'image/png' })
-        .expect(413);
+        .expect(413)
+        .expect((res) => {
+          expect(res.body.error.code).toBe('EVIDENCE_TOO_LARGE');
+          expect(res.body.error.message).toBe('ไฟล์หลักฐานใหญ่เกิน 25 MB');
+        });
     }
     expect(repo.requests).toHaveLength(0);
+  });
+
+  it('อ่านร่างจนเต็มเพดานแล้วยังกดยื่นลาได้ เพราะนับแยกกัน', async () => {
+    const server = app.getHttpServer();
+    const user = 'limit-both';
+    for (let i = 0; i < 10; i++) {
+      await request(server).post('/leave-requests/preview').set('x-role', 'student').set('x-user', user)
+        .field('sessionId', SESSION.id)
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' })
+        .expect(200);
+    }
+    await request(server).post('/leave-requests').set('x-role', 'student').set('x-user', user)
+      .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+      .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' })
+      .expect(201);
+  });
+
+  it('อ่านร่างเกิน 10 ครั้งต่อนาทีได้ 429 แยกตามผู้ใช้', async () => {
+    const server = app.getHttpServer();
+    const preview = (user: string) =>
+      request(server)
+        .post('/leave-requests/preview')
+        .set('x-role', 'student')
+        .set('x-user', user)
+        .field('sessionId', SESSION.id)
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+    for (let i = 0; i < 10; i++) await preview('limit-a').expect(200);
+    await preview('limit-a').expect(429);
+    await preview('limit-b').expect(200);
   });
 
   it('นักศึกษาเลือกคาบ ยื่นหลักฐาน และอาจารย์อนุมัติจน attendance เป็น leave', async () => {

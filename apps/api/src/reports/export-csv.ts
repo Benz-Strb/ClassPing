@@ -1,10 +1,14 @@
 import type { AttendanceReportResponse } from './reports.types.js';
 import { formatReportFilters } from './format-report-filters.js';
+import { hasDecided } from './report-status.js';
 
 function escapeCsv(val: string | number | null | undefined): string {
   if (val === null || val === undefined) return '""';
   const raw = String(val);
-  const str = typeof val === 'string' && /^\s*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
+  // "-" เดี่ยว ๆ เป็นค่าว่าง ไม่ใช่สูตร ส่วน - ที่มีตัวอักษรตามหลังยังกัน
+  const head = raw.trim();
+  const formula = /^[=+@]/u.test(head) || (head.startsWith('-') && head.length > 1) || /^[\t\r]/u.test(raw);
+  const str = typeof val === 'string' && formula ? `'${raw}` : raw;
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -32,19 +36,21 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
   lines.push('');
 
   // สรุปภาพรวม
-  lines.push('--- สรุปภาพรวม ---');
-  lines.push(`จำนวนคาบทั้งหมด,${report.summary.totalSessions}`);
+  lines.push(escapeCsv('สรุปภาพรวม'));
+  lines.push(`จำนวนคาบที่เริ่มแล้ว,${report.summary.totalSessions}`);
   lines.push(`จำนวนนักศึกษาทั้งหมด,${report.summary.totalStudents}`);
   lines.push(`มาเรียน (Present),${report.summary.counts.present}`);
   lines.push(`สาย (Late),${report.summary.counts.late}`);
   lines.push(`ขาดเรียน (Absent),${report.summary.counts.absent}`);
   lines.push(`ลา (Leave),${report.summary.counts.leave}`);
   lines.push(`รอตรวจ (Pending),${report.summary.counts.pending}`);
-  lines.push(`อัตราการเข้าเรียนเฉลี่ย,${report.summary.attendanceRate}%`);
+  lines.push(
+    `อัตราการเข้าเรียนเฉลี่ย,${hasDecided(report.summary.counts) ? `${report.summary.attendanceRate}%` : '-'}`,
+  );
   lines.push('');
 
   // สรุปรายคาบ โดยแสดง kind ชัดเจนเพื่อแยกคาบเรียนกับคาบสอบ
-  lines.push('--- สรุปรายคาบ ---');
+  lines.push(escapeCsv('สรุปรายคาบ'));
   lines.push(
     [
       'วันที่',
@@ -97,6 +103,7 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
     escapeCsv('รอตรวจ'),
     escapeCsv('รวมคาบ'),
     escapeCsv('อัตราเข้าเรียน (%)'),
+    escapeCsv('นอกห้อง (นาที)'),
     ...sessionHeaders,
   ];
   lines.push(headerRow.join(','));
@@ -123,7 +130,8 @@ export function generateAttendanceCsv(report: AttendanceReportResponse): string 
       student.counts.leave,
       student.counts.pending,
       student.counts.total,
-      `${student.attendanceRate}%`,
+      hasDecided(student.counts) ? `${student.attendanceRate}%` : '-',
+      Math.floor(student.outOfRoomSeconds / 60),
       ...sessionCols,
     ];
     lines.push(row.join(','));
