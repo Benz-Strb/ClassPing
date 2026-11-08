@@ -21,6 +21,9 @@ def _path_of(url: str) -> str:
     return _hide(url.split("?", 1)[0])
 
 
+_JOIN_S = 2
+
+
 class Streamer:
     """ส่งภาพจากกล้องเข้า ffmpeg เข้ารหัส H.264 แล้ว publish RTSP ให้ media server
 
@@ -144,13 +147,17 @@ class Streamer:
         if proc is None:
             return
         self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2)
-            self._thread = None
-        try:
-            proc.stdin.close()
-        except OSError:
-            pass
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            thread.join(timeout=_JOIN_S)
+            if thread.is_alive():
+                # ffmpeg ไม่อ่าน stdin แล้ว thread ค้างใน write ต้องฆ่า process ก่อน ไม่งั้น close() จะค้างตาม
+                proc.kill()
+                thread.join(timeout=_JOIN_S)
+        # close() รอ lock เดียวกับ write ถ้ายังค้างอยู่ก็ปล่อย thread ทิ้ง ไม่ให้ stop() ค้าง
+        closer = threading.Thread(target=self._close_stdin, args=(proc,), daemon=True)
+        closer.start()
+        closer.join(timeout=_JOIN_S)
         try:
             proc.wait(timeout=3)
         except subprocess.TimeoutExpired:
@@ -162,6 +169,13 @@ class Streamer:
         else:
             log.info("หยุดส่งวิดีโอ %s", _path_of(self._url))
         self._proc = None
+
+    @staticmethod
+    def _close_stdin(proc: subprocess.Popen) -> None:
+        try:
+            proc.stdin.close()
+        except (OSError, ValueError):
+            pass
 
     def _run(self, fps: int) -> None:
         interval = 1 / fps

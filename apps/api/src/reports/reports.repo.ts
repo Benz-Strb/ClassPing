@@ -266,7 +266,9 @@ export class SupabaseReportsRepo implements ReportsRepo {
             .order('student_id', { ascending: true }),
         );
         for (const attendance of attendances) {
-          sessionsWithRows.add(attendance.session_id);
+          // แถวลาจากการอนุมัติไม่ได้มาจากกล้อง ไม่นับว่าคาบนี้มีข้อมูล
+          if (attendance.status !== 'leave')
+            sessionsWithRows.add(attendance.session_id);
           attendanceMap.set(
             `${attendance.session_id}:${attendance.student_id}`,
             attendance,
@@ -283,7 +285,11 @@ export class SupabaseReportsRepo implements ReportsRepo {
       const paths = [
         ...new Set(
           [...attendanceMap.values()].flatMap((row) =>
-            row.student_id === selectedUser.id && row.image_path
+            row.student_id === selectedUser.id &&
+            row.image_path &&
+            // แถวรอตรวจและแถวลาอาจเป็นรูปหน้าของคนอื่น ไม่ส่งให้นักศึกษา
+            row.status !== 'pending' &&
+            row.status !== 'leave'
               ? [row.image_path]
               : [],
           ),
@@ -325,6 +331,8 @@ export class SupabaseReportsRepo implements ReportsRepo {
     };
 
     const studentReports: StudentAttendanceReport[] = [];
+    // คาบล่วงหน้ายังอยู่ในรายการ แต่ไม่นับเป็นจำนวนคาบ
+    const startedSessions = sessions.filter((s) => new Date(s.starts_at) <= now).length;
 
     for (const code of studentCodes) {
       const user = usersByCode.get(code);
@@ -380,13 +388,19 @@ export class SupabaseReportsRepo implements ReportsRepo {
           kind: s.kind,
           title: s.title,
           status: finalStatus,
-          firstSeenAt: att?.first_seen_at ?? null,
+          firstSeenAt:
+            includeImages && (att?.status === 'pending' || att?.status === 'leave')
+              ? null
+              : (att?.first_seen_at ?? null),
           roomName: s.rooms?.name ?? '-',
           ...(includeImages
             ? {
-                imageUrl: att?.image_path
-                  ? (imageUrls.get(att.image_path) ?? null)
-                  : null,
+                imageUrl:
+                  att?.image_path &&
+                  att.status !== 'pending' &&
+                  att.status !== 'leave'
+                    ? (imageUrls.get(att.image_path) ?? null)
+                    : null,
               }
             : {}),
         });
@@ -399,8 +413,9 @@ export class SupabaseReportsRepo implements ReportsRepo {
         fullName: user?.full_name ?? null,
         userId: user?.id ?? null,
         counts: studentCounts,
-        totalSessions: sessions.length,
+        totalSessions: startedSessions,
         attendanceRate: rate,
+        outOfRoomSeconds: 0,
         sessions: studentSessions,
       });
     }
@@ -439,7 +454,7 @@ export class SupabaseReportsRepo implements ReportsRepo {
       course: courseInfo,
       filter,
       summary: {
-        totalSessions: sessions.length,
+        totalSessions: startedSessions,
         totalStudents: studentCodes.length,
         counts: overallCounts,
         attendanceRate: overallRate,

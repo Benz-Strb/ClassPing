@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import threading
 import time
 
 import numpy as np
@@ -155,3 +157,45 @@ def test_feeder_thread_sends_frames_at_fps():
     time.sleep(0.3)
     streamer.stop()
     assert 3 <= len(procs[0].stdin.chunks) <= 8
+
+
+def test_stop_kills_ffmpeg_that_stopped_reading(monkeypatch):
+    monkeypatch.setattr("camera.stream._JOIN_S", 0.2)
+    release = threading.Event()
+
+    class HungStdin(FakeStdin):
+        def write(self, data: bytes):
+            release.wait(10)
+            raise BrokenPipeError
+
+        def close(self):
+            release.wait(10)
+
+    class HungProc(FakeProc):
+        def __init__(self, cmd):
+            super().__init__(cmd)
+            self.stdin = HungStdin()
+
+        def wait(self, timeout=None):
+            if not self.killed:
+                raise subprocess.TimeoutExpired("ffmpeg", timeout)
+            return self.returncode
+
+        def kill(self):
+            super().kill()
+            release.set()
+
+    procs: list[HungProc] = []
+
+    def popen(cmd, **_):
+        procs.append(HungProc(cmd))
+        return procs[0]
+
+    streamer = Streamer(source=frame, max_width=1280, popen=popen)
+    streamer.start(URL, fps=20, bitrate_kbps=1500)
+    time.sleep(0.1)
+    began = time.monotonic()
+    streamer.stop()
+    assert time.monotonic() - began < 2
+    assert procs[0].killed
+    assert not streamer.running

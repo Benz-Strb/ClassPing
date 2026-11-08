@@ -31,17 +31,24 @@ export async function uploadPose(pose: Pose, photo: Photo): Promise<FaceStatus> 
   return apiFetch<FaceStatus>(`/me/face/${pose}`, { method: 'PUT', body: form });
 }
 
-// แปลงภาพบัตรเป็น JPEG เสมอ (ภาพจากคลังอาจเป็น HEIC) และย่อถ้าใหญ่เกิน
-// JPEG คุณภาพสูงพอให้อ่านตัวเลขได้ และไม่เกิน 5 MB แม้เป็นรูปถ่ายบัตร
-export async function prepareCard(image: Photo): Promise<string> {
+// แปลงเป็น JPEG เสมอ (ภาพจากคลังอาจเป็น HEIC) และย่อถ้าใหญ่เกิน
+async function toJpeg(image: Photo, maxSide: number, compress: number): Promise<string> {
   const context = ImageManipulator.manipulate(image.uri);
-  if (Math.max(image.width, image.height) > CARD_MAX_SIDE) {
-    context.resize(
-      image.width >= image.height ? { width: CARD_MAX_SIDE } : { height: CARD_MAX_SIDE },
-    );
+  if (Math.max(image.width, image.height) > maxSide) {
+    context.resize(image.width >= image.height ? { width: maxSide } : { height: maxSide });
   }
   const rendered = await context.renderAsync();
-  return (await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.92 })).uri;
+  return (await rendered.saveAsync({ format: SaveFormat.JPEG, compress })).uri;
+}
+
+// ภาพบัตร: JPEG คุณภาพสูงพอให้อ่านตัวเลขได้ และไม่เกิน 5 MB แม้เป็นรูปถ่ายบัตร
+export function prepareCard(image: Photo): Promise<string> {
+  return toJpeg(image, CARD_MAX_SIDE, 0.92);
+}
+
+// ภาพหลักฐานลา: API รับแค่ JPG PNG PDF จึงแปลง HEIC เป็น JPEG ก่อนส่ง
+export function prepareLeaveEvidence(image: Photo): Promise<string> {
+  return toJpeg(image, 2400, 0.9);
 }
 
 // ลบสำเนาภาพบัตรในเครื่องหลังใช้เสร็จ ลบเฉพาะไฟล์ใน cache ของแอป ไม่แตะคลังรูป

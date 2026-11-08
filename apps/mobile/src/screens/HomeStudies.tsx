@@ -5,7 +5,7 @@ import type { StudentStudies } from '../lib/types';
 import { Pressable, Text } from '../ui/primitives';
 import { colors } from '../ui/theme';
 
-export function HomeStudies({ onOpenCourses, onOpenAccount }: { onOpenCourses: () => void; onOpenAccount: () => void }) {
+export function HomeStudies({ refreshTick = 0, onOpenCourses, onOpenAccount }: { refreshTick?: number; onOpenCourses: () => void; onOpenAccount: () => void }) {
   const {fontScale} = useWindowDimensions();
   const [data, setData] = useState<StudentStudies | null>(null);
   const [error, setError] = useState<number | null>(null);
@@ -15,7 +15,7 @@ export function HomeStudies({ onOpenCourses, onOpenAccount }: { onOpenCourses: (
     setError(null);
     apiFetch<StudentStudies>('/me/studies').then(value => { if (active) setData(value); }).catch(cause => { if (active) setError(cause instanceof ApiError ? cause.status : 0); });
     return () => { active = false; };
-  }, [revision]);
+  }, [revision, refreshTick]);
   const sessions = data?.sessions.filter(session => session.onDate === data.from) ?? [];
   const time = (value: string) => new Date(value).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
   return <View style={styles.section}>

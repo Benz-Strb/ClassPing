@@ -11,6 +11,9 @@ class InMemoryEnrollmentRepo implements EnrollmentRepo {
   rows = new Map<string, Map<Pose, FaceRow>>();
   files = new Map<string, Buffer>();
   userIds = new Set<string>();
+  // บัญชีที่ยืนยันบัตรแล้ว
+  verified: string[] = [];
+  pagesRead = 0;
 
   async listByUser(userId: string) {
     return [...(this.rows.get(userId)?.values() ?? [])];
@@ -38,6 +41,15 @@ class InMemoryEnrollmentRepo implements EnrollmentRepo {
   }
   async userExists(userId: string) {
     return this.userIds.has(userId);
+  }
+  async verifiedEmbeddings(excludeId: string, model: string, offset: number, limit: number) {
+    this.pagesRead++;
+    const ids = this.verified.filter((id) => id !== excludeId).slice(offset, offset + limit);
+    const rows = ids.flatMap((id) => [...(this.rows.get(id)?.values() ?? [])]);
+    return {
+      users: ids.length,
+      embeddings: rows.filter((r) => r.model === model).map((r) => r.embedding),
+    };
   }
 }
 
@@ -147,7 +159,9 @@ function setup() {
       withdrawn.push(userId);
     },
   } as unknown as UsersService;
-  const service = new EnrollmentService(repo, users, face as unknown as FaceClient, () => NOW);
+  const service = new EnrollmentService(repo, users, face as unknown as FaceClient, () => NOW, {
+    matchAcceptMin: 0.5,
+  });
   return { repo, face, consented, withdrawn, identities, studyInfos, service };
 }
 
@@ -331,6 +345,45 @@ describe('EnrollmentService.verifyIdentity', () => {
     expect(identities[0][1]).toBeGreaterThanOrEqual(0.36);
     // เก็บแค่รูปหน้า ไม่มีภาพบัตร
     expect([...repo.files.keys()]).toEqual([row.imagePath]);
+  });
+
+  it('หน้าตรงกับบัญชีอื่นที่ยืนยันแล้ว ได้ 409 FACE_ALREADY_ENROLLED ไม่บันทึกอะไร', async () => {
+    const { service, repo, identities } = setup();
+    const owner = randomUUID();
+    await storeRow(repo, owner, 'front');
+    repo.verified.push(owner);
+    const me = unverified();
+    expect(await rejection(service.verifyIdentity(me, png(), jpeg()))).toMatchObject({
+      status: 409,
+      code: 'FACE_ALREADY_ENROLLED',
+      message: 'หน้านี้ลงทะเบียนในบัญชีอื่นแล้ว ติดต่อผู้ดูแลระบบ',
+    });
+    expect(await repo.listByUser(me.id)).toEqual([]);
+    expect(identities).toEqual([]);
+  });
+
+  it('บัญชีอื่นที่ยังไม่ยืนยัน หรือคนละโมเดล หรือคนละหน้า ไม่นับ', async () => {
+    const { service, repo, identities } = setup();
+    await storeRow(repo, randomUUID(), 'front');
+    const otherModel = randomUUID();
+    await repo.savePose(otherModel, { pose: 'front', imagePath: 'x', embedding: [1, 0], model: 'other' });
+    const different = randomUUID();
+    await repo.savePose(different, { pose: 'front', imagePath: 'y', embedding: [0, 1], model: 'buffalo_l' });
+    repo.verified.push(otherModel, different);
+    await service.verifyIdentity(unverified(), png(), jpeg());
+    expect(identities).toHaveLength(1);
+  });
+
+  it('หาในทุกหน้าของบัญชีอื่น', async () => {
+    const { service, repo } = setup();
+    for (let i = 0; i < 120; i++) repo.verified.push(randomUUID());
+    const owner = randomUUID();
+    await storeRow(repo, owner, 'front');
+    repo.verified.push(owner);
+    expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
+      code: 'FACE_ALREADY_ENROLLED',
+    });
+    expect(repo.pagesRead).toBe(3);
   });
 
   it('ล้างท่าเก่าที่ถ่ายไว้ก่อนยืนยัน แล้วเริ่มจากหน้าตรงใหม่', async () => {

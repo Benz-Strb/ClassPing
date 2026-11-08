@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -17,10 +17,21 @@ export function StudentsView() {
   const [saving, setSaving] = useState(false);
 
   const [version, setVersion] = useState(0);
+  const lastImageReload = useRef(0);
+
+  // รูปโหลดไม่ได้มักเพราะ URL หมดอายุ (เปิดหน้าทิ้งไว้เกิน 10 นาที) โหลดรายชื่อใหม่ให้ได้ URL ใหม่
+  function reloadOnImageError() {
+    if (Date.now() - lastImageReload.current < 30_000) return;
+    lastImageReload.current = Date.now();
+    setVersion((v) => v + 1);
+  }
 
   useEffect(() => {
     apiFetch<RosterEntry[]>(`/courses/${id}/students`)
-      .then(setRoster)
+      .then((rows) => {
+        setRoster(rows);
+        setError(null);
+      })
       .catch(async (e: unknown) => setError(await handleApiError(e, router)));
   }, [id, router, version]);
 
@@ -56,7 +67,7 @@ export function StudentsView() {
   }
 
   return (
-    <section className="roster-workspace space-y-6">
+    <section className="roster-workspace space-y-6" onErrorCapture={reloadOnImageError}>
       <form onSubmit={add} className="roster-create space-y-3 rounded-lg border p-4">
         <h2 className="font-medium">เพิ่มนักศึกษาด้วยรหัส</h2>
         <p className="text-sm text-gray-600">
@@ -92,7 +103,19 @@ export function StudentsView() {
       {error && <p className="text-red-600">{error}</p>}
 
       {roster === null ? (
-        <p>กำลังโหลด...</p>
+        error ? (
+          <button
+            onClick={() => {
+              setError(null);
+              setVersion((v) => v + 1);
+            }}
+            className="rounded-lg border px-4 py-2"
+          >
+            ลองใหม่
+          </button>
+        ) : (
+          <p>กำลังโหลด...</p>
+        )
       ) : roster.length === 0 ? (
         <p className="text-gray-600">ยังไม่มีนักศึกษาในวิชานี้</p>
       ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { RetryButton } from "@/components/retry-button";
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -63,7 +64,7 @@ export default function AdminRoomsPage() {
           </p>
         )}
         {rooms === null ? (
-          <p role="status">กำลังโหลดห้องเรียน...</p>
+          error ? <RetryButton /> : <p role="status">กำลังโหลดห้องเรียน...</p>
         ) : rooms.length === 0 ? (
           <p className="text-gray-600">ยังไม่มีห้องเรียน</p>
         ) : (

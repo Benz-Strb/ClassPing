@@ -90,4 +90,21 @@ describe('POST /media/auth (e2e)', () => {
       .expect(401);
     await request(app.getHttpServer()).post('/media/auth').expect(401);
   });
+
+  it('ฟิลด์ที่ไม่ใช่ข้อความได้ 401 ไม่ใช่ 500', async () => {
+    for (const bad of [123, { a: 1 }, ['x'], true]) {
+      await request(app.getHttpServer())
+        .post('/media/auth')
+        .send({ action: 'read', protocol: 'webrtc', id: 'x', path: `cam/${CAMERA}`, token: bad })
+        .expect(401);
+      await request(app.getHttpServer())
+        .post('/media/auth')
+        .send({ action: 'publish', protocol: 'rtsp', path: `cam/${CAMERA}`, query: bad })
+        .expect(401);
+      await request(app.getHttpServer())
+        .post('/media/auth')
+        .send({ action: 'api', password: bad })
+        .expect(401);
+    }
+  });
 });

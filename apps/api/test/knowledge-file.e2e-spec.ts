@@ -32,6 +32,11 @@ describe('Knowledge file upload HTTP', () => {
       .set('Authorization', 'Bearer admin').attach('file', Buffer.from('ทุนการศึกษา'), 'scholarship.txt').expect(201);
     expect(res.body.data).toEqual({ name: 'scholarship', content: 'ทุนการศึกษา' });
   });
+  it('keeps a Thai file name for the default name', async () => {
+    const res = await request(app.getHttpServer()).post('/admin/catalog/knowledge/extract')
+      .set('Authorization', 'Bearer admin').attach('file', Buffer.from('ทุนการศึกษา'), 'ทุนเรียนดี.txt').expect(201);
+    expect(res.body.data.name).toBe('ทุนเรียนดี');
+  });
   it('requires an admin role before parsing uploads', async () => {
     for (const token of ['', 'Bearer student']) {
       await request(app.getHttpServer()).post('/admin/catalog/knowledge/extract')

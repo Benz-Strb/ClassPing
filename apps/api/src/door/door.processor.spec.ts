@@ -52,7 +52,10 @@ function setup(
   const trips: NewTrip[] = [];
   let detectCalls = 0;
   let openLoads = 0;
+  const demoted: string[] = [];
   const open = new Set<string>();
+  const pendingOpen = new Set<string>();
+  const restored: string[] = [];
 
   const embeddings: FaceEmbedding[] = [];
   for (const [userId, vector] of [
@@ -76,6 +79,17 @@ function setup(
       openLoads++;
       return [...open];
     },
+    demotePendingTrip: async (_s: string, userId: string) => {
+      demoted.push(userId);
+      if (!pendingOpen.delete(userId)) return null;
+      open.delete(userId);
+      return `trip-${userId}`;
+    },
+    restorePendingTrip: async (tripId: string, userId: string) => {
+      restored.push(`${tripId} ${userId}`);
+      pendingOpen.add(userId);
+      open.add(userId);
+    },
     insertTrip: async (trip: NewTrip) => {
       if (opts.insertFails) throw new Error('db down');
       if (opts.collide) return false;
@@ -96,12 +110,15 @@ function setup(
   const openTrips = new OpenTrips(doorRepo, () => NOW);
   const processor = new DoorProcessor(attendance, doorRepo, deps, config, () => NOW, openTrips);
   return {
+    restored,
     processor,
     openTrips,
     uploads,
     removed,
     trips,
     open,
+    pendingOpen,
+    demoted,
     detectCalls: () => detectCalls,
     openLoads: () => openLoads,
   };
@@ -197,6 +214,37 @@ describe('DoorProcessor.handleOut', () => {
     expect(trips).toEqual([]);
   });
 
+  it('รอบ pending ของคนนี้ถูกเปลี่ยนเป็น unknown แล้วบันทึกรอบ confirmed', async () => {
+    const { processor, trips, open, pendingOpen, demoted } = setup({ detect: () => [face(A)] });
+    open.add('a');
+    pendingOpen.add('a');
+    await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe('confirmed');
+    expect(demoted).toEqual(['a']);
+    expect(trips).toHaveLength(1);
+    expect(trips[0]).toMatchObject({ userId: 'a', status: 'confirmed' });
+  });
+
+  it('บันทึกรอบ confirmed ไม่สำเร็จ รอบ pending เดิมกลับมาเป็นของคนเดิม', async () => {
+    const { processor, open, pendingOpen, restored, openTrips } = setup({
+      detect: () => [face(A)],
+      insertFails: true,
+    });
+    open.add('a');
+    pendingOpen.add('a');
+    await expect(processor.handleOut('s1', [image('full')], OUT_AT)).rejects.toThrow('db down');
+    expect(restored).toEqual(['trip-a a']);
+    expect(pendingOpen.has('a')).toBe(true);
+    await expect(openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('ผลไม่มั่นใจ (pending) ไม่ไปแตะรอบ pending เดิม', async () => {
+    const { processor, open, pendingOpen, demoted } = setup({ detect: () => [face(mid)] });
+    open.add('a');
+    pendingOpen.add('a');
+    await expect(processor.handleOut('s1', [image('full')], OUT_AT)).resolves.toBe('duplicate');
+    expect(demoted).toEqual([]);
+  });
+
   it('คนที่เป็น pending อยู่แล้วก็ไม่เปิดรอบซ้ำ', async () => {
     const { processor, trips } = setup({ detect: () => [face(mid)] });
     await processor.handleOut('s1', [image('full')], OUT_AT);
@@ -225,6 +273,16 @@ describe('DoorProcessor.handleOut', () => {
     expect(trips[0]).toMatchObject({ userId: null, status: 'unknown' });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('รูปหนึ่งตรวจพัง ยังใช้ผลจากรูปอื่น', async () => {
+    const { processor, trips } = setup({
+      detect: (call) => (call === 1 ? new Error('timeout') : [face(A)]),
+    });
+    await expect(
+      processor.handleOut('s1', [image('1'), image('2'), image('3')], OUT_AT),
+    ).resolves.toBe('confirmed');
+    expect(trips[0]).toMatchObject({ userId: 'a', status: 'confirmed' });
   });
 
   describe('อัปโหลดรูปไม่สำเร็จ ต้องไม่ทำให้รอบหาย', () => {

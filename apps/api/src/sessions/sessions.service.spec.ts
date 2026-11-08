@@ -209,6 +209,21 @@ describe('SessionsService.syncCourse', () => {
     ]);
   });
 
+  it('override เฉพาะเวลาเริ่มทำให้เวลาจบก่อนเริ่ม ไม่สร้างและไม่แก้คาบ', async () => {
+    const { course, service, addSchedule, setOverride, sessions } = setup();
+    const schedule = addSchedule({ endTime: '10:30' });
+    setOverride({ scheduleId: schedule.id, onDate: NEXT_MONDAY, startTime: '11:00' });
+    await service.syncCourse(course.id);
+    expect(sessions()).toEqual([]);
+
+    setOverride({ scheduleId: schedule.id, onDate: NEXT_MONDAY, startTime: '10:00' });
+    await service.syncCourse(course.id);
+    expect(sessions()).toHaveLength(1);
+    setOverride({ scheduleId: schedule.id, onDate: NEXT_MONDAY, startTime: '11:00' });
+    await service.syncCourse(course.id);
+    expect(sessions().every((s) => s.endsAt > s.startsAt)).toBe(true);
+  });
+
   it('งดสอนวันจันทร์หน้า คาบนั้นถูกลบ', async () => {
     const { course, service, addSchedule, setOverride, sessions } = setup();
     const schedule = addSchedule();
