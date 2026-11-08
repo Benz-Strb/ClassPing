@@ -23,6 +23,7 @@ function fakeRepo() {
   ];
   const cameras: CameraView[] = [];
   const repo: AdminRepo = {
+    listVideoViews: async () => [],
     listUsers: async () => users,
     updateUserRole: async (id, role) => {
       const user = users.find((item) => item.id === id);
@@ -164,5 +165,26 @@ describe('AdminService', () => {
     const { repo, rooms } = fakeRepo();
     await expect(new AdminService(repo).listRooms()).resolves.toEqual(rooms);
     await expect(new AdminService(repo).listCameras()).resolves.toEqual([]);
+  });
+  it('ประวัติดูกล้อง: ไม่ส่งวันที่ = 7 วันล่าสุดตามเวลาไทย', async () => {
+    const { repo } = fakeRepo();
+    const spy = vi.spyOn(repo, 'listVideoViews');
+    // 17:00Z วันที่ 7 = เช้าวันที่ 8 ของไทย
+    vi.useFakeTimers({ now: new Date('2026-11-07T17:00:00Z') });
+    try {
+      await new AdminService(repo).listVideoViews({});
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(spy).toHaveBeenCalledWith('2026-11-02T00:00:00+07:00', '2026-11-09T00:00:00+07:00');
+  });
+
+  it('ประวัติดูกล้อง: ช่วงเกิน 31 วันหรือวันที่ผิดได้ 400', async () => {
+    const { repo } = fakeRepo();
+    const service = new AdminService(repo);
+    await expect(service.listVideoViews({ from: '2026-10-01', to: '2026-11-01' })).rejects.toMatchObject({ status: 400, code: 'RANGE_TOO_LONG' });
+    await expect(service.listVideoViews({ from: '2026-11-05', to: '2026-11-01' })).rejects.toMatchObject({ status: 400 });
+    await expect(service.listVideoViews({ from: 'x' })).rejects.toMatchObject({ status: 400 });
+    await expect(service.listVideoViews({ from: '2026-10-02', to: '2026-11-01' })).resolves.toEqual([]);
   });
 });
