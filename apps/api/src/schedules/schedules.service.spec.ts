@@ -16,6 +16,7 @@ class InMemorySchedulesRepo implements SchedulesRepo {
   schedules = new Map<string, NewSchedule & { id: string }>();
   overrides: Override[] = [];
   exams: ExamSlot[] = [];
+  classSessions: ExamSlot[] = [];
 
   constructor(
     private readonly courseCodes: Map<string, string>,
@@ -66,8 +67,8 @@ class InMemorySchedulesRepo implements SchedulesRepo {
   async listExamsBetween(from: string, to: string) {
     return this.exams.filter((e) => e.onDate >= from && e.onDate <= to);
   }
-  async listClassSessionsOn(_date: string) {
-    return [];
+  async listClassSessionsOn(date: string) {
+    return this.classSessions.filter((c) => c.onDate === date);
   }
   async listOverridesOnDate(date: string) {
     return this.overrides.filter((o) => o.onDate === date);
@@ -200,6 +201,15 @@ describe('SchedulesService ตารางประจำ', () => {
     expect(
       await rejection(service.create(owner, cs101.id, monday({ roomId: randomUUID() }))),
     ).toMatchObject({ status: 400, code: 'ROOM_NOT_FOUND' });
+  });
+
+  it('แก้ตารางด้วย roomId ว่างได้ 400 ROOM_NOT_FOUND ไม่ใช่ error ฐาน', async () => {
+    const { owner, cs101, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday());
+    expect(await rejection(service.update(owner, mine.id, { roomId: '' }))).toMatchObject({
+      status: 400,
+      code: 'ROOM_NOT_FOUND',
+    });
   });
 
   it('ห้องเดียวกัน วันเดียวกัน เวลาซ้อน ได้ 409 ROOM_CONFLICT บอกวิชาที่ชน', async () => {
@@ -562,6 +572,131 @@ describe('SchedulesService กันคาบซ้อนและคาบท�
       endTime: '15:00',
     });
     await expect(service.clearOverride(owner, schedule.id, NEXT_MONDAY)).resolves.toBeUndefined();
+  });
+});
+
+describe('SchedulesService แถวคาบค้างจริง', () => {
+  // วิชา CS102 มีแถวคาบวันจันทร์หน้า 09:00-12:00 ห้อง A ค้างอยู่ ทั้งที่ตารางประจำย้ายไปแล้ว
+  const withLeftover = () => {
+    const ctx = setup();
+    ctx.repo.classSessions.push({
+      id: randomUUID(),
+      courseId: ctx.cs102.id,
+      courseCode: 'CS102',
+      roomId: ctx.roomA,
+      roomName: 'ห้อง A',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T02:00:00Z'),
+      endsAt: new Date('2026-10-26T05:00:00Z'),
+    });
+    return ctx;
+  };
+
+  it('สร้างตารางทับแถวคาบค้างของวิชาอื่นในห้องเดียวกัน ได้ ROOM_CONFLICT', async () => {
+    const { owner, cs101, service, monday } = withLeftover();
+    expect(
+      await rejection(service.create(owner, cs101.id, monday({ startTime: '10:00' }))),
+    ).toEqual({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+      message: 'ห้อง A มีวิชา CS102 เวลา 09:00-12:00 แล้ว',
+    });
+  });
+
+  it('แก้ตารางให้ทับแถวคาบค้างได้ ROOM_CONFLICT · คนละห้องหรือต่อกันพอดีไม่ชน', async () => {
+    const { owner, cs101, roomB, service, monday } = withLeftover();
+    const mine = await service.create(owner, cs101.id, monday({ startTime: '13:00', endTime: '15:00' }));
+    expect(await rejection(service.update(owner, mine.id, { startTime: '11:00' }))).toMatchObject({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+    });
+    await expect(service.update(owner, mine.id, { startTime: '12:00' })).resolves.toBeTruthy();
+    await expect(
+      service.update(owner, mine.id, { startTime: '10:00', roomId: roomB }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('เปลี่ยนเฉพาะวันให้ทับแถวคาบค้างของวิชาอื่น ได้ ROOM_CONFLICT · ต่อกันพอดีหรือคนละห้องไม่ชน', async () => {
+    const { owner, cs101, roomA, roomB, service, monday } = withLeftover();
+    const mine = await service.create(owner, cs101.id, monday({ roomId: roomB, startTime: '13:00', endTime: '15:00' }));
+    expect(
+      await rejection(
+        service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomA, startTime: '11:00', endTime: '13:00' }),
+      ),
+    ).toMatchObject({ status: 409, code: 'ROOM_CONFLICT' });
+    await expect(
+      service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomA, startTime: '12:00', endTime: '14:00' }),
+    ).resolves.toBeTruthy();
+    await expect(
+      service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomB, startTime: '10:00', endTime: '12:00' }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('เอาการเปลี่ยนเฉพาะวันออก แล้วช่องเดิมทับแถวคาบค้างของวิชาอื่น ได้ ROOM_CONFLICT', async () => {
+    const { owner, cs101, cs102, repo, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday());
+    await service.setOverride(owner, mine.id, NEXT_MONDAY, { cancelled: true });
+    repo.classSessions.push({
+      id: randomUUID(),
+      courseId: cs102.id,
+      courseCode: 'CS102',
+      roomId: mine.roomId,
+      roomName: 'ห้อง A',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T02:00:00Z'),
+      endsAt: new Date('2026-10-26T05:00:00Z'),
+    });
+    expect(await rejection(service.clearOverride(owner, mine.id, NEXT_MONDAY))).toMatchObject({
+      status: 409,
+      code: 'ROOM_CONFLICT',
+    });
+  });
+
+  it('เปลี่ยนเฉพาะวันไม่ชนแถวคาบของวิชาเดียวกัน และแถวที่จบไปแล้ว', async () => {
+    const { owner, cs101, cs102, roomA, roomB, repo, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday({ roomId: roomB, startTime: '13:00', endTime: '15:00' }));
+    const row = (courseId: string, endsAt: string) => ({
+      id: randomUUID(),
+      courseId,
+      courseCode: 'X',
+      roomId: roomA,
+      roomName: 'ห้อง A',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T02:00:00Z'),
+      endsAt: new Date(endsAt),
+    });
+    repo.classSessions.push(row(cs101.id, '2026-10-26T05:00:00Z'), row(cs102.id, '2026-10-20T01:00:00Z'));
+    await expect(
+      service.setOverride(owner, mine.id, NEXT_MONDAY, { roomId: roomA, startTime: '09:00', endTime: '12:00' }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('แถวคาบค้างของวิชาเดียวกันไม่นับว่าชน', async () => {
+    const { owner, cs101, roomA, service, monday, repo } = setup();
+    repo.classSessions.push({
+      id: randomUUID(),
+      courseId: cs101.id,
+      courseCode: 'CS101',
+      roomId: roomA,
+      roomName: 'ห้อง A',
+      onDate: NEXT_MONDAY,
+      startsAt: new Date('2026-10-26T02:00:00Z'),
+      endsAt: new Date('2026-10-26T05:00:00Z'),
+    });
+    await expect(service.create(owner, cs101.id, monday())).resolves.toBeTruthy();
+  });
+});
+
+describe('SchedulesService แก้เวลากับการเปลี่ยนเฉพาะวัน', () => {
+  it('แก้ตารางจนวันที่เปลี่ยนเฉพาะเวลาเริ่มไว้ได้คาบกลับหัว ได้ 400', async () => {
+    const { owner, cs101, service, monday } = setup();
+    const mine = await service.create(owner, cs101.id, monday());
+    await service.setOverride(owner, mine.id, NEXT_MONDAY, { startTime: '11:00' });
+    expect(await rejection(service.update(owner, mine.id, { endTime: '10:30' }))).toMatchObject({
+      status: 400,
+      code: 'BAD_REQUEST',
+    });
+    await expect(service.update(owner, mine.id, { endTime: '11:30' })).resolves.toBeTruthy();
   });
 });
 

@@ -80,6 +80,8 @@ interface Row {
   editor: { full_name: string | null; email: string } | null;
 }
 
+const notPending = () => new AppError(409, 'NOT_PENDING', 'รายการนี้ไม่ได้รอตรวจแล้ว');
+
 @Injectable()
 export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
@@ -183,13 +185,30 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     }));
   }
 
+  // เก็บ URL ที่เซ็นแล้วไว้ใช้ซ้ำจนครึ่งหนึ่งของอายุ หน้าเช็คชื่อดึงทุก 5 วินาที
+  // ถ้า URL เปลี่ยนทุกรอบ เบราว์เซอร์จะโหลดรูปใหม่หมด
+  private readonly signed = new Map<string, { url: string; reuseUntil: number }>();
+
   async signCaptures(paths: string[], seconds: number): Promise<Map<string, string>> {
     const urls = new Map<string, string>();
     if (!paths.length) return urls;
-    const { data, error } = await this.db.storage.from(BUCKET).createSignedUrls(paths, seconds);
+    const now = Date.now();
+    const missing: string[] = [];
+    for (const path of new Set(paths)) {
+      const hit = this.signed.get(path);
+      if (hit && hit.reuseUntil > now) urls.set(path, hit.url);
+      else missing.push(path);
+    }
+    if (!missing.length) return urls;
+    const { data, error } = await this.db.storage.from(BUCKET).createSignedUrls(missing, seconds);
     if (error) throw dbError();
+    if (this.signed.size > 5000) {
+      for (const [path, hit] of this.signed) if (hit.reuseUntil <= now) this.signed.delete(path);
+    }
     for (const item of data) {
-      if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+      if (!item.path || !item.signedUrl) continue;
+      urls.set(item.path, item.signedUrl);
+      this.signed.set(item.path, { url: item.signedUrl, reuseUntil: now + seconds * 500 });
     }
     return urls;
   }
@@ -222,7 +241,8 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
     teacherId: string,
   ): Promise<void> {
     // เปลี่ยน student_id ในแถวเดิม รูปกับเวลาที่เห็นย้ายตามไปด้วยในคำสั่งเดียว
-    const { error } = await this.db
+    // เฉพาะแถวที่ยัง pending ถ้ากล้องเพิ่งเปลี่ยนเป็นผลมั่นใจแล้วต้องไม่แตะ
+    const { data, error } = await this.db
       .from('attendance')
       .update({
         student_id: toUserId,
@@ -232,21 +252,27 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
         updated_at: new Date().toISOString(),
       })
       .eq('session_id', sessionId)
-      .eq('student_id', fromUserId);
+      .eq('student_id', fromUserId)
+      .eq('status', 'pending')
+      .select('student_id');
     // กล้องเพิ่งบันทึกคนใหม่คนนี้พอดี
     if (error?.code === '23505') {
       throw new AppError(409, 'ALREADY_RECORDED', 'นักศึกษาคนนี้มีผลเช็คชื่อในคาบนี้แล้ว');
     }
     if (error) throw dbError();
+    if (!data?.length) throw notPending();
   }
 
   async deleteRow(sessionId: string, userId: string): Promise<void> {
-    const { error } = await this.db
+    const { data, error } = await this.db
       .from('attendance')
       .delete()
       .eq('session_id', sessionId)
-      .eq('student_id', userId);
+      .eq('student_id', userId)
+      .eq('status', 'pending')
+      .select('student_id');
     if (error) throw dbError();
+    if (!data?.length) throw notPending();
   }
 
   async usersByIds(

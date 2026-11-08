@@ -1,10 +1,12 @@
 import { SelectField } from '../ui/SelectField';
 import { colors } from '../ui/theme';
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput } from '../ui/primitives';
 import * as ImagePicker from "expo-image-picker";
 import { apiFetch } from "../lib/api";
+import { previewErrorMessage } from "../lib/errors";
+import { prepareLeaveEvidence } from "../lib/face";
 import {
   discardLeaveEvidence,
   formatLeaveSession,
@@ -20,9 +22,13 @@ const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 
 interface Props {
   onBack?: () => void;
+  // แท็บนี้เปิดอยู่ และเลขที่เพิ่มทุกครั้งที่แอปกลับมาเปิด ใช้โหลดข้อมูลใหม่
+  active?: boolean;
+  focusTick?: number;
 }
 
-export function LeaveScreen({ onBack }: Props) {
+export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
+  const [refreshing, setRefreshing] = useState(false);
   const [sessions, setSessions] = useState<LeaveSession[] | null>(null);
   const [requests, setRequests] = useState<LeaveRequest[] | null>(null);
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -38,6 +44,8 @@ export function LeaveScreen({ onBack }: Props) {
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // ข้อความโหลดไม่สำเร็จแยกจากข้อความตรวจฟอร์ม ล้างเมื่อโหลดสำเร็จ
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
     const [nextSessions, nextRequests] = await Promise.all([
@@ -46,18 +54,24 @@ export function LeaveScreen({ onBack }: Props) {
     ]);
     setSessions(nextSessions);
     setRequests(nextRequests);
+    setLoadError(null);
   }
 
   useEffect(() => {
+    if (!active) return;
     load().catch((e: unknown) =>
-      setError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
+      setLoadError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
     );
-    return () => discardLeaveEvidence(evidenceUri.current);
-  }, []);
+  }, [active, focusTick]);
+
+  useEffect(() => () => discardLeaveEvidence(evidenceUri.current), []);
 
   const availableSessions = useMemo(() => {
+    // คำขอที่ถูกปฏิเสธยื่นคาบเดิมใหม่ได้
     const requested = new Set(
-      requests?.map((request) => request.sessionId) ?? [],
+      requests
+        ?.filter((request) => request.status !== "rejected")
+        .map((request) => request.sessionId) ?? [],
     );
     return sessions?.filter((session) => !requested.has(session.id)) ?? [];
   }, [requests, sessions]);
@@ -79,9 +93,7 @@ export function LeaveScreen({ onBack }: Props) {
         setReason(extractedReason.trim());
       }
     } catch (e) {
-      setOcrError(
-        `${e instanceof Error ? e.message : "อ่านหลักฐานไม่สำเร็จ"} — สามารถกรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
-      );
+      setOcrError(previewErrorMessage(e));
     } finally {
       setReading(false);
     }
@@ -100,13 +112,23 @@ export function LeaveScreen({ onBack }: Props) {
         setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
         return;
       }
+      // API รับแค่ JPG PNG PDF ภาพจากคลังอาจเป็น HEIC จึงแปลงเป็น JPEG
+      let uri: string;
+      try {
+        uri = await prepareLeaveEvidence(asset);
+      } catch {
+        discardLeaveEvidence(asset.uri);
+        setError("เปิดภาพไม่สำเร็จ ลองเลือกใหม่อีกครั้ง");
+        return;
+      }
+      discardLeaveEvidence(asset.uri);
       discardLeaveEvidence(evidence?.uri ?? null);
-      evidenceUri.current = asset.uri;
-      setEvidence(asset);
+      evidenceUri.current = uri;
+      setEvidence({ ...asset, uri });
       setOcrText(null);
       setOcrError(null);
       if (sessionId) {
-        await autoReadEvidence(sessionId, asset.uri);
+        await autoReadEvidence(sessionId, uri);
       }
     } catch {
       setError("เปิดภาพหลักฐานไม่ได้ กรุณาลองเลือกภาพใหม่");
@@ -169,11 +191,11 @@ export function LeaveScreen({ onBack }: Props) {
   if (sessions === null || requests === null) {
     return (
       <View style={styles.center}>
-        {error ? <>
-          <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
+        {loadError ? <>
+          <Text accessibilityRole="alert" style={styles.error}>{loadError}</Text>
           <Pressable accessibilityRole="button" style={styles.secondary} onPress={() => {
-            setError(null);
-            void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
+            setLoadError(null);
+            void load().catch((cause: unknown) => setLoadError(cause instanceof Error ? cause.message : "โหลดระบบลาไม่สำเร็จ"));
           }}><Text>ลองใหม่</Text></Pressable>
         </> : <ActivityIndicator color={colors.action} />}
         {onBack && <Pressable style={styles.secondary} onPress={onBack}>
@@ -188,6 +210,20 @@ export function LeaveScreen({ onBack }: Props) {
       automaticallyAdjustKeyboardInsets
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          tintColor={colors.action}
+          onRefresh={() => {
+            setRefreshing(true);
+            load()
+              .catch((e: unknown) =>
+                setLoadError(e instanceof Error ? e.message : "โหลดระบบลาไม่สำเร็จ"),
+              )
+              .finally(() => setRefreshing(false));
+          }}
+        />
+      }
     >
       <View style={styles.header}>
         <View>
@@ -198,6 +234,7 @@ export function LeaveScreen({ onBack }: Props) {
           <Text>กลับ</Text>
         </Pressable>}
       </View>
+      {loadError && <Text style={styles.error}>{loadError}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.card}>

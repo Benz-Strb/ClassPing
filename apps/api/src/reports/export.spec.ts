@@ -79,6 +79,7 @@ const mockReport: AttendanceReportResponse = {
       },
       totalSessions: 2,
       attendanceRate: 100.0,
+      outOfRoomSeconds: 0,
       sessions: [
         {
           sessionId: 'sess-1',
@@ -114,6 +115,7 @@ const mockReport: AttendanceReportResponse = {
       },
       totalSessions: 2,
       attendanceRate: 50.0,
+      outOfRoomSeconds: 2700,
       sessions: [
         {
           sessionId: 'sess-1',
@@ -172,6 +174,53 @@ describe('export-csv', () => {
     const csv = generateAttendanceCsv(report);
 
     expect(csv).toContain('"\'=HYPERLINK(""https://example.test"")"');
+  });
+
+  it('ค่า - เดี่ยว ๆ ไม่ถูกใส่ \' นำหน้า แต่สูตรที่ขึ้นต้นด้วย - ยังถูกกัน', () => {
+    const report = structuredClone(mockReport);
+    report.sessions[0].title = null;
+    report.students[0].fullName = null;
+    report.students[1].fullName = '-1+1';
+    report.students[1].sessions[0].status = 'unrecorded';
+
+    const csv = generateAttendanceCsv(report);
+
+    expect(csv).toContain('"-"');
+    expect(csv).not.toContain('\'-"');
+    expect(csv).toContain('"\'-1+1"');
+  });
+
+  it('แถวหัวข้อส่วนไม่ขึ้นต้นด้วยตัวที่ Excel ตีเป็นสูตร', () => {
+    const csv = generateAttendanceCsv(mockReport);
+    for (const line of csv.replace('\uFEFF', '').split('\r\n')) {
+      expect(line.replace(/^"/, '')).not.toMatch(/^[=+\-@]./u);
+    }
+    expect(csv).toContain('"สรุปภาพรวม"');
+    expect(csv).toContain('"สรุปรายคาบ"');
+  });
+
+  it('คนที่ยังไม่มีคาบตัดสินผลแสดง - ไม่ใช่ 0%', () => {
+    const report = structuredClone(mockReport);
+    report.students[0].counts = { present: 0, late: 0, absent: 0, leave: 0, pending: 1, total: 1 };
+    report.students[0].attendanceRate = 0;
+
+    const csv = generateAttendanceCsv(report);
+    const row = csv.split('\r\n').find((line) => line.includes('66000001'))!;
+
+    expect(row).not.toContain('0%');
+    expect(row).toContain(',-,');
+  });
+
+  it('มีคอลัมน์เวลานอกห้องเป็นนาทีต่อนักศึกษา', () => {
+    const lines = generateAttendanceCsv(mockReport).split('\r\n');
+    const header = lines.find((line) => line.startsWith('"รหัสนักศึกษา"'))!;
+    const columns = header.split(',');
+    const index = columns.indexOf('"นอกห้อง (นาที)"');
+    expect(index).toBeGreaterThan(0);
+    const minutes = (code: string) =>
+      lines.find((line) => line.includes(code))!.split(',')[index];
+    expect(minutes('66000001')).toBe('0');
+    expect(minutes('66000002')).toBe('45');
   });
 
   it('ป้องกันสูตรที่ซ่อนหลังช่องว่างหรือขึ้นบรรทัดใหม่', () => {

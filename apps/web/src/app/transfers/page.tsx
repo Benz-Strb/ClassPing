@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { RetryButton } from "@/components/retry-button";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
@@ -84,7 +85,7 @@ export default function TransfersPage() {
         </p>
       )}
       {requests === null ? (
-        <p role="status">กำลังโหลด...</p>
+        error ? <RetryButton /> : <p role="status">กำลังโหลด...</p>
       ) : (
         <>
           {curricula.length === 0 ? (

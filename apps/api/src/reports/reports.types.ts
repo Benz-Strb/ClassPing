@@ -53,6 +53,8 @@ export interface StudentSessionStatus {
   firstSeenAt?: string | null;
   roomName?: string;
   imageUrl?: string | null;
+  // วินาทีที่อยู่นอกห้องในคาบนี้ (เฉพาะรอบที่ระบุตัวแล้ว) service เติมให้
+  outOfRoomSeconds?: number;
 }
 
 export interface StudentAttendanceReport {
@@ -62,6 +64,8 @@ export interface StudentAttendanceReport {
   counts: AttendanceCounts;
   totalSessions: number;
   attendanceRate: number;
+  // รวมวินาทีนอกห้องทุกคาบที่ไม่ถูกลบในตัวกรองนี้ service เติมให้ (repo ใส่ 0)
+  outOfRoomSeconds: number;
   sessions: StudentSessionStatus[];
 }
 

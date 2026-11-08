@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Pressable, Text } from '../ui/primitives';
 import { ApiError, apiFetch } from "../lib/api";
+import { formatRate } from "../lib/attendance";
 import type { AttendanceCounts, StudentAttendanceSummary } from "../lib/types";
 import { AttendanceCourseSection } from "./AttendanceCourseSection";
 
@@ -36,7 +37,22 @@ function StatusCounts({ counts }: { counts: AttendanceCounts }) {
   );
 }
 
-export function AttendanceSummarySection({ mode = "summary", onOpenAccount }: { mode?: "summary" | "courses"; onOpenAccount?: () => void }) {
+export function AttendanceSummarySection({
+  mode = "summary",
+  active = true,
+  refreshTick = 0,
+  onSettled,
+  onOpenAccount,
+}: {
+  mode?: "summary" | "courses";
+  // แท็บนี้เปิดอยู่ ปิดอยู่จะไม่โหลด
+  active?: boolean;
+  // เลขที่เพิ่มเมื่อต้องโหลดใหม่ (กลับเข้าแอป ดึงลงเพื่อรีเฟรช)
+  refreshTick?: number;
+  // โหลดจบแล้ว (สำเร็จหรือไม่)
+  onSettled?: () => void;
+  onOpenAccount?: () => void;
+}) {
   const [data, setData] = useState<StudentAttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -44,24 +60,27 @@ export function AttendanceSummarySection({ mode = "summary", onOpenAccount }: { 
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-    setData(null);
+    if (!active) return;
+    let current = true;
     setError(null);
     setForbidden(false);
 
     apiFetch<StudentAttendanceSummary>("/me/reports/attendance")
-      .then((summary) => active && setData(summary))
+      .then((summary) => current && setData(summary))
       .catch((cause: unknown) => {
-        if (active) {
+        if (current) {
           setForbidden(cause instanceof ApiError && cause.status === 403);
           setError(cause instanceof ApiError && cause.status === 403 ? "บัญชีนี้ยังไม่มีสิทธิ์ดูสถิติการเข้าเรียน" : "ยังโหลดสถิติไม่ได้ กรุณาลองอีกครั้ง");
         }
-      });
+      })
+      .finally(() => current && onSettled?.());
 
     return () => {
-      active = false;
+      current = false;
     };
-  }, [reloadKey]);
+    // onSettled เปลี่ยนทุกรอบเรนเดอร์ ไม่ใส่ใน deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey, active, refreshTick]);
 
   return (
     <View style={styles.section} accessibilityRole="summary">
@@ -90,7 +109,7 @@ export function AttendanceSummarySection({ mode = "summary", onOpenAccount }: { 
       ) : (
         <>
           {mode === "summary" && <View style={styles.overallCard}>
-            <View style={styles.overallHeading}><Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text><Text style={styles.rate}>{data.summary.attendanceRate}%</Text></View>
+            <View style={styles.overallHeading}><Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text><Text style={styles.rate}>{formatRate(data.summary.counts, data.summary.attendanceRate)}</Text></View>
             <StatusCounts counts={data.summary.counts} />
             <Text style={styles.muted}>
               รอตรวจยังไม่ใช่ผลยืนยันการเข้าเรียน
