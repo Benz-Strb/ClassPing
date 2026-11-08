@@ -119,6 +119,8 @@ export class SessionsService implements SessionSyncer {
     const planned = new Map<string, PlannedSession>();
     for (let day = 0; day < WINDOW_DAYS; day++) {
       for (const session of planDay(addDays(from, day), schedules, overrides)) {
+        // เวลาจบไม่อยู่หลังเวลาเริ่ม (override ไม่ตรงกับตารางใหม่) ข้ามไป กล้องเปิดคาบแบบนี้ไม่ได้
+        if (session.endsAt <= session.startsAt) continue;
         planned.set(keyOf(session), session);
       }
     }
