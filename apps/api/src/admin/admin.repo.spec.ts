@@ -11,6 +11,16 @@ describe('admin database safety boundaries', () => {
     expect(rpc).toHaveBeenCalledWith('admin_change_user_role', { target_id: 'user', next_role: 'teacher' });
     expect(from).not.toHaveBeenCalled();
   });
+  it('pages through every user instead of stopping at 1000 rows', async () => {
+    const row = (n: number) => ({ id: `u${n}`, email: `e${n}`, full_name: null, role: 'student', student_id: null, face_profiles: [] });
+    const all = Array.from({ length: 2300 }, (_, n) => row(n));
+    const range = vi.fn(async (from: number, to: number) => ({ data: all.slice(from, to + 1), error: null }));
+    const query = { order: vi.fn(() => query), range };
+    const from = vi.fn(() => ({ select: () => query }));
+    const repo = new SupabaseAdminRepo({ from } as unknown as SupabaseClient);
+    await expect(repo.listUsers()).resolves.toHaveLength(2300);
+    expect(range).toHaveBeenCalledTimes(4);
+  });
   it('inserts the whole catalog import in one statement and reports duplicate conflicts', async () => {
     const select = vi.fn().mockResolvedValue({ error: { code: '23505' } });
     const insert = vi.fn(() => ({ select }));

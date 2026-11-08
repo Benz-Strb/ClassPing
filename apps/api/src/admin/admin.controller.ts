@@ -39,7 +39,8 @@ export class AdminController {
   @Post('cameras/:roomId/token')
   createCameraToken(
     @Param('roomId') roomId: string,
+    @Body() body: unknown,
   ): Promise<{ cameraId: string; roomId: string; token: string }> {
-    return this.admin.createCameraToken(roomId);
+    return this.admin.createCameraToken(roomId, body);
   }
 }

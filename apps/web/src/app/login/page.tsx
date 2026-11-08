@@ -5,22 +5,28 @@ import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 function LoginForm() {
-  const error = useSearchParams().get("error");
+  const urlError = useSearchParams().get("error");
   const [loading, setLoading] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
+  const error = signInError ?? urlError;
 
   async function signIn() {
     setLoading(true);
     setSignInError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        // ให้ Google แสดงเฉพาะบัญชีมหาลัย (backend ยังตรวจซ้ำอีกชั้น)
-        queryParams: { hd: "dpu.ac.th", prompt: "select_account" },
-      },
-    });
-    if (error) { setSignInError(error.message); setLoading(false); }
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          // ให้ Google แสดงเฉพาะบัญชีมหาลัย (backend ยังตรวจซ้ำอีกชั้น)
+          queryParams: { hd: "dpu.ac.th", prompt: "select_account" },
+        },
+      });
+      if (error) throw error;
+    } catch {
+      setSignInError("เข้าสู่ระบบด้วย Google ไม่ได้ ลองใหม่อีกครั้ง");
+      setLoading(false);
+    }
   }
 
   return (
@@ -29,7 +35,7 @@ function LoginForm() {
         <div className="login-brand">ClassPing</div>
         <div className="space-y-2"><h1 className="text-3xl font-semibold">เข้าสู่ระบบ</h1><p className="text-gray-600">จัดการรายวิชาและติดตามการเข้าเรียน</p></div>
         <p className="text-sm text-gray-600">เข้าสู่ระบบด้วยเมลมหาวิทยาลัย (@dpu.ac.th)</p>
-        {(signInError || error) && <p role="alert" className="surface-feedback text-sm text-red-600">{signInError || error}</p>}
+        {error && <p role="alert" className="surface-feedback text-sm text-red-600">{error}</p>}
         <button
           onClick={signIn}
           disabled={loading}
