@@ -10,7 +10,7 @@ const TITLES = { curricula: "หลักสูตร", reference: "ข้อม
 const EMPTY = { code: "", name: "", year: "2569", category: "", url: "", content: "", active: true };
 const inputClass = "mt-1 w-full rounded-md border bg-white px-3 py-2";
 
-export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
+export function AdminCatalogView({ kind, endpoint = `/admin/catalog/${kind}` }: { kind: CatalogKind; endpoint?: string }) {
   const router = useRouter();
   const [entries, setEntries] = useState<CatalogEntry[] | null>(null);
   const [form, setForm] = useState(EMPTY);
@@ -24,11 +24,11 @@ export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
   const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let cancelled = false;
-    apiFetch<CatalogEntry[]>(`/admin/catalog/${kind}`)
+    apiFetch<CatalogEntry[]>(endpoint)
       .then((rows) => { if (!cancelled) setEntries(rows); })
       .catch(async (value: unknown) => { const message = await handleApiError(value, router); if (!cancelled) setError(message); });
     return () => { cancelled = true; };
-  }, [kind, router, version]);
+  }, [endpoint, router, version]);
 
   async function save(event: React.FormEvent) {
     event.preventDefault(); setBusy(true); setError(null); setStatus("");
@@ -40,7 +40,7 @@ export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
       ...(kind === "knowledge" && { url: form.url }),
     };
     try {
-      const row = await apiFetch<CatalogEntry>(`/admin/catalog/${kind}${editing ? `/${editing}` : ""}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(body) });
+      const row = await apiFetch<CatalogEntry>(`${endpoint}${editing ? `/${editing}` : ""}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(body) });
       setEntries((current) => [...(current ?? []).filter((item) => item.id !== row.id), row].sort((a, b) => a.name.localeCompare(b.name, "th")));
       setStatus(kind === "knowledge" ? form.active ? "บันทึกและอัปเดตข้อมูลแชทแล้ว" : "บันทึกและนำออกจากแชทแล้ว" : editing ? "แก้ไขรายการแล้ว" : "เพิ่มรายการแล้ว"); setEditing(null); setForm(EMPTY);
     } catch (value) { setError(await handleApiError(value, router)); }
@@ -51,7 +51,7 @@ export function AdminCatalogView({ kind }: { kind: CatalogKind }) {
     setBusy(true); setError(null); setStatus("");
     try {
       const csv = await readAdminText(csvFile);
-      const result = await apiFetch<{ imported: number }>(`/admin/catalog/${kind}/import`, { method: "POST", body: JSON.stringify({ csv }) });
+      const result = await apiFetch<{ imported: number }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify({ csv }) });
       setStatus(`นำเข้า ${result.imported} รายการแล้ว`); setCsvFile(null);
       if (importInput.current) importInput.current.value = "";
       setVersion((current) => current + 1);
