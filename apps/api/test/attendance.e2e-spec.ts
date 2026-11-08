@@ -14,7 +14,7 @@ import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
 class FakeAuth implements CanActivate {
   canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<{ headers: Record<string, string>; user?: unknown }>();
-    req.user = { id: 'u1', role: req.headers['x-role'] };
+    req.user = { id: req.headers['x-user'] ?? 'u1', role: req.headers['x-role'] };
     return true;
   }
 }
@@ -33,7 +33,9 @@ describe('ผลเช็คชื่อรายคาบ (สิทธิ์�
         {
           provide: AttendanceService,
           useValue: {
-            view: async () => {
+            view: async (user: { id: string }) => {
+              // อาจารย์วิชาอื่นได้ 404 เหมือน service จริง
+              if (user.id === 'other') throw new AppError(404, 'SESSION_NOT_FOUND', 'ไม่พบคาบนี้');
               calls.push('view');
               return { session: {}, rows: [], unknown: [] };
             },
@@ -61,7 +63,7 @@ describe('ผลเช็คชื่อรายคาบ (สิทธิ์�
     await app.close();
   });
 
-  it.each(['student', 'admin'])('%s ได้ 403 ทุก route และไม่ถึง service', async (role) => {
+  it.each(['student'])('%s ได้ 403 ทุก route และไม่ถึง service', async (role) => {
     const server = app.getHttpServer();
     await request(server).get(`/sessions/${SESSION}/attendance`).set('x-role', role).expect(403);
     await request(server)
@@ -83,6 +85,31 @@ describe('ผลเช็คชื่อรายคาบ (สิทธิ์�
       .set('x-role', 'teacher')
       .expect(200)
       .expect({ data: { session: {}, rows: [], unknown: [] } });
+  });
+
+  it('แอดมินดู แก้ และ review ได้ และส่งถึง service', async () => {
+    const server = app.getHttpServer();
+    await request(server).get(`/sessions/${SESSION}/attendance`).set('x-role', 'admin').expect(200);
+    await request(server)
+      .patch(`/sessions/${SESSION}/attendance/66000001`)
+      .set('x-role', 'admin')
+      .send({ status: 'leave' })
+      .expect(400);
+    await request(server)
+      .post(`/sessions/${SESSION}/attendance/66000001/review`)
+      .set('x-role', 'admin')
+      .send({ action: 'confirm' })
+      .expect(200);
+    expect(calls).toEqual(['view', 'setStatus', 'review 66000001']);
+  });
+
+  it('อาจารย์วิชาอื่นได้ 404', async () => {
+    await request(app.getHttpServer())
+      .get(`/sessions/${SESSION}/attendance`)
+      .set('x-role', 'teacher')
+      .set('x-user', 'other')
+      .expect(404);
+    expect(calls).toEqual([]);
   });
 
   it('error จาก service ส่งต่อในรูปแบบกลาง', async () => {
