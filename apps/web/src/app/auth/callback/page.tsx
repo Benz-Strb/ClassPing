@@ -4,6 +4,8 @@ import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+const RETRY_MESSAGE = "เข้าสู่ระบบไม่สำเร็จ กรุณากดเข้าสู่ระบบอีกครั้ง";
+
 function Callback() {
   const router = useRouter();
   const params = useSearchParams();
@@ -19,18 +21,18 @@ function Callback() {
     const failed = params.get("error_description") ?? params.get("error");
 
     if (failed || !code) {
-      router.replace(`/login?error=${encodeURIComponent(failed ?? "เข้าสู่ระบบไม่สำเร็จ")}`);
+      router.replace(`/login?error=${encodeURIComponent(RETRY_MESSAGE)}`);
       return;
     }
 
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       router.replace(
-        error ? `/login?error=${encodeURIComponent(error.message)}` : "/",
+        error ? `/login?error=${encodeURIComponent(RETRY_MESSAGE)}` : "/",
       );
     });
   }, [params, router]);
 
-  return <p className="p-6">กำลังเข้าสู่ระบบ...</p>;
+  return <main className="login-layout"><section className="login-panel space-y-3"><h1>กำลังเข้าสู่ระบบ</h1><p role="status">กำลังตรวจสอบบัญชีมหาวิทยาลัย...</p></section></main>;
 }
 
 export default function CallbackPage() {

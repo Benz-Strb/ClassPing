@@ -9,6 +9,7 @@ import { LeaveAccess } from "@/components/leave-access";
 import {
   formatSession,
   formatSubmittedAt,
+  extractLeaveReason,
   OCR_STATUS_LABEL,
   STATUS_LABEL,
   type LeaveRequest,
@@ -70,27 +71,26 @@ function StudentLeavePage() {
     return sessions?.filter((session) => !requested.has(session.id)) ?? [];
   }, [requests, sessions]);
 
-  async function readEvidence() {
-    if (!sessionId || !evidence) {
-      setError("กรุณาเลือกคาบและแนบหลักฐานก่อนอ่านร่าง");
-      return;
-    }
-    if (evidence.size > MAX_EVIDENCE_BYTES) {
+  async function autoReadEvidence(targetSessionId: string, file: File) {
+    if (file.size > MAX_EVIDENCE_BYTES) {
       setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 25 MB");
       return;
     }
     setReading(true);
     setError(null);
     const body = new FormData();
-    body.set("sessionId", sessionId);
-    body.set("evidence", evidence);
+    body.set("sessionId", targetSessionId);
+    body.set("evidence", file);
     try {
       const draft = await apiFetch<{ text: string; reason: string }>(
         "/leave-requests/preview",
         { method: "POST", body },
       );
       setOcrText(draft.text);
-      if (!reason.trim()) setReason(draft.reason);
+      const extractedReason = extractLeaveReason(draft.reason || draft.text);
+      if (extractedReason.trim()) {
+        setReason(extractedReason.trim());
+      }
     } catch (e) {
       setError(
         `${await handleApiError(e, router)} — สามารถกรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
@@ -98,6 +98,14 @@ function StudentLeavePage() {
     } finally {
       setReading(false);
     }
+  }
+
+  async function readEvidence() {
+    if (!sessionId || !evidence) {
+      setError("กรุณาเลือกคาบและแนบหลักฐานก่อนอ่านร่าง");
+      return;
+    }
+    await autoReadEvidence(sessionId, evidence);
   }
 
   async function submit(event: React.FormEvent) {
@@ -158,7 +166,7 @@ function StudentLeavePage() {
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-xl font-semibold">ยื่นคำขอลา</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold">ยื่นคำขอลา</h1>
         <p className="mt-1 text-sm text-gray-600">
           เลือกคาบ แนบหลักฐาน และตรวจสถานะได้จากหน้านี้
         </p>
@@ -184,7 +192,13 @@ function StudentLeavePage() {
               required
               disabled={sessions === null || availableSessions.length === 0}
               value={sessionId}
-              onChange={(event) => setSessionId(event.target.value)}
+              onChange={(event) => {
+                const nextSessionId = event.target.value;
+                setSessionId(nextSessionId);
+                if (nextSessionId && evidence && !reason.trim() && !reading) {
+                  void autoReadEvidence(nextSessionId, evidence);
+                }
+              }}
               className="w-full rounded-lg border px-3 py-2 disabled:bg-gray-100"
             >
               <option value="">
@@ -221,8 +235,12 @@ function StudentLeavePage() {
               type="file"
               accept="application/pdf,image/jpeg,image/png"
               onChange={(event) => {
-                setEvidence(event.target.files?.[0] ?? null);
+                const file = event.target.files?.[0] ?? null;
+                setEvidence(file);
                 setOcrText(null);
+                if (file && sessionId) {
+                  void autoReadEvidence(sessionId, file);
+                }
               }}
               className="block w-full text-sm"
             />

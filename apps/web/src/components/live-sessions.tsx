@@ -55,7 +55,7 @@ export function LiveSessions() {
         เห็นเฉพาะคาบของวิชาที่สอนและคาบสอบที่คุม กล้องเปิดเฉพาะช่วงที่มีคาบ
       </p>
 
-      <div className="flex items-center gap-3">
+      <div className="date-toolbar">
         <button onClick={() => go(-1)} className="rounded-lg border px-3 py-1">
           วันก่อน
         </button>
@@ -77,13 +77,10 @@ export function LiveSessions() {
       ) : sessions.length === 0 ? (
         <p className="text-gray-600">ไม่มีคาบในวันนี้</p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="session-list">
           {sessions.map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
-              <span>
-                <span className="font-medium">{s.courseCode}</span> {formatTime(s.startsAt)}-
-                {formatTime(s.endsAt)} · {s.roomName}
-              </span>
+            <li key={s.id} className="session-link">
+              <span className="agenda-time">{formatTime(s.startsAt)}<small>{formatTime(s.endsAt)}</small></span><span className="session-description"><strong>{s.courseCode} · {s.courseName}</strong><small>{s.roomName || 'ยังไม่ระบุห้อง'}</small></span>
               {s.kind === "exam" && <ExamBadge title={s.title} />}
               <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS[s.status].className}`}>
                 {STATUS[s.status].label}

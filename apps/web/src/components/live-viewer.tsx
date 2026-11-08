@@ -128,7 +128,7 @@ export function LiveViewer() {
   }, [state, sessionId]);
 
   return (
-    <section className="space-y-4">
+    <section className="live-viewer space-y-4">
       <Script src="/mediamtx/reader.js" strategy="afterInteractive" onReady={() => setReady(true)} />
       <Link href="/live" className="text-sm text-blue-600 underline">
         กล้องทั้งหมด

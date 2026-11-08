@@ -1,14 +1,7 @@
+import { colors } from '../ui/theme';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, Linking, ScrollView as NativeScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text } from '../ui/primitives';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { ApiError, apiFetch } from '../lib/api';
@@ -175,7 +168,7 @@ export function EnrollScreen({
   if (!permission) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <ActivityIndicator color={colors.action} />
       </View>
     );
   }
@@ -207,9 +200,10 @@ export function EnrollScreen({
   const color = (p: Pose) => (done.includes(p) ? GREEN : p === pose ? BLUE : GREY);
 
   // วงกลมกลางจอ พื้นรอบๆ ทำจากขอบหนาๆ ของ View ที่โค้งเป็นวงกลม
-  const hole = Math.min(width * 0.72, 320);
-  const cx = width / 2;
-  const cy = height * 0.42;
+  const landscape = width > height;
+  const hole = Math.max(96, Math.min(width * (landscape ? 0.4 : 0.72), height * (landscape ? 0.6 : 0.38), 320));
+  const cx = landscape ? width * 0.28 : width / 2;
+  const cy = height * (landscape ? 0.54 : 0.42);
   const edge = Math.max(width, height);
   const ring = hole + 40;
   const r = hole / 2 + 12;
@@ -263,7 +257,7 @@ export function EnrollScreen({
         <Text style={styles.title}>{pose ? HINT[pose] : 'เสร็จแล้ว'}</Text>
       </View>
 
-      <View style={[styles.bottom, { top: cy + ring / 2 + 16 }]}>
+      <NativeScrollView style={[styles.bottom, { top: landscape ? 56 : cy + ring / 2 + 16, bottom: 16 }, landscape && { left: width * 0.56 }]} contentContainerStyle={styles.captureActions}>
         {stopped ? (
           <>
             <Text style={styles.error}>{stopped}</Text>
@@ -288,7 +282,7 @@ export function EnrollScreen({
         <Pressable style={styles.link} onPress={onSignOut}>
           <Text style={styles.linkLight}>ออกจากระบบ</Text>
         </Pressable>
-      </View>
+      </NativeScrollView>
     </View>
   );
 }
@@ -296,16 +290,17 @@ export function EnrollScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   clip: { overflow: 'hidden' },
-  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#fff' },
-  top: { position: 'absolute', top: 64, left: 24, right: 24, alignItems: 'center' },
-  title: { color: '#fff', fontSize: 22, fontWeight: '600', textAlign: 'center' },
-  bottom: { position: 'absolute', left: 24, right: 24, alignItems: 'center', gap: 12 },
-  message: { color: '#fff', fontSize: 16, textAlign: 'center' },
+  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.surface },
+  top: { position: 'absolute', top: 16, left: 24, right: 24, alignItems: 'center' },
+  title: { color: colors.surface, fontSize: 22, fontWeight: '600', textAlign: 'center' },
+  bottom: { position: 'absolute', left: 24, right: 24 },
+  captureActions: { alignItems: 'center', gap: 8, flexGrow: 1, justifyContent: 'center' },
+  message: { color: colors.surface, fontSize: 16, textAlign: 'center' },
   error: { color: '#fca5a5', fontSize: 16, textAlign: 'center' },
-  body: { fontSize: 15, lineHeight: 24, color: '#374151' },
-  primary: { backgroundColor: '#2563eb', borderRadius: 8, paddingVertical: 14, paddingHorizontal: 32, alignItems: 'center' },
-  primaryText: { color: '#fff', fontSize: 16 },
+  body: { fontSize: 15, lineHeight: 24, color: colors.muted },
+  primary: { backgroundColor: colors.action, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, alignItems: 'center' },
+  primaryText: { color: colors.surface, fontSize: 16 },
   link: { alignItems: 'center', padding: 8 },
-  linkGrey: { color: '#6b7280' },
+  linkGrey: { color: colors.muted },
   linkLight: { color: 'rgba(255,255,255,0.7)' },
 });

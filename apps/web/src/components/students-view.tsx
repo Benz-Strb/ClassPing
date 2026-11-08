@@ -67,8 +67,8 @@ export function StudentsView() {
   }
 
   return (
-    <section className="space-y-6" onErrorCapture={reloadOnImageError}>
-      <form onSubmit={add} className="space-y-3 rounded-lg border p-4">
+    <section className="roster-workspace space-y-6" onErrorCapture={reloadOnImageError}>
+      <form onSubmit={add} className="roster-create space-y-3 rounded-lg border p-4">
         <h2 className="font-medium">เพิ่มนักศึกษาด้วยรหัส</h2>
         <p className="text-sm text-gray-600">
           ใส่ได้หลายรหัส เว้นวรรคหรือขึ้นบรรทัดใหม่
@@ -79,7 +79,7 @@ export function StudentsView() {
           value={codes}
           onChange={(e) => setCodes(e.target.value)}
           placeholder={"66112106\n66112126"}
-          className="w-full rounded-lg border px-3 py-2 font-mono"
+          aria-label="รหัสนักศึกษาที่ต้องการเพิ่ม" className="w-full rounded-lg border px-3 py-2"
         />
         <button
           disabled={saving}

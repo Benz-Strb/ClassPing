@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AppError } from '../common/app-error.js';
-import type { FaceClient } from '../face/face.client.js';
+import type { LeaveOcrClient } from './leave-ocr.client.js';
 import type { AppUser } from '../users/users.service.js';
 import { LeaveController } from './leave.controller.js';
 import type { LeaveRepo, LeaveSessionOption } from './leave.repo.js';
-import { LeaveService } from './leave.service.js';
+import { LeaveService, extractLeaveReason } from './leave.service.js';
 
 const student: AppUser = {
   id: 'student-user',
@@ -56,15 +56,15 @@ function setup() {
     listForTeacher: vi.fn(async () => []),
     signedEvidenceUrl: vi.fn(async () => 'https://example.test/evidence'),
   } satisfies LeaveRepo;
-  const face = {
+  const ocr = {
     readLeaveDocument: vi.fn(async () => ({
       lines: [{ text: 'ใบลาป่วย', score: null }],
     })),
   };
   return {
     repo,
-    face,
-    service: new LeaveService(repo, face as unknown as FaceClient),
+    ocr,
+    service: new LeaveService(repo, ocr as unknown as LeaveOcrClient),
   };
 }
 
@@ -77,7 +77,7 @@ const evidence = {
 
 describe('LeaveService', () => {
   it.each(['admin', 'teacher'] as const)('ปฏิเสธ %s แม้มีรหัสนักศึกษา', async (role) => {
-    const { service, repo, face } = setup();
+    const { service, repo, ocr } = setup();
     const user = { ...student, role };
     expect(() => service.listSessions(user)).toThrow('ดูคาบเรียนได้เฉพาะบัญชีนักศึกษา');
     expect(() => service.listMine(user)).toThrow('ดูคำขอลาได้เฉพาะบัญชีนักศึกษา');
@@ -85,13 +85,13 @@ describe('LeaveService', () => {
     await expect(service.submit(user, SESSION_ID, 'ทดสอบ', evidence)).rejects.toMatchObject({ status: 403 });
     expect(repo.studentCanRequest).not.toHaveBeenCalled();
     expect(repo.createRequest).not.toHaveBeenCalled();
-    expect(face.readLeaveDocument).not.toHaveBeenCalled();
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
   });
 
   it('จำกัดเหตุผลร่างไว้ 1000 ตัวอักษรแต่เก็บข้อความอ่านเต็มให้ตรวจ', async () => {
-    const { service, face } = setup();
+    const { service, ocr } = setup();
     const text = 'ก'.repeat(1200);
-    face.readLeaveDocument.mockResolvedValue({
+    ocr.readLeaveDocument.mockResolvedValue({
       lines: [{ text, score: null }],
     });
     await expect(
@@ -131,7 +131,7 @@ describe('LeaveService', () => {
   });
 
   it('ไม่อ่านร่างของคาบที่นักศึกษาไม่มีสิทธิ์', async () => {
-    const { service, repo, face } = setup();
+    const { service, repo, ocr } = setup();
     repo.studentCanRequest.mockResolvedValue(false);
     await expect(
       service.preview(student, SESSION_ID, evidence),
@@ -139,18 +139,18 @@ describe('LeaveService', () => {
       status: 404,
       code: 'SESSION_NOT_FOUND',
     });
-    expect(face.readLeaveDocument).not.toHaveBeenCalled();
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
   });
 
   it('ไม่อ่านไฟล์ปลอมและไม่กลืนข้อผิดพลาด OCR ในขั้นร่าง', async () => {
-    const { service, face } = setup();
+    const { service, ocr } = setup();
     await expect(
       service.preview(student, SESSION_ID, {
         ...evidence,
         buffer: Buffer.from('fake'),
       }),
     ).rejects.toMatchObject({ code: 'INVALID_EVIDENCE' });
-    face.readLeaveDocument.mockRejectedValue(new Error('OCR unavailable'));
+    ocr.readLeaveDocument.mockRejectedValue(new Error('OCR unavailable'));
     await expect(
       service.preview(student, SESSION_ID, evidence),
     ).rejects.toThrow('OCR unavailable');
@@ -164,7 +164,7 @@ describe('LeaveService', () => {
   });
 
   it('ไม่เรียก OCR เมื่อ session ไม่ใช่วิชาที่ลงทะเบียน', async () => {
-    const { service, repo, face } = setup();
+    const { service, repo, ocr } = setup();
     repo.studentCanRequest.mockResolvedValue(false);
 
     await expect(
@@ -178,7 +178,7 @@ describe('LeaveService', () => {
       status: 404,
       code: 'SESSION_NOT_FOUND',
     });
-    expect(face.readLeaveDocument).not.toHaveBeenCalled();
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
     expect(repo.createRequest).not.toHaveBeenCalled();
   });
 
@@ -223,14 +223,14 @@ describe('LeaveService', () => {
   });
 
   it('มีคำขอที่ยังไม่ถูกปฏิเสธอยู่แล้ว ตอบ 409 โดยไม่เรียก OCR', async () => {
-    const { service, repo, face } = setup();
+    const { service, repo, ocr } = setup();
     repo.hasActiveRequest.mockResolvedValue(true);
 
     await expect(
       service.submit(student, SESSION_ID, 'ป่วย', evidence),
     ).rejects.toMatchObject({ status: 409, code: 'LEAVE_REQUEST_DUPLICATE' });
     expect(repo.hasActiveRequest).toHaveBeenCalledWith('student-user', SESSION_ID);
-    expect(face.readLeaveDocument).not.toHaveBeenCalled();
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
     expect(repo.createRequest).not.toHaveBeenCalled();
   });
 
@@ -242,8 +242,8 @@ describe('LeaveService', () => {
   });
 
   it('Typhoon ล้มเหลวแล้วยังบันทึกคำขอและหลักฐานเพื่อให้อาจารย์ตรวจเอง', async () => {
-    const { service, repo, face } = setup();
-    face.readLeaveDocument.mockRejectedValue(new Error('typhoon unavailable'));
+    const { service, repo, ocr } = setup();
+    ocr.readLeaveDocument.mockRejectedValue(new Error('typhoon unavailable'));
 
     await expect(
       service.submit(student, SESSION_ID, 'ป่วย', evidence),
@@ -330,5 +330,42 @@ describe('LeaveController', () => {
     ).toThrowError(
       expect.objectContaining({ status: 400, code: 'BAD_REQUEST' }),
     );
+  });
+});
+
+describe('extractLeaveReason', () => {
+  it('ดึงเหตุผลจากเอกสารลาป่วยแบบฟอร์ม', () => {
+    const text = `ข้อมูลสมมติสำหรับทดสอบระบบเท่านั้น
+หลักฐานลาป่วยสมมติ
+มหาวิทยาลัยประกายหมึกทดสอบ
+ชื่อ นักศึกษาจำลอง ใบทดสอบ
+รหัสนักศึกษา TEST0001
+รายวิชา TEST101
+วันที่ลา 9 พฤศจิกายน 2026
+เหตุผล มีไข้และเจ็บคอ ขอพักรักษาตัว 1 วัน
+ClassPing • หน้า 1 / 1`;
+    expect(extractLeaveReason(text)).toBe('มีไข้และเจ็บคอ ขอพักรักษาตัว 1 วัน');
+  });
+
+  it('ดึงเหตุผลจากเอกสารลากิจแบบฟอร์ม', () => {
+    const text = `ข้อมูลสมมติสำหรับทดสอบระบบเท่านั้น
+หลักฐานลากิจสมมติ
+มหาวิทยาลัยประกายหมึกทดสอบ
+ชื่อ นักศึกษาจำลอง ใบทดสอบ
+รหัสนักศึกษา TEST0001
+รายวิชา TEST102
+วันที่ลา 11–13 พฤศจิกายน 2026
+เหตุผล ต้องดูแลสมาชิกในครอบครัวต่างจังหวัด
+ClassPing • หน้า 1 / 1`;
+    expect(extractLeaveReason(text)).toBe('ต้องดูแลสมาชิกในครอบครัวต่างจังหวัด');
+  });
+
+  it('ดึงการวินิจฉัยจากใบรับรองแพทย์', () => {
+    const text = `โรงพยาบาลกรุงเทพ
+ใบรับรองแพทย์
+ตรวจร่างกาย นายสมชาย ใจดี
+การวินิจฉัยโรค: อาหารเป็นพิษเฉียบพลัน (Acute Gastroenteritis)
+เห็นควรให้พักรักษาตัว 2 วัน`;
+    expect(extractLeaveReason(text)).toBe('อาหารเป็นพิษเฉียบพลัน (Acute Gastroenteritis)');
   });
 });

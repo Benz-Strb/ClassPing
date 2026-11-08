@@ -10,8 +10,8 @@ import type { App } from 'supertest/types.js';
 import { RolesGuard } from './../src/auth/roles.guard.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
-import { FaceClient } from './../src/face/face.client.js';
 import { CLOCK } from './../src/common/clock.js';
+import { LeaveOcrClient } from './../src/leave/leave-ocr.client.js';
 import { LeaveController } from './../src/leave/leave.controller.js';
 import { PreviewLimitGuard } from './../src/leave/preview-limit.guard.js';
 import {
@@ -199,7 +199,7 @@ describe('ระบบลา (e2e)', () => {
         { provide: CLOCK, useValue: () => new Date() },
         { provide: LEAVE_REPO, useValue: repo },
         {
-          provide: FaceClient,
+          provide: LeaveOcrClient,
           useValue: {
             readLeaveDocument: async () => ({
               lines: [{ text: 'ใบลาป่วย', score: null }],

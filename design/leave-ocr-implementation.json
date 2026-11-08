@@ -1,0 +1,27 @@
+{
+  "scope": "Leave evidence OCR and mobile course/session dropdowns only",
+  "face_scanning": "Unchanged; SHA checks passed; no face engine imported by OCR worker",
+  "ocr": {
+    "service": "127.0.0.1:8002",
+    "launch": "services/ocr/run.sh",
+    "authentication": "Separate LEAVE_OCR_SERVICE_TOKEN",
+    "provider": "Existing Typhoon OCR credential; no credential values committed",
+    "live_checks": [
+      "Worker read synthetic PNG successfully",
+      "Compiled API OCR client read synthetic PNG successfully"
+    ]
+  },
+  "validation": {
+    "api_tests": 50,
+    "worker_tests": 5,
+    "api_build": "passed",
+    "api_lint": "passed with 4 pre-existing warnings",
+    "mobile_types": "passed",
+    "ios_export": "passed",
+    "visual_review": [
+      "iPhone 17 Pro",
+      "iPad mini"
+    ]
+  },
+  "android": "deferred by user"
+}

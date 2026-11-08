@@ -45,8 +45,8 @@ export function CheckinSessions() {
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center gap-3">
+    <section className="space-y-5">
+      <div className="date-toolbar">
         <button onClick={() => go(-1)} className="rounded-lg border px-3 py-1">
           วันก่อน
         </button>
@@ -68,16 +68,14 @@ export function CheckinSessions() {
       ) : sessions.length === 0 ? (
         <p className="text-gray-600">ไม่มีคาบในวันนี้</p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="session-list">
           {sessions.map((session) => (
             <li key={session.id}>
               <Link
                 href={`/courses/${id}/checkin/${session.id}`}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50"
+                className="session-link"
               >
-                <span>
-                  {formatTime(session.startsAt)}-{formatTime(session.endsAt)} · {session.roomName}
-                </span>
+                <span className="agenda-time">{formatTime(session.startsAt)}<small>{formatTime(session.endsAt)}</small></span><span className="session-description">{session.roomName || 'ยังไม่ระบุห้อง'}<small>{session.kind === 'exam' ? 'คาบสอบ' : 'คาบเรียน'}</small></span>
                 {session.kind === "exam" && <ExamBadge title={session.title} />}
                 {session.cancelled ? (
                   <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">

@@ -1,12 +1,7 @@
+import { colors } from '../ui/theme';
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Image, View } from 'react-native';
+import { Pressable, Text, TextInput } from '../ui/primitives';
 import { apiFetch } from "../lib/api";
 import { formatBuddhistDate, formatOutOfRoom, formatRate, parseFilterDate } from "../lib/attendance";
 import type { AttendanceCounts } from "../lib/types";
@@ -80,8 +75,8 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
   }, [courseId, query, reload]);
 
   return (
-    <View style={{ gap: 10, marginTop: 10 }}>
-      <View style={{ flexDirection: "row", gap: 12 }}>
+    <View style={{ gap: 16, marginTop: 16 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {[
           ["all", "ทั้งหมด"],
           ["class", "คาบเรียน"],
@@ -95,8 +90,9 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
           >
             <Text
               style={{
-                color: kind === value ? "#1d4ed8" : "#4b5563",
-                padding: 6,
+                color: kind === value ? colors.action : colors.muted,
+                padding: 12,
+                minHeight: 48,
               }}
             >
               {label}
@@ -110,7 +106,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
         value={startDate}
         onChangeText={setStartDate}
         autoCapitalize="none"
-        style={{ borderWidth: 1, borderColor: "#d1d5db", padding: 10 }}
+        style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.outline, padding: 12 }}
       />
       <TextInput
         accessibilityLabel="วันที่สิ้นสุด"
@@ -118,7 +114,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
         value={endDate}
         onChangeText={setEndDate}
         autoCapitalize="none"
-        style={{ borderWidth: 1, borderColor: "#d1d5db", padding: 10 }}
+        style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.outline, padding: 12 }}
       />
       <Pressable
         accessibilityRole="button"
@@ -142,11 +138,11 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
           setReload((value) => value + 1);
         }}
       >
-        <Text style={{ color: "#1d4ed8", padding: 8 }}>แสดงผล / โหลดใหม่</Text>
+        <Text style={{ color: colors.action, padding: 8 }}>แสดงผล / โหลดใหม่</Text>
       </Pressable>
       {filterError && <Text style={{ color: "#dc2626" }}>{filterError}</Text>}
       {error ? (
-        <Text style={{ color: "#dc2626" }}>{error}</Text>
+        <Text style={{ color: colors.danger }}>{error}</Text>
       ) : !data ? (
         <ActivityIndicator accessibilityLabel="กำลังโหลดรายละเอียด" />
       ) : (
@@ -163,7 +159,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
               key={session.sessionId}
               style={{
                 borderTopWidth: 1,
-                borderColor: "#e5e7eb",
+                borderColor: colors.border,
                 paddingTop: 8,
                 gap: 4,
               }}
@@ -197,7 +193,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
               )}
             </View>
           ))}
-          <Text style={{ color: "#6b7280" }}>หากภาพหมดอายุ ให้กดโหลดใหม่</Text>
+          <Text style={{ color: colors.muted }}>หากภาพหมดอายุ ให้กดโหลดใหม่</Text>
         </>
       )}
     </View>

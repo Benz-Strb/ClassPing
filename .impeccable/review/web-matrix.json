@@ -1,0 +1,558 @@
+[
+  {
+    "path": "/login",
+    "width": 360,
+    "url": "/login",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses",
+    "width": 360,
+    "url": "/courses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/me",
+    "width": 360,
+    "url": "/me",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/leave",
+    "width": 360,
+    "url": "/leave",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/leave/review",
+    "width": 360,
+    "url": "/leave/review",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/transfers",
+    "width": 360,
+    "url": "/transfers",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live",
+    "width": 360,
+    "url": "/live",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live/session",
+    "width": 360,
+    "url": "/live/session",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live/session/recording",
+    "width": 360,
+    "url": "/live/session/recording",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/checkin",
+    "width": 360,
+    "url": "/courses/preview/checkin",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/checkin/session",
+    "width": 360,
+    "url": "/courses/preview/checkin/session",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/students",
+    "width": 360,
+    "url": "/courses/preview/students",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/schedule",
+    "width": 360,
+    "url": "/courses/preview/schedule",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/exams",
+    "width": 360,
+    "url": "/courses/preview/exams",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/rules",
+    "width": 360,
+    "url": "/courses/preview/rules",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/reports",
+    "width": 360,
+    "url": "/courses/preview/reports",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin",
+    "width": 360,
+    "url": "/admin",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/users",
+    "width": 360,
+    "url": "/admin/users",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/rooms",
+    "width": 360,
+    "url": "/admin/rooms",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/cameras",
+    "width": 360,
+    "url": "/admin/cameras",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/courses",
+    "width": 360,
+    "url": "/admin/courses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/curricula",
+    "width": 360,
+    "url": "/admin/curricula",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/transfers",
+    "width": 360,
+    "url": "/admin/transfers",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/reference",
+    "width": 360,
+    "url": "/admin/reference",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/knowledge",
+    "width": 360,
+    "url": "/admin/knowledge",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/leave-statuses",
+    "width": 360,
+    "url": "/admin/leave-statuses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "test": "mobile menu",
+    "width": 360,
+    "expanded": "true"
+  },
+  {
+    "path": "/login",
+    "width": 768,
+    "url": "/login",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses",
+    "width": 768,
+    "url": "/courses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/me",
+    "width": 768,
+    "url": "/me",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/leave",
+    "width": 768,
+    "url": "/leave",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/leave/review",
+    "width": 768,
+    "url": "/leave/review",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/transfers",
+    "width": 768,
+    "url": "/transfers",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live",
+    "width": 768,
+    "url": "/live",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live/session",
+    "width": 768,
+    "url": "/live/session",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live/session/recording",
+    "width": 768,
+    "url": "/live/session/recording",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/checkin",
+    "width": 768,
+    "url": "/courses/preview/checkin",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/checkin/session",
+    "width": 768,
+    "url": "/courses/preview/checkin/session",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/students",
+    "width": 768,
+    "url": "/courses/preview/students",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/schedule",
+    "width": 768,
+    "url": "/courses/preview/schedule",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/exams",
+    "width": 768,
+    "url": "/courses/preview/exams",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/rules",
+    "width": 768,
+    "url": "/courses/preview/rules",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/reports",
+    "width": 768,
+    "url": "/courses/preview/reports",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin",
+    "width": 768,
+    "url": "/admin",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/users",
+    "width": 768,
+    "url": "/admin/users",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/rooms",
+    "width": 768,
+    "url": "/admin/rooms",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/cameras",
+    "width": 768,
+    "url": "/admin/cameras",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/courses",
+    "width": 768,
+    "url": "/admin/courses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/curricula",
+    "width": 768,
+    "url": "/admin/curricula",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/transfers",
+    "width": 768,
+    "url": "/admin/transfers",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/reference",
+    "width": 768,
+    "url": "/admin/reference",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/knowledge",
+    "width": 768,
+    "url": "/admin/knowledge",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/leave-statuses",
+    "width": 768,
+    "url": "/admin/leave-statuses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "test": "mobile menu",
+    "width": 768,
+    "expanded": "true"
+  },
+  {
+    "path": "/login",
+    "width": 1440,
+    "url": "/login",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses",
+    "width": 1440,
+    "url": "/courses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/me",
+    "width": 1440,
+    "url": "/me",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/leave",
+    "width": 1440,
+    "url": "/leave",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/leave/review",
+    "width": 1440,
+    "url": "/leave/review",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/transfers",
+    "width": 1440,
+    "url": "/transfers",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live",
+    "width": 1440,
+    "url": "/live",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live/session",
+    "width": 1440,
+    "url": "/live/session",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/live/session/recording",
+    "width": 1440,
+    "url": "/live/session/recording",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/checkin",
+    "width": 1440,
+    "url": "/courses/preview/checkin",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/checkin/session",
+    "width": 1440,
+    "url": "/courses/preview/checkin/session",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/students",
+    "width": 1440,
+    "url": "/courses/preview/students",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/schedule",
+    "width": 1440,
+    "url": "/courses/preview/schedule",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/exams",
+    "width": 1440,
+    "url": "/courses/preview/exams",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/rules",
+    "width": 1440,
+    "url": "/courses/preview/rules",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/courses/preview/reports",
+    "width": 1440,
+    "url": "/courses/preview/reports",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin",
+    "width": 1440,
+    "url": "/admin",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/users",
+    "width": 1440,
+    "url": "/admin/users",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/rooms",
+    "width": 1440,
+    "url": "/admin/rooms",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/cameras",
+    "width": 1440,
+    "url": "/admin/cameras",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/courses",
+    "width": 1440,
+    "url": "/admin/courses",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/curricula",
+    "width": 1440,
+    "url": "/admin/curricula",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/transfers",
+    "width": 1440,
+    "url": "/admin/transfers",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/reference",
+    "width": 1440,
+    "url": "/admin/reference",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/knowledge",
+    "width": 1440,
+    "url": "/admin/knowledge",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "path": "/admin/leave-statuses",
+    "width": 1440,
+    "url": "/admin/leave-statuses",
+    "overflow": false,
+    "errors": []
+  }
+]

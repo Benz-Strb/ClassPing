@@ -1,12 +1,8 @@
+import { colors } from '../ui/theme';
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { apiFetch } from "../lib/api";
+import { ActivityIndicator, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text } from '../ui/primitives';
+import { ApiError, apiFetch } from "../lib/api";
 import { formatRate } from "../lib/attendance";
 import type { AttendanceCounts, StudentAttendanceSummary } from "../lib/types";
 import { AttendanceCourseSection } from "./AttendanceCourseSection";
@@ -26,10 +22,11 @@ const STATUSES: {
 ];
 
 function StatusCounts({ counts }: { counts: AttendanceCounts }) {
+  const {fontScale} = useWindowDimensions();
   return (
     <View style={styles.statsRow}>
       {STATUSES.map((status) => (
-        <View key={status.key} style={styles.statItem}>
+        <View key={status.key} style={[styles.statItem, fontScale > 1.6 && styles.largeStatItem]}>
           <Text style={[styles.statNumber, styles[status.key]]}>
             {counts[status.key]}
           </Text>
@@ -45,6 +42,7 @@ export function AttendanceSummarySection({
   active = true,
   refreshTick = 0,
   onSettled,
+  onOpenAccount,
 }: {
   mode?: "summary" | "courses";
   // แท็บนี้เปิดอยู่ ปิดอยู่จะไม่โหลด
@@ -53,9 +51,11 @@ export function AttendanceSummarySection({
   refreshTick?: number;
   // โหลดจบแล้ว (สำเร็จหรือไม่)
   onSettled?: () => void;
+  onOpenAccount?: () => void;
 }) {
   const [data, setData] = useState<StudentAttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
 
@@ -63,14 +63,14 @@ export function AttendanceSummarySection({
     if (!active) return;
     let current = true;
     setError(null);
+    setForbidden(false);
 
     apiFetch<StudentAttendanceSummary>("/me/reports/attendance")
       .then((summary) => current && setData(summary))
       .catch((cause: unknown) => {
         if (current) {
-          setError(
-            cause instanceof Error ? cause.message : "โหลดสถิติไม่สำเร็จ",
-          );
+          setForbidden(cause instanceof ApiError && cause.status === 403);
+          setError(cause instanceof ApiError && cause.status === 403 ? "บัญชีนี้ยังไม่มีสิทธิ์ดูสถิติการเข้าเรียน" : "ยังโหลดสถิติไม่ได้ กรุณาลองอีกครั้ง");
         }
       })
       .finally(() => current && onSettled?.());
@@ -87,30 +87,29 @@ export function AttendanceSummarySection({
       <Text style={styles.heading}>{mode === "courses" ? "รายวิชาของฉัน" : "สถิติการเข้าเรียน"}</Text>
 
       {error ? (
-        <View style={styles.messageCard}>
-          <Text style={styles.error}>{error}</Text>
-          <Pressable
+        <View style={[styles.messageCard, onOpenAccount && styles.homeMessage]}>
+          <Text style={styles.muted}>{error}</Text>
+          {(!forbidden || onOpenAccount) && <Pressable
             accessibilityRole="button"
             style={styles.retryButton}
-            onPress={() => setReloadKey((value) => value + 1)}
+            onPress={forbidden ? onOpenAccount : () => setReloadKey((value) => value + 1)}
           >
-            <Text style={styles.retryText}>ลองใหม่</Text>
-          </Pressable>
+            <Text style={styles.retryText}>{forbidden ? "ตรวจสอบบัญชี" : "ลองใหม่"}</Text>
+          </Pressable>}
         </View>
       ) : !data ? (
-        <View style={styles.messageCard}>
+        <View style={[styles.messageCard, onOpenAccount && styles.homeMessage]}>
           <ActivityIndicator accessibilityLabel="กำลังโหลดสถิติการเข้าเรียน" />
           <Text style={styles.muted}>กำลังโหลดสถิติ...</Text>
         </View>
       ) : data.courses.length === 0 ? (
-        <View style={styles.messageCard}>
+        <View style={[styles.messageCard, onOpenAccount && styles.homeMessage]}>
           <Text style={styles.muted}>ยังไม่มีรายวิชาที่ลงทะเบียน</Text>
         </View>
       ) : (
         <>
           {mode === "summary" && <View style={styles.overallCard}>
-            <Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text>
-            <Text style={styles.rate}>{formatRate(data.summary.counts, data.summary.attendanceRate)}</Text>
+            <View style={styles.overallHeading}><Text style={styles.cardLabel}>อัตราการเข้าเรียนรวม</Text><Text style={styles.rate}>{formatRate(data.summary.counts, data.summary.attendanceRate)}</Text></View>
             <StatusCounts counts={data.summary.counts} />
             <Text style={styles.muted}>
               รอตรวจยังไม่ใช่ผลยืนยันการเข้าเรียน
@@ -152,53 +151,53 @@ export function AttendanceSummarySection({
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 12, marginTop: 14 },
-  heading: { fontSize: 18, fontWeight: "600", color: "#111827" },
+  section: { gap: 12 },
+  heading: { fontSize: 20, fontWeight: "500", color: colors.identity },
   messageCard: {
-    minHeight: 92,
+    minHeight: 64,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "flex-start",
+    gap: 4,
   },
+  homeMessage: { borderWidth: 0, padding: 0, minHeight: 0 },
   overallCard: {
-    backgroundColor: "#f5f5f5",
-    borderWidth: 1,
-    borderColor: "#dedede",
-    borderRadius: 8,
-    padding: 16,
+    paddingVertical: 8,
     gap: 8,
   },
   courseCard: {
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: 12,
     padding: 16,
     gap: 4,
   },
-  cardLabel: { color: "#374151", fontSize: 14 },
-  rate: { color: "#111111", fontSize: 36, fontWeight: "700" },
-  statsRow: { flexDirection: "row", marginTop: 8 },
-  statItem: { flex: 1, alignItems: "center", gap: 2 },
+  cardLabel: { color: colors.identity, fontSize: 14 },
+  overallHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  rate: { color: colors.action, fontSize: 24, lineHeight: 36, fontWeight: "500" },
+  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  statItem: { flex: 1, minWidth: 44, alignItems: "center", gap: 2 },
+  largeStatItem: { minWidth: 96 },
   statNumber: { fontSize: 18, fontWeight: "700" },
-  present: { color: "#15803d" },
-  late: { color: "#b45309" },
-  absent: { color: "#dc2626" },
-  leave: { color: "#111111" },
-  pending: { color: "#6b7280" },
-  statLabel: { color: "#4b5563", fontSize: 12 },
-  courseCode: { color: "#111827", fontSize: 16, fontWeight: "600" },
-  courseName: { color: "#4b5563" },
-  muted: { color: "#6b7280", textAlign: "center" },
-  error: { color: "#dc2626", textAlign: "center" },
+  present: { color: colors.action },
+  late: { color: colors.warning },
+  absent: { color: colors.danger },
+  leave: { color: colors.ink },
+  pending: { color: colors.muted },
+  statLabel: { color: colors.muted, fontSize: 12 },
+  courseCode: { color: colors.ink, fontSize: 16, fontWeight: "600" },
+  courseName: { color: colors.muted },
+  muted: { color: colors.muted, fontSize: 14, lineHeight: 22 },
+  error: { color: colors.danger, textAlign: "center" },
   retryButton: {
     borderWidth: 1,
-    borderColor: "#111111",
-    borderRadius: 8,
-    padding: 8,
+    borderColor: colors.selected,
+    backgroundColor: colors.selected,
+    borderRadius: 10,
+    paddingHorizontal: 12,
   },
-  retryText: { minHeight: 48, textAlignVertical: "center", paddingVertical: 12, color: "#111111", fontWeight: "600" },
+  retryText: { minHeight: 48, textAlignVertical: "center", paddingVertical: 12, color: colors.action, fontWeight: "600" },
 });

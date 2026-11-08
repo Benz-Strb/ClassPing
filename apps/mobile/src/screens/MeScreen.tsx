@@ -1,11 +1,7 @@
+import { colors } from '../ui/theme';
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Pressable, Text } from '../ui/primitives';
 import { decideScreen, canEnrollFace } from "../lib/access";
 import { ApiError, apiFetch } from "../lib/api";
 import { discardCard } from "../lib/face";
@@ -16,6 +12,7 @@ import { StudentNavigator } from "./StudentNavigator";
 import { EnrollScreen } from "./EnrollScreen";
 import { IdentityScreen } from "./IdentityScreen";
 import { WebOnlyScreen } from "./WebOnlyScreen";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Props {
   // เด้งกลับหน้า login พร้อมข้อความ
@@ -89,7 +86,7 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
 
   if (error) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
         <Text style={styles.error}>{error}</Text>
         <Pressable
           accessibilityRole="button"
@@ -104,14 +101,14 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
         <Pressable style={styles.button} onPress={signOut}>
           <Text>ออกจากระบบ</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     );
   }
   if (!me) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator />
-      </View>
+      <SafeAreaView edges={['bottom']} style={styles.container}>
+        <ActivityIndicator color={colors.action} />
+      </SafeAreaView>
     );
   }
 
@@ -124,18 +121,16 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
   });
 
   if (screen === "consent") {
-    return (
-      <ConsentScreen
-        onAccepted={setMe}
-        onContinueWithout={() => setConsentDeclined(true)}
-        onSignOut={signOut}
-      />
-    );
+    return <SafeAreaView edges={['bottom']} style={styles.screen}><ConsentScreen
+      onAccepted={setMe}
+      onContinueWithout={() => setConsentDeclined(true)}
+      onSignOut={signOut}
+    /></SafeAreaView>;
   }
 
   if (screen === "identity") {
     return (
-      <IdentityScreen
+      <SafeAreaView edges={['bottom']} style={styles.screen}><IdentityScreen
         error={cardError}
         onPicked={(uri) => {
           setCard(uri);
@@ -143,13 +138,13 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
         }}
         onSkip={() => setEnrolling(false)}
         onSignOut={signOut}
-      />
+      /></SafeAreaView>
     );
   }
 
   if (screen === "enroll" && face) {
     return (
-      <EnrollScreen
+      <SafeAreaView edges={['bottom']} style={styles.screen}><EnrollScreen
         // ท่าที่ถ่ายไว้ก่อนยืนยันบัตรจะถูกล้าง เริ่มจากหน้าตรงใหม่
         done={face.verified ? face.done : []}
         card={face.verified ? null : card}
@@ -172,7 +167,7 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
           void refresh();
         }}
         onSignOut={signOut}
-      />
+      /></SafeAreaView>
     );
   }
 
@@ -189,40 +184,40 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
   }
 
   return (
-    <WebOnlyScreen
+    <SafeAreaView edges={['bottom']} style={styles.screen}><WebOnlyScreen
       me={me}
       face={face}
       onEnroll={canEnrollFace(me) ? startEnroll : undefined}
       onSignOut={signOut}
-    />
+    /></SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  screen: { flex: 1, backgroundColor: colors.surface },
   content: { flexGrow: 1, padding: 24, gap: 10 },
   container: {
     flex: 1,
     justifyContent: "center",
     padding: 24,
     gap: 10,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
   title: { fontSize: 20, fontWeight: "600" },
-  error: { color: "#dc2626" },
-  ok: { color: "#15803d", marginTop: 8 },
-  pending: { color: "#6b7280", marginTop: 8 },
+  error: { color: colors.danger },
+  ok: { color: colors.action, marginTop: 8 },
+  pending: { color: colors.muted, marginTop: 8 },
   primary: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
+    backgroundColor: colors.action,
+    borderRadius: 12,
     padding: 12,
     alignItems: "center",
     marginTop: 8,
   },
-  primaryText: { color: "#fff", fontSize: 16 },
+  primaryText: { color: colors.surface, fontSize: 16 },
   button: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     alignItems: "center",
     marginTop: 8,

@@ -47,7 +47,7 @@ export default function AdminRoomsPage() {
   return (
     <section
       aria-labelledby="rooms-title"
-      className="grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]"
+      className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]"
     >
       <div className="space-y-4">
         <div>

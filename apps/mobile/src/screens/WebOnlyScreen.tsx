@@ -1,6 +1,9 @@
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { ROLE_LABEL, webOnlyMessage } from '../lib/access';
+import { StyleSheet, View } from 'react-native';
+import { webOnlyMessage } from '../lib/access';
 import type { FaceStatus, Me } from '../lib/types';
+import { Pressable, Text } from '../ui/primitives';
+import { colors } from '../ui/theme';
+import { AccountScreen } from './AccountScreen';
 
 interface Props {
   me: Me;
@@ -10,32 +13,21 @@ interface Props {
   onSignOut: () => void;
 }
 
+// หน้าบัญชีแบบเดียวกับนักศึกษา แต่บอกให้ใช้เว็บ
 export function WebOnlyScreen({ me, face, onEnroll, onSignOut }: Props) {
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{me.fullName ?? me.email}</Text>
-      <Text>{me.email}</Text>
-      <Text>บทบาท: {ROLE_LABEL[me.role]}</Text>
-      {me.studentId && <Text>รหัสนักศึกษา: {me.studentId}</Text>}
-      <Text style={styles.pending}>{webOnlyMessage(me)}</Text>
-      {onEnroll && face && !face.complete && (
-        <Pressable accessibilityRole="button" style={styles.button} onPress={onEnroll}>
-          <Text>ลงทะเบียนใบหน้า</Text>
-        </Pressable>
-      )}
-      {face?.complete && <Text style={styles.ok}>ลงทะเบียนใบหน้าแล้ว</Text>}
-      <Pressable accessibilityRole="button" style={styles.button} onPress={onSignOut}>
-        <Text>ออกจากระบบ</Text>
-      </Pressable>
-    </ScrollView>
-  );
+  const canEnroll = !!onEnroll && !!face && !face.complete;
+  const banner = (me.role === 'student' || canEnroll) && <View style={styles.banner}>
+    {me.role === 'student' && <Text style={styles.muted}>{webOnlyMessage(me)}</Text>}
+    {canEnroll && <Pressable accessibilityRole="button" style={styles.action} onPress={onEnroll}>
+      <Text style={styles.actionText}>ลงทะเบียนใบหน้า</Text>
+    </Pressable>}
+  </View>;
+  return <AccountScreen me={me} face={face} banner={banner} onSignOut={onSignOut} />;
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { flexGrow: 1, padding: 24, gap: 10 },
-  title: { fontSize: 20, fontWeight: '600' },
-  ok: { color: '#15803d', marginTop: 8 },
-  pending: { color: '#6b7280', marginTop: 8 },
-  button: { borderWidth: 1, borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 8 },
+  banner: { gap: 8 },
+  muted: { fontSize: 14, lineHeight: 23, color: colors.muted },
+  action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
+  actionText: { fontSize: 16, color: colors.onAction, fontWeight: '500' },
 });

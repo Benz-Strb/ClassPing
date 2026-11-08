@@ -165,7 +165,7 @@ export function ScheduleView() {
   ].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
 
   return (
-    <section className="space-y-8">
+    <section className="schedule-view space-y-8">
       {error && <p className="text-red-600">{error}</p>}
 
       <div className="space-y-3">
@@ -173,7 +173,7 @@ export function ScheduleView() {
         {data.schedules.length === 0 && <p className="text-gray-600">ยังไม่มีตารางเรียน</p>}
         <ul className="divide-y rounded-lg border">
           {data.schedules.map((schedule) => (
-            <li key={schedule.id} className="flex items-center justify-between px-4 py-3">
+            <li key={schedule.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
               <span>
                 <span className="font-medium">{WEEKDAYS[schedule.weekday]}</span>{" "}
                 {schedule.startTime}-{schedule.endTime} · {schedule.roomName}
@@ -235,7 +235,7 @@ export function ScheduleView() {
         <ul className="divide-y rounded-lg border">
           {rows.map((row) =>
             row.kind === "replaced" ? (
-              <li key={row.key} className="flex items-center justify-between px-4 py-3">
+              <li key={row.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
                 <span className="text-gray-500 line-through">
                   {formatDate(row.onDate)} {row.start}-{row.end}
                 </span>
@@ -244,7 +244,7 @@ export function ScheduleView() {
                 </span>
               </li>
             ) : row.kind === "cancelled" ? (
-              <li key={row.key} className="flex items-center justify-between px-4 py-3">
+              <li key={row.key} className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
                 <span className="text-gray-500 line-through">
                   {formatDate(row.onDate)} {row.schedule.startTime}-{row.schedule.endTime}
                 </span>
