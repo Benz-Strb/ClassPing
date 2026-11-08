@@ -5,6 +5,7 @@ import type { AppUser } from '../users/users.service.js';
 import { LeaveController } from './leave.controller.js';
 import type { LeaveRepo, LeaveSessionOption } from './leave.repo.js';
 import { LeaveService, extractLeaveReason } from './leave.service.js';
+import { PreviewLimitGuard, SubmitLimitGuard } from './preview-limit.guard.js';
 
 const student: AppUser = {
   id: 'student-user',
@@ -234,11 +235,11 @@ describe('LeaveService', () => {
     expect(repo.createRequest).not.toHaveBeenCalled();
   });
 
-  it('POST /leave-requests ใช้เพดานอ่านใบลาเดียวกับ preview', () => {
+  it('อ่านร่างกับยื่นลามีเพดานของตัวเอง ไม่นับรวมกัน', () => {
     const guards = (name: 'preview' | 'submit') =>
       Reflect.getMetadata('__guards__', LeaveController.prototype[name]) as unknown[];
-    expect(guards('submit')).toEqual(guards('preview'));
-    expect(guards('submit')).toHaveLength(1);
+    expect(guards('preview')).toEqual([PreviewLimitGuard]);
+    expect(guards('submit')).toEqual([SubmitLimitGuard]);
   });
 
   it('Typhoon ล้มเหลวแล้วยังบันทึกคำขอและหลักฐานเพื่อให้อาจารย์ตรวจเอง', async () => {

@@ -13,7 +13,7 @@ import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
 import { CLOCK } from './../src/common/clock.js';
 import { LeaveOcrClient } from './../src/leave/leave-ocr.client.js';
 import { LeaveController } from './../src/leave/leave.controller.js';
-import { PreviewLimitGuard } from './../src/leave/preview-limit.guard.js';
+import { PreviewLimitGuard, SubmitLimitGuard } from './../src/leave/preview-limit.guard.js';
 import {
   LEAVE_REPO,
   type LeaveRepo,
@@ -196,6 +196,7 @@ describe('ระบบลา (e2e)', () => {
       providers: [
         LeaveService,
         PreviewLimitGuard,
+        SubmitLimitGuard,
         { provide: CLOCK, useValue: () => new Date() },
         { provide: LEAVE_REPO, useValue: repo },
         {
@@ -302,6 +303,21 @@ describe('ระบบลา (e2e)', () => {
         });
     }
     expect(repo.requests).toHaveLength(0);
+  });
+
+  it('อ่านร่างจนเต็มเพดานแล้วยังกดยื่นลาได้ เพราะนับแยกกัน', async () => {
+    const server = app.getHttpServer();
+    const user = 'limit-both';
+    for (let i = 0; i < 10; i++) {
+      await request(server).post('/leave-requests/preview').set('x-role', 'student').set('x-user', user)
+        .field('sessionId', SESSION.id)
+        .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' })
+        .expect(200);
+    }
+    await request(server).post('/leave-requests').set('x-role', 'student').set('x-user', user)
+      .field('sessionId', SESSION.id).field('reason', 'ลาป่วย')
+      .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' })
+      .expect(201);
   });
 
   it('อ่านร่างเกิน 10 ครั้งต่อนาทีได้ 429 แยกตามผู้ใช้', async () => {

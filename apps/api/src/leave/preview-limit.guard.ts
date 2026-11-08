@@ -1,27 +1,23 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK, type Clock } from '../common/clock.js';
-import { RateLimiter } from '../common/rate-limiter.js';
+import { UserLimitGuard } from '../common/user-limit.guard.js';
 
 export const PREVIEW_LIMIT = 10;
 export const PREVIEW_WINDOW_MS = 60_000;
+export const SUBMIT_LIMIT = 10;
 
-// อ่านใบลาด้วย OCR เสียเงินต่อครั้ง จำกัดต่อผู้ใช้ ใช้ทั้งอ่านร่างและยื่นลา นับรวมกัน
+// อ่านใบลาด้วย OCR เสียเงินต่อครั้ง จำกัดต่อผู้ใช้
+// หน้าลาอ่านร่างเองทุกครั้งที่เลือกไฟล์ จึงแยกเพดานการยื่นลาไว้ เลือกไฟล์หลายรอบแล้วยังกดส่งได้
 @Injectable()
-export class PreviewLimitGuard implements CanActivate {
-  private readonly limiter: RateLimiter;
-
+export class PreviewLimitGuard extends UserLimitGuard {
   constructor(@Inject(CLOCK) now: Clock) {
-    this.limiter = new RateLimiter(PREVIEW_LIMIT, PREVIEW_WINDOW_MS, now);
+    super(PREVIEW_LIMIT, PREVIEW_WINDOW_MS, now);
   }
+}
 
-  canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<{ user?: { id: string } }>();
-    this.limiter.check(req.user?.id ?? 'unknown');
-    return true;
+@Injectable()
+export class SubmitLimitGuard extends UserLimitGuard {
+  constructor(@Inject(CLOCK) now: Clock) {
+    super(SUBMIT_LIMIT, PREVIEW_WINDOW_MS, now);
   }
 }
