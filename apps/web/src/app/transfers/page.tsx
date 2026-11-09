@@ -76,7 +76,7 @@ export default function TransfersPage() {
     <main className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
       <h1 className="text-2xl font-semibold">ขอเทียบโอนรายวิชา</h1>
       <p>
-        แนบเอกสาร → เทียบหลักสูตรและชุดจับคู่ → รอแอดมินตรวจอนุมัติ
+        แนบเอกสาร → เทียบหลักสูตรและชุดจับคู่ → รออาจารย์ตรวจอนุมัติ
         ผลจับคู่เป็นข้อเสนอประกอบการพิจารณา
       </p>
       {error && (
@@ -90,7 +90,7 @@ export default function TransfersPage() {
         <>
           {curricula.length === 0 ? (
             <p>
-              ยังไม่มีหลักสูตรพร้อมเอกสารสำหรับยื่นเทียบโอน กรุณาติดต่อผู้ดูแล
+              ยังไม่มีหลักสูตรพร้อมเอกสารสำหรับยื่นเทียบโอน กรุณาติดต่ออาจารย์
             </p>
           ) : (
             <form
@@ -158,7 +158,7 @@ export default function TransfersPage() {
               {documentId &&
                 !curricula.find((c) => c.id === documentId)?.sourceInstitutions
                   .length && (
-                  <p>หลักสูตรนี้ยังไม่มีชุดจับคู่ กรุณาติดต่อผู้ดูแล</p>
+                  <p>หลักสูตรนี้ยังไม่มีชุดจับคู่ กรุณาติดต่ออาจารย์</p>
                 )}
               {courses.map((course, index) => (
                 <fieldset
@@ -240,8 +240,8 @@ export default function TransfersPage() {
               </label>
               <p className="text-sm text-gray-600">
                 กรอกข้อมูลตามเอกสาร
-                ระบบใช้ชื่อสถาบันและรหัสวิชาตรงกับชุดจับคู่ที่ผู้ดูแลกำหนด
-                หากไม่พบคู่เทียบให้ติดต่อผู้ดูแลก่อนยื่นใหม่
+                ระบบใช้ชื่อสถาบันและรหัสวิชาตรงกับชุดจับคู่ที่อาจารย์กำหนด
+                หากไม่พบคู่เทียบให้ติดต่ออาจารย์ก่อนยื่นใหม่
               </p>
               <button disabled={busy} className={buttonClass}>
                 {busy ? "กำลังส่ง..." : "ส่งคำขอและดูผลจับคู่"}

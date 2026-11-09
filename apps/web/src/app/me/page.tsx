@@ -81,6 +81,11 @@ export default function MePage() {
           ตรวจคำขอลา
         </Link>
       )}
+      {me.role === "teacher" && (
+        <Link href="/teacher/transfers" className="block text-blue-700 underline">
+          พิจารณาเทียบโอนและหลักสูตร
+        </Link>
+      )}
       <button onClick={signOut} className="rounded-lg border px-4 py-2">
         ออกจากระบบ
       </button>

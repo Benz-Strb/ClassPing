@@ -11,11 +11,11 @@ import {
 
 export function TransferRequestCard({
   request,
-  admin = false,
+  reviewer = false,
   onReviewed,
 }: {
   request: TransferRequest;
-  admin?: boolean;
+  reviewer?: boolean;
   onReviewed?: () => Promise<void>;
 }) {
   const [decisions, setDecisions] = useState<
@@ -62,7 +62,7 @@ export function TransferRequestCard({
       <header>
         <h3 className="font-semibold">{request.curriculumName}</h3>
         <p>{TRANSFER_STATUS[request.status]}</p>
-        {admin && (
+        {reviewer && (
           <p>
             {request.studentCode ?? "ไม่มีรหัส"} ·{" "}
             {request.studentName ?? "ไม่ระบุชื่อ"}
@@ -106,7 +106,7 @@ export function TransferRequestCard({
               <p>
                 คู่เทียบ: {item.match.targetCode} · {item.match.targetName} (
                 {item.match.targetCredits} หน่วยกิต) —
-                รอแอดมินตรวจเอกสารและเกณฑ์เกรด
+                รออาจารย์ตรวจเอกสารและเกณฑ์เกรด
               </p>
             ) : (
               <p className="text-amber-800">
@@ -120,7 +120,7 @@ export function TransferRequestCard({
                 {item.note && `— ${item.note}`}
               </p>
             )}
-            {admin && request.status === "pending" && (
+            {reviewer && request.status === "pending" && (
               <div className="grid gap-2 sm:grid-cols-2">
                 <label>
                   ผลพิจารณา {item.sourceCode}
@@ -165,7 +165,7 @@ export function TransferRequestCard({
             )}
           </section>
         ))}
-        {admin && request.status === "pending" && (
+        {reviewer && request.status === "pending" && (
           <>
             <p className="text-sm text-gray-600">
               ตรวจเอกสารต้นฉบับ เกรด และนโยบายมหาวิทยาลัยก่อนบันทึก
