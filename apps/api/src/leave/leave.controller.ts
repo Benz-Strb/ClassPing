@@ -85,8 +85,15 @@ export class LeaveController {
     @Body('sessionId') sessionId: string,
     @Body('reason') reason: string,
     @UploadedFile() evidence?: LeaveEvidence,
+    @Body('documentDetails') rawDetails?: string,
   ) {
-    return this.leave.submit(user, sessionId, reason, evidence);
+    let documentDetails: unknown;
+    if (rawDetails !== undefined) {
+      try { documentDetails = JSON.parse(rawDetails); }
+      catch { throw new AppError(400, 'BAD_REQUEST', 'ข้อมูลร่างเอกสารไม่ถูกต้อง'); }
+      if (documentDetails === null) throw new AppError(400, 'BAD_REQUEST', 'ข้อมูลร่างเอกสารไม่ถูกต้อง');
+    }
+    return this.leave.submit(user, sessionId, reason, evidence, documentDetails);
   }
 
   @Post(':id/review')

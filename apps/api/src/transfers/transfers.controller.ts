@@ -73,9 +73,20 @@ export class TransfersController {
     @CurrentUser() user: AppUser,
     @Param('id') id: string,
     @UploadedFile() file?: TransferFile,
+    @Body('payload') payload?: unknown,
   ) {
-    return this.transfers.uploadCurriculum(user, id, file);
+    return this.transfers.uploadCurriculum(user, id, file, payload);
   }
+  @Post('preview')
+  @UseInterceptors(DocumentUploadErrorsInterceptor, FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }))
+  preview(@CurrentUser() user: AppUser, @UploadedFile() file?: TransferFile) { return this.transfers.preview(user, file); }
+  @Post('curricula')
+  @Roles('teacher')
+  @UseInterceptors(DocumentUploadErrorsInterceptor, FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }))
+  createCurriculum(@CurrentUser() user: AppUser, @Body('payload') payload: unknown, @UploadedFile() file?: TransferFile) { return this.transfers.createCurriculum(user, payload, file); }
+  @Patch('requests/:id/curriculum')
+  @Roles('teacher')
+  assign(@CurrentUser() user: AppUser, @Param('id') id: string, @Body() body: unknown) { return this.transfers.assign(user, id, body); }
   @Get('mappings') @Roles('teacher') mappings(@CurrentUser() user: AppUser) {
     return this.transfers.mappings(user);
   }

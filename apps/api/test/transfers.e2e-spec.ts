@@ -13,6 +13,7 @@ import { EnvelopeInterceptor } from '../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
 import { TransfersController } from '../src/transfers/transfers.controller.js';
 import { TRANSFERS_REPO } from '../src/transfers/transfers.repo.js';
+import { LeaveOcrClient } from '../src/leave/leave-ocr.client.js';
 import { TransfersService } from '../src/transfers/transfers.service.js';
 import type {
   CurriculumDocument,
@@ -74,7 +75,7 @@ describe('Transfers HTTP flow', () => {
       listCurricula: async () => docs,
       getCurriculumDocument: async (id: string) =>
         docs.find((d) => d.id === id) ?? null,
-      addCurriculumDocument: async (id: string, path: string) => {
+      addCurriculumDocument: async (id: string, path: string, _file: unknown, details?: { sourceInstitution: string; sourceMajor: string; courses: { sourceCode: string; sourceName: string; credits: number; grade: string }[] }) => {
         docs = [
           {
             id: D,
@@ -85,9 +86,15 @@ describe('Transfers HTTP flow', () => {
             path,
             fileName: 'curriculum.pdf',
             createdAt: new Date().toISOString(),
+            ...details,
           },
         ];
         return { id: D };
+      },
+      createCatalog: async () => C,
+      assignCurriculum: async (requestId: string, doc: CurriculumDocument, items: TransferRequest['items']) => {
+        const row = rows.find(r => r.id === requestId)!;
+        Object.assign(row, { curriculumId: doc.curriculumId, curriculumDocumentId: doc.id, curriculumName: doc.curriculumName, items });
       },
       listMappings: async (id?: string) =>
         mappings.filter((m) => !id || m.curriculumId === id),
@@ -145,6 +152,7 @@ describe('Transfers HTTP flow', () => {
       controllers: [TransfersController],
       providers: [
         TransfersService,
+        { provide: LeaveOcrClient, useValue: { readTransferDocument: vi.fn().mockResolvedValue({ lines: [{ text: 'School A University' }, { text: 'Major: CS' }, { text: 'IT101 Programming 3' }] }) } },
         { provide: TRANSFERS_REPO, useValue: repo },
         { provide: APP_GUARD, useClass: FakeAuth },
         { provide: APP_GUARD, useClass: RolesGuard },
@@ -346,7 +354,7 @@ describe('Transfers HTTP flow', () => {
       .expect(400);
     expect(upload).not.toHaveBeenCalled();
   });
-  it('ชุดจับคู่ที่ปิดใช้งานแล้วไม่ถูกใช้', async () => {
+  it('ไม่ใช้ชุดจับคู่ที่ปิดใช้งาน แต่เสนอจากหลักสูตร OCR ได้', async () => {
     await prepare();
     await request(app.getHttpServer())
       .patch(`/transfers/mappings/${mappings[0].id}`)
@@ -354,6 +362,24 @@ describe('Transfers HTTP flow', () => {
       .send({ active: false })
       .expect(200);
     const { body } = await submit();
-    expect(body.data.items[0].match).toBeNull();
+    expect(body.data.items[0].matchSource).toBe('curriculum');
+    expect(body.data.items[0].match.id).toBe(D);
   });
+  it('OCR → ส่งคำขอไม่มีหลักสูตร → อาจารย์อัปโหลดหลักสูตร/จับคู่/อนุมัติ → อ้างอิงประวัติครั้งถัดไป', async () => {
+    const preview = await request(app.getHttpServer()).post('/transfers/preview').attach('document', PDF, { filename: 'source.pdf', contentType: 'application/pdf' }).expect(201);
+    expect(preview.body.data).toMatchObject({ sourceInstitution: 'School A University', sourceMajor: 'CS', courses: [{ sourceCode: 'IT101', credits: 3 }] });
+    const draft = preview.body.data;
+    const first = await request(app.getHttpServer()).post('/transfers/requests').field('payload', JSON.stringify(draft)).attach('document', PDF, { filename: 'source.pdf', contentType: 'application/pdf' }).expect(201);
+    expect(first.body.data).toMatchObject({ status: 'pending', curriculumDocumentId: null, sourceMajor: 'CS' });
+    await request(app.getHttpServer()).post('/transfers/curricula').set('x-role', 'teacher').field('payload', JSON.stringify({ name: 'Computer Science', year: 2569, draft })).attach('document', PDF, { filename: 'target.pdf', contentType: 'application/pdf' }).expect(201);
+    await request(app.getHttpServer()).patch(`/transfers/requests/${first.body.data.id}/curriculum`).set('x-role', 'teacher').send({ curriculumDocumentId: D }).expect(200);
+    const row = rows[0];
+    expect(row.items[0].match?.targetCode).toBe('IT101');
+    expect(row.items[0].decision).toBeUndefined();
+    await request(app.getHttpServer()).post(`/transfers/requests/${row.id}/review`).set('x-role', 'teacher').send({ decisions: [{ itemId: row.items[0].id, decision: 'approved' }] }).expect(200);
+    const next = await request(app.getHttpServer()).post('/transfers/requests').set('x-user', 'student-2').field('payload', JSON.stringify(draft)).attach('document', PDF, { filename: 'second.pdf', contentType: 'application/pdf' }).expect(201);
+    expect(next.body.data).toMatchObject({ status: 'pending', items: [{ matchSource: 'history', previousApproval: { requestId: row.id } }] });
+    expect(next.body.data.items[0].decision).toBeUndefined();
+  });
+
 });

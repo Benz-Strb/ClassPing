@@ -16,7 +16,6 @@ const LINKS = [
   { href: "/admin/courses", label: "รายวิชาและตารางเรียน" },
   { href: "/admin/reference", label: "ข้อมูลกลาง" },
   { href: "/admin/knowledge", label: "แหล่งความรู้" },
-  { href: "/admin/leave-statuses", label: "สถานะการลา" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

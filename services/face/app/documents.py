@@ -16,7 +16,7 @@ MAX_PDF_PAGES = 10
 PDF_LOCK = Lock()
 
 
-def document_frames(data: bytes):
+def document_frames(data: bytes, max_pages: int = MAX_PDF_PAGES):
     if len(data) > MAX_DOCUMENT_BYTES:
         raise too_large('หลักฐานใหญ่เกิน 25 MB')
     if not data.startswith(b'%PDF-'):
@@ -24,8 +24,8 @@ def document_frames(data: bytes):
         return
     try:
         with PDF_LOCK, closing(pdfium.PdfDocument(data)) as document:
-            if not 1 <= len(document) <= MAX_PDF_PAGES:
-                raise FaceError(400, 'INVALID_IMAGE', 'PDF ต้องมี 1–10 หน้า')
+            if not 1 <= len(document) <= max_pages:
+                raise FaceError(400, 'INVALID_IMAGE', f'PDF ต้องมี 1–{max_pages} หน้า')
             # ตรวจทุกหน้าก่อนเริ่ม OCR และก่อนจัดสรร bitmap
             for index in range(len(document)):
                 with closing(document[index]) as page:
