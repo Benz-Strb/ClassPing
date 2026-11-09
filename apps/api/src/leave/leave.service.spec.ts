@@ -50,6 +50,7 @@ function setup() {
     hasActiveRequest: vi.fn(async () => false),
     createRequest: vi.fn(async () => ({ id: 'leave-1' })),
     deleteRequest: vi.fn(async () => undefined),
+    saveOcrResult: vi.fn(async () => undefined),
     uploadEvidence: vi.fn(async () => undefined),
     deleteEvidence: vi.fn(async () => undefined),
     createAttachment: vi.fn(async () => undefined),
@@ -257,28 +258,40 @@ describe('LeaveService', () => {
     expect(guards('submit')).toEqual([SubmitLimitGuard]);
   });
 
-  it('Typhoon ล้มเหลวแล้วยังบันทึกคำขอและหลักฐานเพื่อให้อาจารย์ตรวจเอง', async () => {
+  it('ยื่นลาตอบทันทีโดยไม่รอ OCR แล้วเก็บผลที่อ่านเบื้องหลัง', async () => {
     const { service, repo, ocr } = setup();
-    ocr.readLeaveDocument.mockRejectedValue(new Error('typhoon unavailable'));
+    let finish: (value: { lines: { text: string; score: null }[] }) => void = () => undefined;
+    ocr.readLeaveDocument.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
 
     await expect(
       service.submit(student, SESSION_ID, 'ป่วย', evidence),
-    ).resolves.toMatchObject({
-      id: 'leave-1',
-      status: 'pending',
-      ocrStatus: 'failed',
-      ocr: null,
-    });
+    ).resolves.toEqual({ id: 'leave-1', status: 'pending', ocrStatus: 'pending' });
     expect(repo.createRequest).toHaveBeenCalledWith({
       studentId: 'student-user',
       sessionId: SESSION_ID,
       reason: 'ป่วย',
       documentDetails: documentDetailsSchema.parse({}),
       ocrText: '',
-      ocrStatus: 'failed',
+      ocrStatus: 'pending',
     });
     expect(repo.uploadEvidence).toHaveBeenCalledOnce();
     expect(repo.createAttachment).toHaveBeenCalledOnce();
+    expect(repo.saveOcrResult).not.toHaveBeenCalled();
+
+    finish({ lines: [{ text: 'ใบรับรองแพทย์', score: null }] });
+    await vi.waitFor(() => expect(repo.saveOcrResult).toHaveBeenCalledWith('leave-1', 'ใบรับรองแพทย์', 'completed'));
+  });
+
+  it('Typhoon ล้มเหลวแล้วยังบันทึกคำขอและหลักฐานเพื่อให้อาจารย์ตรวจเอง', async () => {
+    const { service, repo, ocr } = setup();
+    ocr.readLeaveDocument.mockRejectedValue(new Error('typhoon unavailable'));
+
+    await expect(
+      service.submit(student, SESSION_ID, 'ป่วย', evidence),
+    ).resolves.toMatchObject({ id: 'leave-1', status: 'pending' });
+    expect(repo.uploadEvidence).toHaveBeenCalledOnce();
+    expect(repo.createAttachment).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(repo.saveOcrResult).toHaveBeenCalledWith('leave-1', '', 'failed'));
   });
 
   it('Storage ล้มเหลวแล้วล้างไฟล์และคำขอ แต่ไม่กลืน error', async () => {

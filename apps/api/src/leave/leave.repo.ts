@@ -10,7 +10,7 @@ export interface LeaveRequestInput {
   reason: string;
   documentDetails?: DocumentDetails;
   ocrText: string;
-  ocrStatus: 'completed' | 'failed';
+  ocrStatus: 'pending' | 'completed' | 'failed';
 }
 
 export interface LeaveRequestRecord {
@@ -70,6 +70,7 @@ export interface LeaveRepo {
   hasActiveRequest(studentId: string, sessionId: string): Promise<boolean>;
   createRequest(input: LeaveRequestInput): Promise<LeaveRequestRecord>;
   deleteRequest(id: string): Promise<void>;
+  saveOcrResult(id: string, ocrText: string, ocrStatus: 'completed' | 'failed'): Promise<void>;
   uploadEvidence(path: string, bytes: Buffer, mime: string): Promise<void>;
   deleteEvidence(path: string): Promise<void>;
   createAttachment(input: {
@@ -263,6 +264,16 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     if (error?.code === '23505') throw new Error('LEAVE_REQUEST_DUPLICATE');
     if (error) throw dbError();
     return data as LeaveRequestRecord;
+  }
+
+  // เขียนผล OCR ที่อ่านเบื้องหลัง เฉพาะคำขอที่ยังรอผลอยู่
+  async saveOcrResult(id: string, ocrText: string, ocrStatus: 'completed' | 'failed'): Promise<void> {
+    const { error } = await this.db
+      .from('leave_requests')
+      .update({ ocr_text: ocrText, ocr_status: ocrStatus })
+      .eq('id', id)
+      .eq('ocr_status', 'pending');
+    if (error) throw dbError();
   }
 
   async deleteRequest(id: string): Promise<void> {

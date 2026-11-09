@@ -115,6 +115,11 @@ class MemoryLeaveRepo implements LeaveRepo {
     return { id };
   }
 
+  async saveOcrResult(id: string, ocrText: string, ocrStatus: 'completed' | 'failed') {
+    const item = this.requests.find((value) => value.id === id && value.ocrStatus === 'pending');
+    if (item) Object.assign(item, { ocrText, ocrStatus });
+  }
+
   async deleteRequest(id: string) {
     this.requests = this.requests.filter((item) => item.id !== id);
   }
@@ -380,8 +385,10 @@ describe('ระบบลา (e2e)', () => {
     expect(submitted.body.data).toMatchObject({
       id: '22222222-2222-4222-8222-222222222222',
       status: 'pending',
-      ocrStatus: 'completed',
+      ocrStatus: 'pending',
     });
+    // OCR อ่านต่อเบื้องหลังหลังตอบกลับ
+    await vi.waitFor(() => expect(repo.requests[0].ocrStatus).toBe('completed'));
 
     const mine = await request(server)
       .get('/leave-requests/mine')
