@@ -22,7 +22,7 @@ def create_app(reader, token: str) -> FastAPI:
 
     @app.middleware('http')
     async def protect_upload(request, call_next):
-        if request.url.path in ('/leave/ocr', '/transfers/ocr'):
+        if request.url.path in ('/leave/ocr', '/transfers/ocr', '/schedules/ocr'):
             if not hmac.compare_digest(token, request.headers.get('x-ocr-token', '')):
                 return JSONResponse(status_code=401, content={'error': {'code': 'UNAUTHORIZED'}})
             length = request.headers.get('content-length', '')
@@ -61,6 +61,7 @@ def create_app(reader, token: str) -> FastAPI:
         except Exception:
             return JSONResponse(status_code=503, content={'error': {'code': 'OCR_UNAVAILABLE', 'message': 'บริการอ่านข้อความหลักฐานยังไม่พร้อม'}})
 
+    @app.post('/schedules/ocr')
     @app.post('/transfers/ocr')
     async def transfer_read(image: UploadFile = File(...), x_ocr_token: str = Header(default='')):
         if not hmac.compare_digest(token, x_ocr_token):

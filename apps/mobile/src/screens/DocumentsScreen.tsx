@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Pressable, Text } from "../ui/primitives";
+import { Pressable, ScrollView, Text } from "../ui/primitives";
 import { colors } from "../ui/theme";
 import { LeaveScreen } from "./LeaveScreen";
 import { TransfersScreen } from "./TransfersScreen";
+import { TimetableUpload } from "./TimetableUpload";
 
 export function DocumentsScreen({
   active,
   focusTick,
+  onTimetableImported,
 }: {
   active: boolean;
   focusTick: number;
+  onTimetableImported: () => void;
 }) {
-  const [section, setSection] = useState<"leave" | "transfers">("leave");
+  const [section, setSection] = useState<"leave" | "transfers" | "timetable">("leave");
   const [visitedTransfers, setVisitedTransfers] = useState(false);
+  const [visitedTimetable, setVisitedTimetable] = useState(false);
   return (
     <View style={styles.root}>
       <View style={styles.heading}>
@@ -25,6 +29,7 @@ export function DocumentsScreen({
             [
               { key: "leave", label: "การลา" },
               { key: "transfers", label: "เทียบโอนรายวิชา" },
+              { key: "timetable", label: "ตารางเรียน" },
             ] as const
           ).map((item) => (
             <Pressable
@@ -34,6 +39,7 @@ export function DocumentsScreen({
               onPress={() => {
                 setSection(item.key);
                 if (item.key === "transfers") setVisitedTransfers(true);
+                if (item.key === "timetable") setVisitedTimetable(true);
               }}
               style={[styles.tab, section === item.key && styles.selected]}
             >
@@ -72,12 +78,24 @@ export function DocumentsScreen({
           />
         </View>
       )}
+      {visitedTimetable && (
+        <View
+          style={[styles.root, section !== "timetable" && styles.hidden]}
+          accessibilityElementsHidden={section !== "timetable"}
+          importantForAccessibility={section === "timetable" ? "auto" : "no-hide-descendants"}
+        >
+          <ScrollView contentContainerStyle={styles.timetable}>
+            <TimetableUpload onImported={onTimetableImported} />
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  timetable: { padding: 24, flexGrow: 1, width: "100%", maxWidth: 800, alignSelf: "center" },
   hidden: { display: "none" },
   heading: { paddingHorizontal: 24, paddingTop: 16, gap: 12 },
   title: { fontSize: 24, fontWeight: "600", color: colors.identity },
