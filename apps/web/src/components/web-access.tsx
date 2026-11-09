@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
@@ -8,21 +8,30 @@ import type { Me } from "@/lib/types";
 
 const STUDENT_MESSAGE = "เว็บไซต์สำหรับผู้ดูแลระบบและอาจารย์เท่านั้น นักศึกษากรุณาใช้งานผ่านแอป ClassPing รวมถึงการยื่นลาและเทียบโอน";
 
+const WebUserContext = createContext<Me | null>(null);
+
+export function useWebUser() {
+  return useContext(WebUserContext);
+}
+
 export function WebAccess({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [checkedPath, setCheckedPath] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+  const [user, setUser] = useState<Me | null>(null);
+  const authCallback = pathname.startsWith("/auth/");
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    if (pathname.startsWith("/auth/")) return;
+    if (authCallback) return;
     let active = true;
     let revision = 0;
+    let verifiedUserId: string | null | undefined;
     let timer: ReturnType<typeof setTimeout>;
-    async function check() {
+    async function check(block = true) {
       const current = ++revision;
-      setCheckedPath(null);
+      if (block) setChecked(false);
       setError(null);
       try {
         const { data, error } = await supabase.auth.getSession();
@@ -35,15 +44,9 @@ export function WebAccess({ children }: { children: ReactNode }) {
           if (active) router.replace(`/login?error=${encodeURIComponent(STUDENT_MESSAGE)}`);
           return;
         }
-        if (!me && pathname !== "/" && pathname !== "/login") {
-          router.replace("/login");
-          return;
-        }
-        if (pathname === "/leave" || pathname === "/transfers" || pathname.startsWith("/transfers/")) {
-          router.replace("/courses");
-          return;
-        }
-        setCheckedPath(pathname);
+        verifiedUserId = data.session?.user.id ?? null;
+        setUser(me);
+        setChecked(true);
       } catch (value) {
         if (!active || current !== revision) return;
         if (value instanceof ApiError && value.status === 401) {
@@ -55,17 +58,33 @@ export function WebAccess({ children }: { children: ReactNode }) {
       }
     }
     void check();
-    const { data } = supabase.auth.onAuthStateChange(() => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION") return;
+      const sameUser = verifiedUserId !== undefined && verifiedUserId === (session?.user.id ?? null);
+      if (event === "SIGNED_IN" && sameUser) return;
+      const block = !sameUser || event === "SIGNED_OUT" || event === "USER_UPDATED";
       ++revision;
-      setCheckedPath(null);
+      if (block) setChecked(false);
       clearTimeout(timer);
-      timer = setTimeout(() => void check(), 0);
+      timer = setTimeout(() => void check(block), 0);
     });
     return () => { active = false; ++revision; clearTimeout(timer); data.subscription.unsubscribe(); };
-  }, [pathname, retry, router]);
+  }, [authCallback, retry, router]);
+
+  const redirect = checked && !authCallback
+    ? !user && pathname !== "/" && pathname !== "/login"
+      ? "/login"
+      : pathname === "/leave" || pathname === "/transfers" || pathname.startsWith("/transfers/")
+        ? "/courses"
+        : null
+    : null;
+
+  useEffect(() => {
+    if (redirect) router.replace(redirect);
+  }, [redirect, router]);
 
   if (pathname.startsWith("/auth/")) return children;
   if (error) return <main className="login-layout"><section className="login-panel"><p role="alert">{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>ลองใหม่</button></section></main>;
-  if (checkedPath !== pathname) return <p className="p-6" role="status">กำลังตรวจสอบสิทธิ์...</p>;
-  return children;
+  if (!checked || redirect) return <p className="p-6" role="status">กำลังตรวจสอบสิทธิ์...</p>;
+  return <WebUserContext.Provider value={user}>{children}</WebUserContext.Provider>;
 }

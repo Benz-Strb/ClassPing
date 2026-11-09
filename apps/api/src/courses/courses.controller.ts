@@ -42,6 +42,13 @@ export class CoursesController {
     return this.courses.getRules(user, id);
   }
 
+  @Delete(':id')
+  @HttpCode(200)
+  async remove(@CurrentUser() user: AppUser, @Param('id') id: string): Promise<{ removed: string }> {
+    await this.courses.remove(user, id);
+    return { removed: id };
+  }
+
   @Put(':id/rules')
   setRules(
     @CurrentUser() user: AppUser,

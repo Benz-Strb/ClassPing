@@ -117,4 +117,27 @@ describe('transfer OCR and matching', () => {
       )[0].previousApproval,
     ).toBeUndefined();
   });
+  it('extracts year 1–4 headings without treating the curriculum calendar year as a study year', () => {
+    const draft = extractTransferDraft(['หลักสูตร พ.ศ. 2569', 'ชั้นปีที่ 1', 'CS101 Programming 3', 'ชั้นปีที่ 2', 'CS201 Data Structures 3', 'ปีที่ 3', 'CS301 Networks 3', 'Year 4', 'CS401 Project 3'].map(text => ({ text })));
+    expect(draft.courses.map(course => course.studyYear)).toEqual([1, 2, 3, 4]);
+    expect(extractTransferDraft([{ text: 'CS101 Programming 3' }]).courses[0].studyYear).toBeUndefined();
+  });
+  it('prepares automatic approval only for identical approved credits and grade at the same institution', () => {
+    const match = suggestItems([source], 'School', 'CS', doc, [], [])[0].match;
+    const previous = { id: 'prior', curriculumId: 'curr', sourceInstitution: 'School', sourceMajor: 'CS', reviewedAt: '2026-11-08', items: [{ ...source, id: 'item', match, decision: 'approved' }] } as TransferRequest;
+    expect(suggestItems([source], 'School', 'CS', doc, [], [previous])[0].autoApprovalSuggested).toBe(true);
+    expect(suggestItems([source], 'School', '', doc, [], [previous])[0].autoApprovalSuggested).toBe(true);
+    for (const patch of [{ grade: '' }, { grade: 'C' }, { grade: 'A' }, { credits: 4 }]) {
+      expect(suggestItems([{ ...source, ...patch }], 'School', 'CS', doc, [], [previous])[0].autoApprovalSuggested).toBeUndefined();
+    }
+    expect(suggestItems([source], 'New School', 'CS', doc, [], [previous])[0].autoApprovalSuggested).toBeUndefined();
+  });
+  it('does not automatically approve when past approvals disagree on the target', () => {
+    const target2 = { ...source, sourceCode: 'IT102', sourceName: 'Other course' };
+    const curriculum = { ...doc, courses: [...doc.courses!, target2] };
+    const match = suggestItems([source], 'School', 'CS', doc, [], [])[0].match!;
+    const past = (targetCode: string, targetName: string) => ({ id: targetCode, curriculumId: 'curr', sourceInstitution: 'School', sourceMajor: 'CS', reviewedAt: '2026-11-08', items: [{ ...source, id: 'item', match: { ...match, targetCode, targetName }, decision: 'approved' }] }) as TransferRequest;
+    expect(suggestItems([source], 'School', 'CS', curriculum, [], [past('IT101', 'Programming'), past('IT102', 'Other course')])[0].autoApprovalSuggested).toBeUndefined();
+  });
+
 });

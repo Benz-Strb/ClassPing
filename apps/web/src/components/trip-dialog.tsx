@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import { useEffect, useRef, useState } from "react";
 import { chooseBackAt, formatTime } from "@/lib/time";
 import type { SessionView, TripView } from "@/lib/types";
@@ -53,8 +55,8 @@ export function TripDialog({
     return finish(onSave(chooseBackAt(original, backTime, session)));
   }
 
-  function remove() {
-    if (!window.confirm("ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง")) return;
+  async function remove() {
+    if (!(await confirmAction("ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง"))) return;
     return finish(onDelete());
   }
 

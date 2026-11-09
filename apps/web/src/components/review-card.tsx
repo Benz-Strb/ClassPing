@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import { useState } from "react";
 import type { AttendanceRow } from "@/lib/types";
 import { Photo } from "./photo";
@@ -106,8 +108,8 @@ export function ReviewCard({
 }) {
   const [choosing, setChoosing] = useState(false);
 
-  function reject() {
-    if (!window.confirm(rejectMessage)) return;
+  async function reject() {
+    if (!(await confirmAction(rejectMessage))) return;
     onReview({ action: "reject" });
   }
 

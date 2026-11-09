@@ -90,7 +90,7 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
           <View style={styles.tip}><Text style={styles.tipTitle}>เข้าเรียนได้โดยไม่ต้องกดเช็กชื่อ</Text><Text style={styles.tipText}>กล้องในห้องเรียนบันทึกการเข้าเรียนให้คุณ ตรวจสอบผลย้อนหลังได้ที่รายวิชา</Text></View>
         </ScrollView>}
         {key === 'courses' && <CoursesScreen active={tab === 'courses'} />}
-        {key === 'leave' && <DocumentsScreen active={tab === 'leave'} focusTick={focusTick} />}
+        {key === 'leave' && <DocumentsScreen active={tab === 'leave'} focusTick={focusTick} onTimetableImported={() => setFocusTick(value => value + 1)} />}
         {key === 'chat' && <ChatScreen authenticated />}
         {key === 'account' && <AccountScreen me={me} face={face} banner={enrollBanner} onSignOut={onSignOut} />}
       </View>)}
