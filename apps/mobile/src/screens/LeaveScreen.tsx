@@ -47,7 +47,6 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [reading, setReading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  const [showOcrText, setShowOcrText] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // ข้อความโหลดไม่สำเร็จแยกจากข้อความตรวจฟอร์ม ล้างเมื่อโหลดสำเร็จ
@@ -134,14 +133,15 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
             return;
           }
         }
-        const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.9 };
+        // คุณภาพเต็ม เพราะรูปที่ถูกบีบอัดทำให้ OCR อ่านวันที่เพี้ยน
+        const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 1 };
         const result = source === "camera"
           ? await ImagePicker.launchCameraAsync(options)
           : await ImagePicker.launchImageLibraryAsync(options);
         if (result.canceled) return;
         const asset = result.assets[0];
         const image = await ImageManipulator.manipulate(asset.uri).renderAsync();
-        candidateUri = (await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 })).uri;
+        candidateUri = (await image.saveAsync({ format: SaveFormat.JPEG, compress: 1 })).uri;
         discardLeaveEvidence(asset.uri);
         fileName = `${(asset.fileName || "หลักฐานการลา").replace(/\.[^.]+$/, "")}.jpg`;
       }
@@ -284,30 +284,6 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
             }} disabled={busy || !courseId} />
         </>}
 
-        <Text style={styles.heading}>ระบุเหตุผล</Text>
-        <TextInput
-          accessibilityLabel="เหตุผลการลา"
-          multiline
-          maxLength={1000}
-          value={reason}
-          onChangeText={setReason}
-          editable={!busy}
-          placeholder="เช่น มีไข้สูง แพทย์ให้พักรักษาตัว"
-          style={styles.input}
-        />
-
-        <Text style={styles.heading}>ข้อมูลร่างจากหลักฐาน</Text>
-        <Text style={styles.help}>ตรวจแก้ก่อนส่ง ช่องที่อ่านไม่พบเว้นว่างได้ วันที่เหล่านี้ไม่เปลี่ยนคาบเรียนที่เลือก</Text>
-        {DOCUMENT_FIELDS.map(([key, label]) => (
-          <View key={key}>
-            <Text>{label}</Text>
-            <TextInput accessibilityLabel={label} value={documentDetails[key]}
-              maxLength={key === 'facility' ? 200 : 10} editable={!busy && !reading}
-              placeholder={key === 'facility' ? 'ชื่อสถานพยาบาล (ถ้ามี)' : 'YYYY-MM-DD เช่น 2026-11-08'}
-              onChangeText={value => setDocumentDetails(current => ({ ...current, [key]: value }))}
-              style={styles.input} />
-          </View>
-        ))}
         <SelectField
           label="แนบหลักฐานการลา"
           placeholder="เลือกวิธีแนบหลักฐาน"
@@ -343,13 +319,8 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
         {ocrError && <Text accessibilityRole="alert" style={styles.error}>{ocrError}</Text>}
         {ocrText !== null && (
           <View accessibilityLiveRegion="polite">
-            <Pressable style={styles.secondary} accessibilityState={{ expanded: showOcrText }}
-              onPress={() => setShowOcrText(value => !value)}>
-              <Text>{showOcrText ? 'ซ่อนข้อความต้นฉบับ' : 'ดูข้อความต้นฉบับที่ OCR อ่านได้'}</Text>
-            </Pressable>
-            {showOcrText && <Text>{ocrText || "ไม่พบข้อความ กรุณากรอกข้อมูลเอง"}</Text>}
             <Text style={styles.help}>
-              ระบบแยกข้อมูลที่อ่านพบลงฟอร์มร่างแล้ว ตรวจสอบและแก้ไขก่อนส่ง
+              {ocrText ? "ระบบแยกข้อมูลที่อ่านพบลงฟอร์มร่างแล้ว ตรวจสอบและแก้ไขก่อนส่ง" : "ไม่พบข้อความ กรุณากรอกข้อมูลเอง"}
             </Text>
           </View>
         )}
@@ -357,6 +328,32 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
           OCR เป็นข้อมูลร่าง ไม่รับรองความแท้ของหลักฐาน
           การอ่านร่างยังไม่ส่งคำขอลา
         </Text>
+
+
+        <Text style={styles.heading}>ระบุเหตุผล</Text>
+        <TextInput
+          accessibilityLabel="เหตุผลการลา"
+          multiline
+          maxLength={1000}
+          value={reason}
+          onChangeText={setReason}
+          editable={!busy}
+          placeholder="เช่น มีไข้สูง แพทย์ให้พักรักษาตัว"
+          style={styles.input}
+        />
+
+        <Text style={styles.heading}>ข้อมูลร่างจากหลักฐาน</Text>
+        <Text style={styles.help}>ตรวจแก้ก่อนส่ง ช่องที่อ่านไม่พบเว้นว่างได้ วันที่เหล่านี้ไม่เปลี่ยนคาบเรียนที่เลือก</Text>
+        {DOCUMENT_FIELDS.map(([key, label]) => (
+          <View key={key}>
+            <Text>{label}</Text>
+            <TextInput accessibilityLabel={label} value={documentDetails[key]}
+              maxLength={key === 'facility' ? 200 : 10} editable={!busy && !reading}
+              placeholder={key === 'facility' ? 'ชื่อสถานพยาบาล (ถ้ามี)' : 'YYYY-MM-DD เช่น 2026-11-08'}
+              onChangeText={value => setDocumentDetails(current => ({ ...current, [key]: value }))}
+              style={styles.input} />
+          </View>
+        ))}
 
         <Pressable
           style={[styles.primary, (busy || reading) && styles.disabled]}
