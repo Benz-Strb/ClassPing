@@ -1,35 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
-import { handleApiError } from "@/lib/auth-error";
-import { supabase } from "@/lib/supabase";
-import type { Me } from "@/lib/types";
+import { useWebUser } from "@/components/web-access";
+import { TodayAgenda } from "@/components/today-agenda";
 
 export default function Home() {
-  const router = useRouter();
-  const [state, setState] = useState<"loading" | "guest">("loading");
-  const [error, setError] = useState<string | null>(null);
+  const me = useWebUser();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!data.session) {
-        setState("guest");
-        return;
-      }
-      try {
-        const me = await apiFetch<Me>("/me");
-        if (me.role === "teacher" || me.role === "admin") router.replace("/courses");
-      } catch (e) {
-        setError(await handleApiError(e, router));
-      }
-    });
-  }, [router]);
-
-  if (error) return <p className="p-6 text-red-600">{error}</p>;
-  if (state === "loading") return <p className="p-6">กำลังโหลด...</p>;
+  if (me) return (
+    <main className="space-y-8">
+      <TodayAgenda />
+    </main>
+  );
 
   return (
     <main className="welcome-layout">

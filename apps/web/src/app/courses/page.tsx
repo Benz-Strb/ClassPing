@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { notify } from "@/components/notifications";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import type { Course, Me } from "@/lib/types";
 import { RetryButton } from "@/components/retry-button";
-import { TodayAgenda } from "@/components/today-agenda";
+import { TimetableImport } from "@/components/timetable-import";
+import { DeleteCourseButton } from "@/components/delete-course-button";
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -33,6 +35,7 @@ export default function CoursesPage() {
     setError(null);
     try {
       await apiFetch<Course>("/courses", { method: "POST", body: JSON.stringify(form) });
+      notify(`สร้างวิชา ${form.code} แล้ว`);
       setForm({ code: "", name: "", section: "" });
       setVersion((v) => v + 1);
     } catch (e) {
@@ -43,21 +46,10 @@ export default function CoursesPage() {
   }
 
   return (
-    <main className="space-y-8">
-      <header className="workspace-heading">
-        <div><h1>ตารางและงานของวันนี้</h1><p>รายวิชา กลุ่มเรียน และรายละเอียดการเข้าเรียน</p></div>
-        <Link href="/live" className="ml-auto mr-4 text-sm text-blue-600 underline">
-          กล้อง
-        </Link>
-        <Link href="/me" className="text-sm text-blue-600 underline">
-          บัญชีของฉัน
-        </Link>
-      </header>
-
+    <main className="courses-workspace flex flex-col gap-8">
       {error && <p role="alert" className="surface-feedback text-red-600">{error}</p>}
       <div className="workspace-columns">
       <div className="workspace-primary">
-      <TodayAgenda />
       <section className="work-surface" aria-labelledby="my-courses-title">
       <div className="surface-heading"><h2 id="my-courses-title">รายวิชาของฉัน</h2><span className="tool-note">{courses ? `${courses.length} รายวิชา` : ""}</span></div>
       {courses === null ? (
@@ -67,7 +59,7 @@ export default function CoursesPage() {
       ) : (
         <ul className="course-grid">
           {courses.map((course) => (
-            <li key={course.id} className="course-card">
+            <li key={course.id} className="course-card course-list-row">
               <Link
                 href={`/courses/${course.id}/students`}
                 className="course-entry"
@@ -75,16 +67,19 @@ export default function CoursesPage() {
                 <span className="course-code">{course.code}</span><span className="course-detail"><h2>{course.name}</h2>{course.section && <small>กลุ่ม {course.section}</small>}</span>
                 <span className="course-open" aria-hidden="true">&rsaquo;</span>
               </Link>
+              <DeleteCourseButton course={course} onDeleted={() => setCourses(value => value?.filter(item => item.id !== course.id) ?? null)} onError={setError} />
             </li>
           ))}
         </ul>
       )}
       </section>
       </div>
-      <aside className="workspace-tools" aria-label="เครื่องมือรายวิชา">
-      <section className="work-surface"><h2 className="mb-4">งานที่ต้องตรวจ</h2><Link href="/leave/review" className="tool-link">ตรวจคำขอลา<span aria-hidden="true">&rsaquo;</span></Link><Link href="/live" className="tool-link">คาบเรียนและกล้อง<span aria-hidden="true">&rsaquo;</span></Link><p className="tool-note mt-4">ผลรอตรวจต้องได้รับการยืนยันก่อนนับเป็นผลเข้าเรียน</p></section>
-      <form onSubmit={create} className="space-y-4 rounded-xl border p-6">
+      <aside className="workspace-tools course-tools" aria-label="เครื่องมือรายวิชา">
+      <section className="work-surface"><h2 className="mb-4">งานที่ต้องตรวจ</h2><Link href="/leave/review" className="tool-link">ตรวจคำขอลา<span aria-hidden="true">&rsaquo;</span></Link><Link href="/live" className="tool-link">คาบเรียนและกล้อง<span aria-hidden="true">&rsaquo;</span></Link></section>
+      <section className="work-surface space-y-4">
         <h2 className="font-medium">สร้างวิชา</h2>
+      {courses && <TimetableImport courses={courses} />}
+      <form onSubmit={create} className="space-y-4">
         <div className="grid gap-4">
           <label className="form-field"><span>รหัสวิชา</span>
           <input
@@ -120,6 +115,7 @@ export default function CoursesPage() {
           {saving ? "กำลังสร้าง..." : "สร้างวิชา"}
         </button>
       </form>
+      </section>
       </aside>
       </div>
     </main>

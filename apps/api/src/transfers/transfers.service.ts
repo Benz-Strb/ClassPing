@@ -147,7 +147,7 @@ export class TransfersService {
     let doc: CurriculumDocument | null = input.curriculumDocumentId ? await this.repo.getCurriculumDocument(input.curriculumDocumentId) : null;
     if (input.curriculumDocumentId && !doc?.active) throw missing();
     const mappings = await this.repo.listMappings(doc?.curriculumId);
-    const history = input.sourceMajor ? await this.repo.listRequests() : [];
+    const history = await this.repo.listRequests();
     if (!doc) {
       const docs = await this.repo.listCurricula();
       const ranked = docs.map(candidate => ({ doc: candidate, score: suggestItems(input.courses, input.sourceInstitution, input.sourceMajor, candidate, mappings, history).filter(i => i.match).length })).sort((a, b) => b.score - a.score);
@@ -221,6 +221,9 @@ export class TransfersService {
         'ต้องพิจารณารายวิชาให้ครบและไม่ซ้ำ',
       );
     const decisions: StoredReviewDecision[] = [];
+    if (!input.confirmedRecommendations && input.decisions.some(decision => decision.decision === 'approved' && request.items.some(item => item.id === decision.itemId && item.autoApprovalSuggested))) {
+      throw new AppError(400, 'RECHECK_REQUIRED', 'กรุณาตรวจซ้ำและยืนยันวิชาที่ระบบเสนออนุมัติจากประวัติ');
+    }
     const doc = request.curriculumDocumentId ? await this.repo.getCurriculumDocument(request.curriculumDocumentId) : null;
     for (const decision of input.decisions) {
       const item = request.items.find(i => i.id === decision.itemId);

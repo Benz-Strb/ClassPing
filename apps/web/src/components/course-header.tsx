@@ -10,7 +10,6 @@ import type { Course } from "@/lib/types";
 const TABS = [
   { path: "checkin", label: "เช็คชื่อ" },
   { path: "students", label: "นักศึกษา" },
-  { path: "schedule", label: "ตารางเรียน" },
   { path: "exams", label: "สอบ" },
   { path: "rules", label: "เกณฑ์" },
   { path: "reports", label: "รายงาน" },

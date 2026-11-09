@@ -25,6 +25,7 @@ export interface TransferItem {
   grade: string;
   match: TransferMapping | null;
   matchSource?: 'history' | 'curriculum' | 'mapping';
+  autoApprovalSuggested?: boolean;
   previousApproval?: { requestId: string; reviewedAt: string };
   decision?: "approved" | "rejected";
   note?: string;
@@ -72,5 +73,5 @@ export async function openTransferDocument(path: string) {
   }
 }
 
-export interface ExtractedCourse { sourceCode: string; sourceName: string; credits: number; grade: string }
+export interface ExtractedCourse { sourceCode: string; sourceName: string; credits: number; grade: string; studyYear?: number | null }
 export interface TransferDraft { sourceInstitution: string; sourceMajor: string; courses: ExtractedCourse[]; ocrText: string; warnings: string[] }

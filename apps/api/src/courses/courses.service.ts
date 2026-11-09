@@ -93,6 +93,11 @@ export class CoursesService {
     return this.repo.update(courseId, input);
   }
 
+  async remove(user: AppUser, courseId: string): Promise<void> {
+    await this.getOwned(user, courseId);
+    if (!(await this.repo.remove(courseId))) throw notFound();
+  }
+
   private async checkTeacher(user: AppUser, teacherId: string | undefined): Promise<void> {
     if (teacherId === undefined) return;
     if (user.role !== 'admin') throw new AppError(403, 'FORBIDDEN', 'เฉพาะแอดมินที่มอบหมายผู้สอนได้');

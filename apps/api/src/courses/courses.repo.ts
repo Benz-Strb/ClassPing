@@ -27,6 +27,7 @@ export interface CoursesRepo {
   findById(id: string): Promise<Course | null>;
   insert(course: NewCourse): Promise<Course>;
   update(id: string, patch: Partial<NewCourse>): Promise<Course>;
+  remove(id: string): Promise<boolean>;
   getRules(courseId: string): Promise<Rules | null>;
   saveRules(courseId: string, rules: Rules): Promise<Rules>;
 }
@@ -73,6 +74,12 @@ const courseRow = (c: Partial<NewCourse>) => ({
 @Injectable()
 export class SupabaseCoursesRepo implements CoursesRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
+
+  async remove(id: string): Promise<boolean> {
+    const { data, error } = await this.db.from('courses').delete().eq('id', id).select('id');
+    if (error) throw dbError();
+    return data.length > 0;
+  }
 
   async isTeacher(id: string): Promise<boolean> {
     const { data, error } = await this.db.from('users').select('id').eq('id', id).eq('role', 'teacher').maybeSingle();
