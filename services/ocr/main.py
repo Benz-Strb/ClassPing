@@ -105,7 +105,11 @@ def create_app(reader, token: str) -> FastAPI:
 
 
 def build_app():
-    if os.getenv('TYPHOON_OCR_API_KEY', '').strip():
+    # รันในเครื่องก่อน เอกสารจะได้ไม่ออกไปเซิร์ฟเวอร์ Typhoon แม้ตั้ง API key ไว้
+    if os.getenv('TYPHOON_OCR_MLX_MODEL', '').strip():
+        from app.typhoon_mlx import MlxTyphoonReader
+        reader = MlxTyphoonReader(os.path.expanduser(os.environ['TYPHOON_OCR_MLX_MODEL'].strip()))
+    elif os.getenv('TYPHOON_OCR_API_KEY', '').strip():
         from app.typhoon_ocr import TyphoonTextReader
         reader = TyphoonTextReader()
     else:
