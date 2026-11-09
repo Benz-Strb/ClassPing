@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { WebAccess } from "@/components/web-access";
 import { MainNavigation } from "@/components/main-navigation";
+import { Notifications } from "@/components/notifications";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="th">
       <body>
+        <Notifications />
         <a href="#main-content" className="skip-link">ข้ามไปเนื้อหา</a>
         <Suspense fallback={<p role="status">กำลังตรวจสอบสิทธิ์...</p>}>
           <WebAccess>

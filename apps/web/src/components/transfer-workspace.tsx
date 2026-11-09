@@ -1,54 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { confirmAction } from "@/components/notifications";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import {
   openTransferDocument,
   TRANSFER_STATUS,
   type TransferCurriculum,
-  type TransferDraft,
   type TransferRequest,
-  type ExtractedCourse,
 } from "@/lib/transfers";
 
 const input = "w-full rounded-lg border border-gray-400 bg-white px-3 py-2";
 const button = "min-h-11 rounded-lg border px-4 py-2 disabled:opacity-50";
 const primary = `${button} bg-purple-700 text-white`;
-const blankCourse = (): ExtractedCourse => ({
-  sourceCode: "",
-  sourceName: "",
-  credits: 3,
-  grade: "",
-});
-const emptyDraft = (): TransferDraft => ({
-  sourceInstitution: "",
-  sourceMajor: "",
-  courses: [blankCourse()],
-  ocrText: "",
-  warnings: [],
-});
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "เรียกระบบไม่สำเร็จ";
 
 export function TransferWorkspace({ requestId }: { requestId?: string }) {
   const [docs, setDocs] = useState<TransferCurriculum[]>([]);
   const [requests, setRequests] = useState<TransferRequest[] | null>(null);
-  const [tab, setTab] = useState<"requests" | "curricula" | "history">(
+  const [tab, setTab] = useState<"requests" | "history">(
     "requests",
   );
-  const [file, setFile] = useState<File | null>(null);
-  const [draft, setDraft] = useState<TransferDraft>(emptyDraft);
-  const [name, setName] = useState("");
-  const [year, setYear] = useState(new Date().getFullYear() + 543);
   const [busy, setBusy] = useState(false);
-  const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<
     Record<string, { decision: string; note: string; targetCode?: string }>
   >({});
   const [targetDoc, setTargetDoc] = useState("");
+  const [rechecked, setRechecked] = useState(false);
   const load = useCallback(async () => {
     const [documents, rows] = await Promise.all([
       apiFetch<TransferCurriculum[]>("/transfers/curricula"),
@@ -56,6 +38,9 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
     ]);
     setDocs(documents);
     setRequests(rows);
+    const current = rows.find(row => row.id === requestId);
+    setDecisions(Object.fromEntries((current?.status === 'pending' ? current.items : []).filter(item => item.autoApprovalSuggested && item.match).map(item => [item.id, { decision: 'approved', note: '', targetCode: item.match!.targetCode }])));
+    setRechecked(false);
     if (requestId)
       setTargetDoc(
         rows.find((r) => r.id === requestId)?.curriculumDocumentId ?? "",
@@ -81,47 +66,6 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
       setBusy(false);
     }
   }
-  async function read(selected: File | null) {
-    setFile(selected);
-    setDraft(emptyDraft());
-    setName("");
-    if (!selected) return;
-    await run(async () => {
-      if (selected.size > 10 * 1024 * 1024)
-        throw new Error("ไฟล์ต้องไม่เกิน 10 MB");
-      setReading(true);
-      try {
-        const form = new FormData();
-        form.set("document", selected);
-        const result = await apiFetch<TransferDraft>("/transfers/preview", {
-          method: "POST",
-          body: form,
-        });
-        setDraft({
-          ...result,
-          courses: result.courses.length ? result.courses : [blankCourse()],
-        });
-        setName(result.sourceMajor || selected.name.replace(/\.[^.]+$/, ""));
-      } finally {
-        setReading(false);
-      }
-    });
-  }
-  async function saveCurriculum(event: React.FormEvent) {
-    event.preventDefault();
-    await run(async () => {
-      if (!file) throw new Error("กรุณาแนบไฟล์หลักสูตร");
-      const form = new FormData();
-      form.set("document", file);
-      form.set("payload", JSON.stringify({ name, year, draft }));
-      await apiFetch("/transfers/curricula", { method: "POST", body: form });
-      await load();
-      setSuccess("บันทึกหลักสูตรและรายวิชาแล้ว");
-      setFile(null);
-      setDraft(emptyDraft());
-      setName("");
-    });
-  }
   async function assign() {
     await run(async () => {
       await apiFetch(`/transfers/requests/${requestId}/curriculum`, {
@@ -135,10 +79,12 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
   }
   async function review(event: React.FormEvent) {
     event.preventDefault();
+    if (!(await confirmAction('ยืนยันผลพิจารณาทุกรายวิชา? ระบบจะบันทึกสถาบัน วิชา หน่วยกิต และเกรด เพื่อเสนอผลพิจารณาสำหรับคำขอถัดไป', { title: 'ยืนยันผลเทียบโอน', confirmLabel: 'ยืนยันผลพิจารณา' }))) return;
     await run(async () => {
       await apiFetch(`/transfers/requests/${requestId}/review`, {
         method: "POST",
         body: JSON.stringify({
+          confirmedRecommendations: rechecked,
           decisions: request!.items.map((item) => ({
             itemId: item.id,
             ...decisions[item.id],
@@ -314,7 +260,6 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
           {success}
         </p>
       )}
-      {reading && <p role="status">กำลังอ่านหลักสูตรด้วย OCR...</p>}
       {requests === null ? (
         <p role="status">กำลังโหลด...</p>
       ) : requestId ? (
@@ -393,7 +338,7 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
               )}
               {!docs.length && (
                 <Link
-                  href="/documents/transfers"
+                  href="/teacher/curricula"
                   className="text-purple-800 underline"
                 >
                   ไปเพิ่มหลักสูตรปลายทาง
@@ -406,7 +351,9 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
                   <h2 className="text-xl font-semibold">
                     ตรงกับที่เคยอนุมัติ ({previouslyApproved.length})
                   </h2>
+                  {request.status === 'pending' && <p className="tool-note">รายการที่สถาบัน วิชา หน่วยกิต และเกรดตรงกับประวัติ จะเตรียมผลอนุมัติไว้ให้ กรุณารีเช็คและยืนยันก่อนบันทึกจริง</p>}
                   {previouslyApproved.map(itemRow)}
+                  {request.status === 'pending' && request.items.some(item => item.autoApprovalSuggested && decisions[item.id]?.decision === 'approved') && <label className="flex items-start gap-3 py-4"><input type="checkbox" required checked={rechecked} disabled={busy} onChange={event => setRechecked(event.target.checked)} /><span>ตรวจเอกสาร เกรด และวิชาที่ระบบเสนออนุมัติจากประวัติแล้ว ยืนยันให้ใช้ผลพิจารณานี้</span></label>}
                 </section>
               )}
               <section className="work-surface">
@@ -423,7 +370,7 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
               </section>
               {request.status === "pending" && (
                 <button className={primary} disabled={busy}>
-                  {busy ? "กำลังบันทึก..." : "บันทึกผลพิจารณาทุกรายวิชา"}
+                  {busy ? "กำลังบันทึก..." : "ยืนยันผลพิจารณาทุกรายวิชา"}
                 </button>
               )}
             </form>
@@ -435,7 +382,6 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
             {(
               [
                 { key: "requests", label: "คำขอนักศึกษา" },
-                { key: "curricula", label: "หลักสูตรและ OCR" },
                 { key: "history", label: "ประวัติเคยอนุมัติ" },
               ] as const
             ).map((t) => (
@@ -477,216 +423,6 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
               ))}
             </section>
           )}
-          {tab === "curricula" && (
-            <div className="space-y-6">
-              <form
-                onSubmit={saveCurriculum}
-                className="work-surface space-y-4"
-              >
-                <h2 className="text-xl font-semibold">เพิ่มหลักสูตรปลายทาง</h2>
-                <p className="tool-note">
-                  PDF 1–100 หน้า, JPG หรือ PNG ไม่เกิน 10 MB ตรวจแก้ข้อมูล OCR
-                  ก่อนบันทึก
-                </p>
-                <label className="block space-y-2">
-                  <span>เอกสารหลักสูตร</span>
-                  <input
-                    type="file"
-                    accept="application/pdf,image/jpeg,image/png"
-                    disabled={busy}
-                    onChange={(e) => void read(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-                {file && (
-                  <>
-                    {draft.warnings.map((w) => (
-                      <p key={w} className="tool-note">
-                        {w}
-                      </p>
-                    ))}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {[
-                        { label: "ชื่อหลักสูตร", value: name, update: setName },
-                        {
-                          label: "สถาบัน",
-                          value: draft.sourceInstitution,
-                          update: (value: string) =>
-                            setDraft((d) => ({
-                              ...d,
-                              sourceInstitution: value,
-                            })),
-                        },
-                        {
-                          label: "สาขา",
-                          value: draft.sourceMajor,
-                          update: (value: string) =>
-                            setDraft((d) => ({ ...d, sourceMajor: value })),
-                        },
-                      ].map((f) => (
-                        <label key={f.label} className="space-y-1">
-                          <span>{f.label}</span>
-                          <input
-                            required
-                            maxLength={200}
-                            className={input}
-                            disabled={busy}
-                            value={f.value}
-                            onChange={(e) => f.update(e.target.value)}
-                          />
-                        </label>
-                      ))}
-                      <label className="space-y-1">
-                        <span>ปีหลักสูตร</span>
-                        <input
-                          required
-                          type="number"
-                          min={1900}
-                          max={2700}
-                          className={input}
-                          disabled={busy}
-                          value={year}
-                          onChange={(e) => setYear(Number(e.target.value))}
-                        />
-                      </label>
-                    </div>
-                    <h3 className="font-semibold">
-                      รายวิชาที่อ่านได้ ({draft.courses.length})
-                    </h3>
-                    {draft.courses.map((course, index) => (
-                      <fieldset
-                        key={index}
-                        className="grid gap-3 border-t py-3 sm:grid-cols-4"
-                      >
-                        <legend>รายวิชาที่ {index + 1}</legend>
-                        {(["sourceCode", "sourceName", "credits"] as const).map(
-                          (key) => (
-                            <label
-                              key={key}
-                              className={`space-y-1 ${key === "sourceName" ? "sm:col-span-2" : ""}`}
-                            >
-                              <span>
-                                {
-                                  {
-                                    sourceCode: "รหัสวิชา",
-                                    sourceName: "ชื่อวิชา",
-                                    credits: "หน่วยกิต",
-                                  }[key]
-                                }
-                              </span>
-                              <input
-                                required
-                                className={input}
-                                disabled={busy}
-                                type={key === "credits" ? "number" : "text"}
-                                min={key === "credits" ? 0.5 : undefined}
-                                max={key === "credits" ? 30 : undefined}
-                                step={key === "credits" ? 0.5 : undefined}
-                                value={course[key]}
-                                onChange={(e) =>
-                                  setDraft((d) => ({
-                                    ...d,
-                                    courses: d.courses.map((c, i) =>
-                                      i === index
-                                        ? {
-                                            ...c,
-                                            [key]:
-                                              key === "credits"
-                                                ? Number(e.target.value)
-                                                : e.target.value,
-                                          }
-                                        : c,
-                                    ),
-                                  }))
-                                }
-                              />
-                            </label>
-                          ),
-                        )}
-                        <button
-                          type="button"
-                          className={button}
-                          disabled={busy || draft.courses.length === 1}
-                          onClick={() =>
-                            setDraft((d) => ({
-                              ...d,
-                              courses: d.courses.filter((_, i) => i !== index),
-                            }))
-                          }
-                        >
-                          ลบวิชาที่ {index + 1}
-                        </button>
-                      </fieldset>
-                    ))}
-                    <button
-                      type="button"
-                      disabled={busy || draft.courses.length >= 1000}
-                      className={button}
-                      onClick={() =>
-                        setDraft((d) => ({
-                          ...d,
-                          courses: [...d.courses, blankCourse()],
-                        }))
-                      }
-                    >
-                      เพิ่มรายวิชา
-                    </button>
-                    {draft.ocrText && (
-                      <details>
-                        <summary className="cursor-pointer py-2">
-                          ข้อความ OCR ต้นฉบับ
-                        </summary>
-                        <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-sm">
-                          {draft.ocrText}
-                        </pre>
-                      </details>
-                    )}
-                    <div>
-                      <button disabled={busy} className={primary}>
-                        ยืนยันและบันทึกหลักสูตร
-                      </button>
-                    </div>
-                  </>
-                )}
-              </form>
-              <section className="work-surface space-y-4">
-                <h2 className="text-xl font-semibold">หลักสูตรที่บันทึกแล้ว</h2>
-                {!docs.length && (
-                  <p>ยังไม่มีหลักสูตร อัปโหลดเอกสารเพื่อเริ่มจับคู่รายวิชา</p>
-                )}
-                {docs.map((d) => (
-                  <details key={d.id} className="border-t py-3">
-                    <summary className="cursor-pointer py-2">
-                      {d.curriculumName} · {d.year} · {d.courses?.length ?? 0}{" "}
-                      วิชา
-                    </summary>
-                    <p>
-                      {d.sourceInstitution} · {d.sourceMajor}
-                    </p>
-                    <button
-                      disabled={busy}
-                      className={button}
-                      onClick={() =>
-                        void run(async () =>
-                          openTransferDocument(
-                            `/transfers/curricula/${d.id}/document`,
-                          ),
-                        )
-                      }
-                    >
-                      ดูเอกสารต้นฉบับ
-                    </button>
-                    <ul className="space-y-2 py-3">
-                      {d.courses?.map((c) => (
-                        <li key={c.sourceCode}>
-                          {c.sourceCode} · {c.sourceName} · {c.credits} หน่วยกิต
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ))}
-              </section>
-            </div>
-          )}
           {tab === "history" && (
             <section className="work-surface space-y-4">
               <h2 className="text-xl font-semibold">รายวิชาที่เคยอนุมัติ</h2>
@@ -708,6 +444,7 @@ export function TransferWorkspace({ requestId }: { requestId?: string }) {
                     {item.match!.targetCode} · {item.match!.targetName}
                   </p>
                   <p className="tool-note">
+                    วิชาเดิม {item.credits} หน่วยกิต · เกรด {item.grade || 'ไม่ระบุ'} ·
                     {row.curriculumName} · {item.match!.targetCredits} หน่วยกิต
                   </p>
                   <Link

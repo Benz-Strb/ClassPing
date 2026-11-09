@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -420,8 +422,8 @@ function UnknownTripCard({
     if (!result.ok) setError(result.error);
   }
 
-  function reject() {
-    if (!window.confirm("ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง")) return;
+  async function reject() {
+    if (!(await confirmAction("ลบรอบนี้ใช่ไหม รอบนี้จะหายไปจากการนับเวลานอกห้อง"))) return;
     void submit({ action: "reject" });
   }
 
