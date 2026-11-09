@@ -7,6 +7,7 @@ import { RolesGuard } from '../src/auth/roles.guard.js';
 import { AdminController } from '../src/admin/admin.controller.js';
 import { AdminService } from '../src/admin/admin.service.js';
 import { CatalogController } from '../src/admin/catalog.controller.js';
+import { CurriculaController } from '../src/admin/curricula.controller.js';
 import { CHAT_PROVIDER, MockChatProvider } from '../src/chat/chat.provider.js';
 import { CatalogService } from '../src/admin/catalog.service.js';
 import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
@@ -37,7 +38,7 @@ describe('Admin HTTP RBAC', () => {
   ] as [string, string][];
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      controllers: [AdminController, CatalogController],
+      controllers: [AdminController, CatalogController, CurriculaController],
       providers: [
         { provide: AdminService, useValue: admin }, { provide: CatalogService, useValue: catalog },
         { provide: APP_GUARD, useClass: FakeAuth }, { provide: APP_GUARD, useClass: RolesGuard },
@@ -61,8 +62,39 @@ describe('Admin HTTP RBAC', () => {
       for (const fn of [...Object.values(admin), ...Object.values(catalog)]) expect(fn).not.toHaveBeenCalled();
     });
   }
+  it('admin ใช้เส้นทางหลักสูตรเดิมและใหม่ไม่ได้แล้ว', async () => {
+    for (const [method, path] of [
+      ['get', '/admin/catalog/curricula'], ['post', '/admin/catalog/curricula'],
+      ['put', '/admin/catalog/curricula/entry'], ['post', '/admin/catalog/curricula/import'],
+      ['get', '/teacher/curricula'], ['post', '/teacher/curricula'],
+      ['put', '/teacher/curricula/entry'], ['post', '/teacher/curricula/import'],
+    ] as [string, string][]) {
+      const response = await request(app.getHttpServer())[method as 'post'](path).set('x-role', 'admin').send({});
+      expect(response.status, `${method} ${path}`).toBe(403);
+    }
+    for (const fn of Object.values(catalog)) expect(fn).not.toHaveBeenCalled();
+  });
+  it('อาจารย์จัดการได้เฉพาะหลักสูตร', async () => {
+    await request(app.getHttpServer()).get('/teacher/curricula').set('x-role', 'teacher').expect(200);
+    await request(app.getHttpServer()).post('/teacher/curricula').set('x-role', 'teacher').send({ name: 'IT' }).expect(201);
+    await request(app.getHttpServer()).put('/teacher/curricula/entry').set('x-role', 'teacher').send({ name: 'IT' }).expect(200);
+    await request(app.getHttpServer()).post('/teacher/curricula/import').set('x-role', 'teacher').send({ csv: 'x' }).expect(201);
+    expect(catalog.list).toHaveBeenCalledWith('curricula');
+    expect(catalog.create).toHaveBeenCalledWith('curricula', { name: 'IT' });
+    expect(catalog.update).toHaveBeenCalledWith('curricula', 'entry', { name: 'IT' });
+    expect(catalog.importCsv).toHaveBeenCalledWith('curricula', { csv: 'x' });
+  });
+  for (const role of ['student', '']) {
+    it(`blocks teacher curricula routes for ${role || 'missing user'}`, async () => {
+      for (const [method, path] of [['get', '/teacher/curricula'], ['post', '/teacher/curricula'], ['put', '/teacher/curricula/entry'], ['post', '/teacher/curricula/import']] as [string, string][]) {
+        const response = await request(app.getHttpServer())[method as 'post'](path).set('x-role', role).send({});
+        expect(response.status, `${method} ${path}`).toBe(403);
+      }
+      for (const fn of Object.values(catalog)) expect(fn).not.toHaveBeenCalled();
+    });
+  }
   it('allows admin and dispatches writes to the intended handler', async () => {
-    await request(app.getHttpServer()).get('/admin/catalog/curricula').set('x-role', 'admin').expect(200);
+    await request(app.getHttpServer()).get('/admin/catalog/reference').set('x-role', 'admin').expect(200);
     await request(app.getHttpServer()).post('/admin/catalog/reference/import').set('x-role', 'admin').send({ csv: 'example' }).expect(201);
     await request(app.getHttpServer()).put('/admin/catalog/knowledge/entry').set('x-role', 'admin').send({ name: 'FAQ' }).expect(200);
     await request(app.getHttpServer()).get('/admin/video-views?from=2026-11-01&to=2026-11-02').set('x-role', 'admin').expect(200);
@@ -79,7 +111,7 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
   const repo = { saveKnowledge: vi.fn(async (_id: string | null, row: object) => ({ id: 'entry', ...row })), insert: vi.fn(async (_kind: string, rows: object[]) => rows.map((row) => ({ id: 'entry', ...row }))), list: vi.fn(async () => []), update: vi.fn() };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      controllers: [CatalogController],
+      controllers: [CatalogController, CurriculaController],
       providers: [CatalogService, { provide: CHAT_PROVIDER, useClass: MockChatProvider }, { provide: CATALOG_REPO, useValue: repo },
         { provide: APP_CONFIG, useValue: { allowedOrigins: [], port: 3001 } },
         { provide: APP_GUARD, useClass: FakeAuth }, { provide: APP_GUARD, useClass: RolesGuard }],
@@ -98,7 +130,7 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
     expect(repo.saveKnowledge).toHaveBeenCalledTimes(1);
   });
   it('reports invalid CSV row without writing any records', async () => {
-    const response = await request(app.getHttpServer()).post('/admin/catalog/curricula/import').set('x-role', 'admin')
+    const response = await request(app.getHttpServer()).post('/teacher/curricula/import').set('x-role', 'teacher')
       .send({ csv: 'code,name,year\nCS,Computer,2569\nIT,IT,no-year' });
     expect(response.status).toBe(400);
     expect(response.body.error.message).toContain('3');
