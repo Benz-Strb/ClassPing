@@ -9,7 +9,7 @@ import { AttendanceSummarySection } from './AttendanceSummarySection';
 import { HomeStudies } from './HomeStudies';
 import { CoursesScreen } from './CoursesScreen';
 import { ChatScreen } from './ChatScreen';
-import { LeaveScreen } from './LeaveScreen';
+import { DocumentsScreen } from './DocumentsScreen';
 import { AccountScreen } from './AccountScreen';
 import {StudentTabBar, TABS, type Tab} from '../ui/StudentTabBar';
 
@@ -84,13 +84,13 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
           <View style={styles.shortcuts}>
             {(['courses', 'leave'] as const).map((key) => <Pressable key={key} onPress={() => navigate(key)} style={[styles.shortcut, key === 'courses' && styles.primaryShortcut]}>
               <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={key === 'courses' ? colors.onAction : colors.action} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><Path d={TABS.find(item => item.key === key)!.path} /></Svg>
-              <Text style={[styles.shortcutText, key === 'courses' && styles.primaryShortcutText]}>{key === 'courses' ? 'ดูรายวิชาของฉัน' : 'ยื่นใบลา'}</Text>
+              <Text style={[styles.shortcutText, key === 'courses' && styles.primaryShortcutText]}>{key === 'courses' ? 'ดูรายวิชาของฉัน' : 'เอกสารของฉัน'}</Text>
             </Pressable>)}
           </View>
           <View style={styles.tip}><Text style={styles.tipTitle}>เข้าเรียนได้โดยไม่ต้องกดเช็กชื่อ</Text><Text style={styles.tipText}>กล้องในห้องเรียนบันทึกการเข้าเรียนให้คุณ ตรวจสอบผลย้อนหลังได้ที่รายวิชา</Text></View>
         </ScrollView>}
         {key === 'courses' && <CoursesScreen active={tab === 'courses'} />}
-        {key === 'leave' && <LeaveScreen active={tab === 'leave'} focusTick={focusTick} />}
+        {key === 'leave' && <DocumentsScreen active={tab === 'leave'} focusTick={focusTick} />}
         {key === 'chat' && <ChatScreen authenticated />}
         {key === 'account' && <AccountScreen me={me} face={face} banner={enrollBanner} onSignOut={onSignOut} />}
       </View>)}

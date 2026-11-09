@@ -7,7 +7,7 @@ import {colors} from './theme';
 export const TABS = [
   {key: 'home', label: 'หน้าหลัก', path: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z'},
   {key: 'courses', label: 'รายวิชา', path: 'M4 4h6v16H4z M14 4h6v16h-6z'},
-  {key: 'leave', label: 'การลา', path: 'M7 3v4m10-4v4M4 5h16v16H4zM8 12h8m-8 4h5'},
+  {key: 'leave', label: 'เอกสาร', path: 'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6'},
   {key: 'chat', label: 'ผู้ช่วย', path: 'M3 4h18v13H9l-6 4z M7 9h10 M7 13h6'},
   {key: 'account', label: 'บัญชี', path: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 22v-3a8 8 0 0 1 16 0v3'},
 ] as const;

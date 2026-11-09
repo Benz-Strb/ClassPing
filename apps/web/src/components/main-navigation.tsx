@@ -59,7 +59,7 @@ export function MainNavigation() {
       </div>
       <div id="main-navigation-links" className="navigation-links" data-open={open}>
         {links.map(({ href, label }) => (
-          <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={pathname === href || (href !== "/" && pathname.startsWith(`${href}/`)) ? "page" : undefined} className="navigation-link">
+          <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={pathname === href || (href === "/documents" && (pathname.startsWith("/documents/") || pathname.startsWith("/leave/") || pathname === "/admin/transfers" || pathname === "/admin/leave-statuses")) || (href !== "/" && pathname.startsWith(`${href}/`)) ? "page" : undefined} className="navigation-link">
             <span aria-hidden="true" className="navigation-icon" style={{ maskImage: `url(/icons/${iconFor(href)}.svg)` }} />
             {label}
           </Link>

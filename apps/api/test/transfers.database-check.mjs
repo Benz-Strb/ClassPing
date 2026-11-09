@@ -267,6 +267,19 @@ assert.equal(
   false,
 );
 checks++;
+const teacherRequest = await create([item('teacher-item', 'IT201')]);
+await db.query(review, [teacherRequest, teacher, JSON.stringify([{ itemId: 'teacher-item', decision: 'approved', expectedDocumentId: documentId }])]);
+assert.equal((await db.query('select reviewed_by from public.transfer_requests where id=$1', [teacherRequest])).rows[0].reviewed_by, teacher);
+checks++;
+const changedRequest = await create([item('changed-item', 'IT202')]);
+await rejects(review, [changedRequest, teacher, JSON.stringify([{ itemId: 'changed-item', decision: 'approved', expectedDocumentId: '30000000-0000-4000-8000-000000000099' }])], 'CURRICULUM_CHANGED');
+const manualRequest = await create([item('manual-item', 'IT203', false)]);
+await db.query(review, [manualRequest, teacher, JSON.stringify([{ itemId: 'manual-item', decision: 'approved', match: { targetCode: 'IT203', targetName: 'Teacher selected', targetCredits: 3, minCredits: 3 } }])]);
+assert.equal((await db.query('select status from public.transfer_requests where id=$1', [manualRequest])).rows[0].status, 'approved');
+checks++;
+const { rows: queued } = await db.query("insert into public.transfer_requests(student_id,curriculum_name,source_institution,source_major,document_path,document_name,document_mime,document_size,items) values($1,'Pending','School','CS','qa/no-target.pdf','doc.pdf','application/pdf',100,$2) returning id", [student, JSON.stringify([item('queued-item', 'IT300', false)])]);
+await db.query(review, [queued[0].id, teacher, JSON.stringify([{ itemId: 'queued-item', decision: 'rejected', note: 'No suitable target curriculum' }])]);
+checks++;
 const result = {
   checks,
   migration: 'passed',

@@ -1,3 +1,4 @@
+import { extractLeaveDraft } from '../src/leave/leave-draft.js';
 import type {
   CanActivate,
   ExecutionContext,
@@ -101,6 +102,7 @@ class MemoryLeaveRepo implements LeaveRepo {
         fullName: 'นักศึกษา ทดสอบ',
       },
       reason: input.reason,
+      documentDetails: input.documentDetails,
       status: 'pending',
       ocrText: input.ocrText,
       ocrStatus: input.ocrStatus,
@@ -345,7 +347,7 @@ describe('ระบบลา (e2e)', () => {
         contentType: 'image/png',
       })
       .expect(200)
-      .expect({ data: { text: 'ใบลาป่วย', reason: 'ใบลาป่วย' } });
+      .expect({ data: { text: 'ใบลาป่วย', ...extractLeaveDraft('ใบลาป่วย') } });
     expect(repo.requests).toEqual([]);
 
     await request(server)
@@ -369,6 +371,7 @@ describe('ระบบลา (e2e)', () => {
       .set('x-role', 'student')
       .field('sessionId', SESSION.id)
       .field('reason', 'ไข้สูง')
+      .field('documentDetails', JSON.stringify({ facility: 'คลินิกทดสอบ', documentDate: '2026-11-08', leaveStartDate: '2026-11-08', leaveEndDate: '2026-11-09' }))
       .attach('evidence', PNG, {
         filename: 'leave.png',
         contentType: 'image/png',
@@ -386,6 +389,7 @@ describe('ระบบลา (e2e)', () => {
       .expect(200);
     expect(mine.body.data[0]).toMatchObject({
       reason: 'ไข้สูง',
+      documentDetails: { facility: 'คลินิกทดสอบ', documentDate: '2026-11-08', leaveStartDate: '2026-11-08', leaveEndDate: '2026-11-09' },
       ocrText: 'ใบลาป่วย',
       session: { courseCode: 'CS101', roomName: 'LAB 1' },
       attachments: [{ fileName: 'leave.png', mime: 'image/png' }],
@@ -400,6 +404,7 @@ describe('ระบบลา (e2e)', () => {
       id: '22222222-2222-4222-8222-222222222222',
       status: 'pending',
       reason: 'ไข้สูง',
+      documentDetails: { facility: 'คลินิกทดสอบ', documentDate: '2026-11-08', leaveStartDate: '2026-11-08', leaveEndDate: '2026-11-09' },
       student: { studentId: '66000001' },
     });
 

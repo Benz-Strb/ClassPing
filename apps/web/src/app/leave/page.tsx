@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RetryButton } from "@/components/retry-button";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -9,7 +9,10 @@ import { LeaveAccess } from "@/components/leave-access";
 import {
   formatSession,
   formatSubmittedAt,
-  extractLeaveReason,
+  EMPTY_DOCUMENT_DETAILS,
+  DOCUMENT_FIELDS,
+  type DocumentDetails,
+  type LeaveDraft,
   OCR_STATUS_LABEL,
   STATUS_LABEL,
   type LeaveRequest,
@@ -28,8 +31,11 @@ function StudentLeavePage() {
   const [sessions, setSessions] = useState<LeaveSession[] | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [reason, setReason] = useState("");
+  const [documentDetails, setDocumentDetails] = useState<DocumentDetails>({ ...EMPTY_DOCUMENT_DETAILS });
   const [evidence, setEvidence] = useState<File | null>(null);
-  const [fileKey, setFileKey] = useState(0);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const photosInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
@@ -82,15 +88,15 @@ function StudentLeavePage() {
     body.set("sessionId", targetSessionId);
     body.set("evidence", file);
     try {
-      const draft = await apiFetch<{ text: string; reason: string }>(
+      const draft = await apiFetch<LeaveDraft>(
         "/leave-requests/preview",
         { method: "POST", body },
       );
       setOcrText(draft.text);
-      const extractedReason = extractLeaveReason(draft.reason || draft.text);
-      if (extractedReason.trim()) {
-        setReason(extractedReason.trim());
-      }
+      setReason(current => current.trim() ? current : draft.reason);
+      setDocumentDetails(current => Object.fromEntries(
+        DOCUMENT_FIELDS.map(([key]) => [key, current[key] || draft.documentDetails[key] || '']),
+      ) as unknown as DocumentDetails);
     } catch (e) {
       setError(
         `${await handleApiError(e, router)} — สามารถกรอกเหตุผลและส่งให้อาจารย์ตรวจเองได้`,
@@ -128,14 +134,16 @@ function StudentLeavePage() {
     const body = new FormData();
     body.set("sessionId", sessionId);
     body.set("reason", reason);
+    body.set("documentDetails", JSON.stringify(documentDetails));
     body.set("evidence", evidence);
     try {
       await apiFetch("/leave-requests", { method: "POST", body });
       setSessionId("");
       setReason("");
+      setDocumentDetails({ ...EMPTY_DOCUMENT_DETAILS });
       setEvidence(null);
       setOcrText(null);
-      setFileKey((value) => value + 1);
+
       await load();
     } catch (e) {
       setError(await handleApiError(e, router));
@@ -226,28 +234,68 @@ function StudentLeavePage() {
               className="min-h-24 w-full rounded-lg border px-3 py-2"
             />
           </label>
-          <label htmlFor="leave-evidence" className="block">
-            <span className="mb-1 block font-medium">หลักฐานการลา</span>
-            <input
-              key={fileKey}
-              id="leave-evidence"
-              required
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
+          <fieldset className="space-y-3" disabled={saving || reading}>
+            <legend className="font-medium">ข้อมูลร่างจากหลักฐาน</legend>
+            <p className="text-sm text-gray-600">ตรวจแก้ก่อนส่ง ช่องที่อ่านไม่พบเว้นว่างได้ วันที่เหล่านี้ไม่เปลี่ยนคาบเรียนที่เลือก</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {DOCUMENT_FIELDS.map(([key, label]) => (
+                <label key={key} className="block">
+                  <span className="mb-1 block">{label}</span>
+                  <input type={key === 'facility' ? 'text' : 'date'}
+                    maxLength={key === 'facility' ? 200 : undefined}
+                    value={documentDetails[key]}
+                    onChange={event => setDocumentDetails(current => ({ ...current, [key]: event.target.value }))}
+                    className="w-full min-w-0 rounded-lg border px-3 py-2" />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset disabled={saving || reading} className="space-y-2">
+            <legend className="mb-1 font-medium">หลักฐานการลา</legend>
+            <select
+              aria-label="เลือกวิธีแนบหลักฐาน"
+              value=""
               onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                setEvidence(file);
-                setOcrText(null);
-                if (file && sessionId) {
-                  void autoReadEvidence(sessionId, file);
-                }
+                const inputs: Record<string, typeof cameraInput> = { camera: cameraInput, photos: photosInput, files: fileInput };
+                const input = inputs[event.target.value];
+                input?.current?.click();
               }}
-              className="block w-full text-sm"
-            />
-            <span className="mt-1 block text-sm text-gray-500">
-              PDF, JPG หรือ PNG ขนาดไม่เกิน 25 MB
-            </span>
-          </label>
+              className="w-full rounded-lg border px-3 py-2"
+            >
+              <option value="" disabled>เลือกวิธีแนบหลักฐาน</option>
+              <option value="camera">ถ่ายรูป</option>
+              <option value="photos">เลือกจากคลังภาพ</option>
+              <option value="files">เลือกไฟล์ PDF / รูปภาพ</option>
+            </select>
+            {([
+              [cameraInput, "image/jpeg,image/png", "environment"],
+              [photosInput, "image/jpeg,image/png", undefined],
+              [fileInput, "application/pdf,image/jpeg,image/png", undefined],
+            ] as const).map(([ref, accept, capture], index) => (
+              <input key={index} ref={ref} type="file" accept={accept} capture={capture} hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+                    setError("กรุณาเลือกไฟล์ PDF, JPG หรือ PNG");
+                    return;
+                  }
+                  if (file.size > MAX_EVIDENCE_BYTES) {
+                    setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 25 MB");
+                    return;
+                  }
+                  setEvidence(file);
+                  setDocumentDetails({ ...EMPTY_DOCUMENT_DETAILS });
+                  setError(null);
+                  setOcrText(null);
+                  if (sessionId) void autoReadEvidence(sessionId, file);
+                }} />
+            ))}
+            {evidence && <p role="status" className="break-all text-sm">ไฟล์ที่เลือก: {evidence.name}</p>}
+            <p className="text-sm text-gray-500">PDF, JPG หรือ PNG ขนาดไม่เกิน 25 MB · แนบได้ครั้งละ 1 ไฟล์</p>
+            <p className="text-sm text-gray-500">การถ่ายรูปขึ้นอยู่กับอุปกรณ์และเบราว์เซอร์ที่ใช้</p>
+          </fieldset>
           <button
             type="button"
             onClick={() => void readEvidence()}
@@ -258,9 +306,10 @@ function StudentLeavePage() {
           </button>
           {ocrText !== null && (
             <div role="status" className="space-y-2 rounded-lg bg-blue-50 p-3">
-              <p className="whitespace-pre-wrap">
-                {ocrText || "ไม่พบข้อความ กรุณากรอกเหตุผลเอง"}
-              </p>
+              <details>
+                <summary className="cursor-pointer">ดูข้อความต้นฉบับที่ OCR อ่านได้</summary>
+                <p className="whitespace-pre-wrap">{ocrText || "ไม่พบข้อความ กรุณากรอกข้อมูลเอง"}</p>
+              </details>
               <p>
                 ตรวจและแก้เหตุผลด้านบนก่อนส่ง หากกรอกไว้แล้วระบบจะไม่เขียนทับ
               </p>
@@ -304,6 +353,9 @@ function StudentLeavePage() {
                   </span>
                 </div>
                 <p>{request.reason}</p>
+                {DOCUMENT_FIELDS.map(([key, label]) => request.documentDetails?.[key] ? (
+                  <p key={key} className="text-sm">{label}: {request.documentDetails[key]}</p>
+                ) : null)}
                 <p className="text-sm text-gray-600">
                   OCR: {OCR_STATUS_LABEL[request.ocrStatus]}
                   {request.ocrText ? ` — ${request.ocrText}` : ""}

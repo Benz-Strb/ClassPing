@@ -10,7 +10,7 @@ import type { Me } from "@/lib/types";
 
 export default function Home() {
   const router = useRouter();
-  const [state, setState] = useState<"loading" | "guest" | "student">("loading");
+  const [state, setState] = useState<"loading" | "guest">("loading");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,8 +21,7 @@ export default function Home() {
       }
       try {
         const me = await apiFetch<Me>("/me");
-        if (me.role === "student") setState("student");
-        else router.replace("/courses");
+        if (me.role === "teacher" || me.role === "admin") router.replace("/courses");
       } catch (e) {
         setError(await handleApiError(e, router));
       }
@@ -34,21 +33,11 @@ export default function Home() {
 
   return (
     <main className="welcome-layout">
-      {state === "student" ? (
-        <section className="work-surface welcome-panel">
-          <h1>พื้นที่นักศึกษา</h1>
-          <p className="tool-note mt-3 mb-6">ดูตารางเรียนและผลเข้าเรียนผ่านแอป ClassPing ส่วนคำขอลาและเทียบโอนใช้งานบนเว็บได้</p>
-          <Link href="/leave" className="tool-link">ยื่นคำขอลาและดูสถานะ<span aria-hidden="true">&rsaquo;</span></Link>
-          <Link href="/transfers" className="tool-link">ขอเทียบโอนรายวิชา<span aria-hidden="true">&rsaquo;</span></Link>
-          <Link href="/me" className="tool-link">บัญชีของฉัน<span aria-hidden="true">&rsaquo;</span></Link>
-        </section>
-      ) : (
         <section className="work-surface welcome-panel">
           <h1>ClassPing</h1>
-          <p className="tool-note mt-3 mb-8">ระบบจัดการรายวิชาและการเข้าเรียนด้วยใบหน้า สำหรับนักศึกษาและบุคลากรมหาวิทยาลัย</p>
+          <p className="tool-note mt-3 mb-8">ระบบจัดการรายวิชาและการเข้าเรียนด้วยใบหน้า สำหรับผู้ดูแลระบบและอาจารย์</p>
           <Link href="/login" className="welcome-action">เข้าสู่ระบบด้วยบัญชีมหาวิทยาลัย</Link>
         </section>
-      )}
     </main>
   );
 }

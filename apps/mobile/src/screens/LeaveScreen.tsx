@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput } from '../ui/primitives';
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { File } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { apiFetch } from "../lib/api";
 import { previewErrorMessage } from "../lib/errors";
-import { prepareLeaveEvidence } from "../lib/face";
 import {
   discardLeaveEvidence,
   formatLeaveSession,
@@ -14,7 +16,9 @@ import {
   OCR_STATUS_LABEL,
   submitLeave,
   previewLeave,
-  extractLeaveReason,
+  EMPTY_DOCUMENT_DETAILS,
+  DOCUMENT_FIELDS,
+  type DocumentDetails,
 } from "../lib/leave";
 import type { LeaveRequest, LeaveSession } from "../lib/types";
 
@@ -34,7 +38,8 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
-  const [evidence, setEvidence] = useState<ImagePicker.ImagePickerAsset | null>(
+  const [documentDetails, setDocumentDetails] = useState<DocumentDetails>({ ...EMPTY_DOCUMENT_DETAILS });
+  const [evidence, setEvidence] = useState<{ uri: string; fileName: string } | null>(
     null,
   );
   const evidenceUri = useRef<string | null>(null);
@@ -42,6 +47,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [reading, setReading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [showOcrText, setShowOcrText] = useState(false);
   const [ocrText, setOcrText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // ข้อความโหลดไม่สำเร็จแยกจากข้อความตรวจฟอร์ม ล้างเมื่อโหลดสำเร็จ
@@ -88,10 +94,10 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
     try {
       const draft = await previewLeave(targetSessionId, uri);
       setOcrText(draft.text);
-      const extractedReason = extractLeaveReason(draft.reason || draft.text);
-      if (extractedReason.trim()) {
-        setReason(extractedReason.trim());
-      }
+      setReason(current => current.trim() ? current : draft.reason);
+      setDocumentDetails(current => Object.fromEntries(
+        DOCUMENT_FIELDS.map(([key]) => [key, current[key] || draft.documentDetails[key] || '']),
+      ) as unknown as DocumentDetails);
     } catch (e) {
       setOcrError(previewErrorMessage(e));
     } finally {
@@ -99,40 +105,63 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
     }
   }
 
-  async function pickEvidence() {
+  async function pickEvidence(source: "camera" | "photos" | "files") {
     if (busy || reading) return;
     setBusy(true);
     setError(null);
+    let candidateUri: string | null = null;
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
-      const asset = result.canceled ? null : result.assets[0];
-      if (!asset) return;
-      if (asset.fileSize && asset.fileSize > MAX_EVIDENCE_BYTES) {
+      let fileName: string;
+      if (source === "files") {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ["application/pdf", "image/jpeg", "image/png"],
+          copyToCacheDirectory: true,
+          multiple: false,
+        });
+        if (result.canceled) return;
+        const asset = result.assets[0];
+        candidateUri = asset.uri;
+        fileName = asset.name;
+        if (!/\.(pdf|jpe?g|png)$/i.test(fileName)) {
+          setError("กรุณาเลือกไฟล์ PDF, JPG หรือ PNG");
+          return;
+        }
+      } else {
+        if (source === "camera") {
+          const permission = await ImagePicker.requestCameraPermissionsAsync();
+          if (!permission.granted) {
+            setError("กรุณาอนุญาตกล้องในการตั้งค่า หรือเลือกหลักฐานจากคลังภาพหรือไฟล์");
+            return;
+          }
+        }
+        const options: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.9 };
+        const result = source === "camera"
+          ? await ImagePicker.launchCameraAsync(options)
+          : await ImagePicker.launchImageLibraryAsync(options);
+        if (result.canceled) return;
+        const asset = result.assets[0];
+        const image = await ImageManipulator.manipulate(asset.uri).renderAsync();
+        candidateUri = (await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 })).uri;
         discardLeaveEvidence(asset.uri);
-        setError("ภาพหลักฐานต้องมีขนาดไม่เกิน 25 MB");
+        fileName = `${(asset.fileName || "หลักฐานการลา").replace(/\.[^.]+$/, "")}.jpg`;
+      }
+      if (new File(candidateUri).size > MAX_EVIDENCE_BYTES) {
+        setError("ไฟล์หลักฐานต้องมีขนาดไม่เกิน 25 MB");
         return;
       }
-      // API รับแค่ JPG PNG PDF ภาพจากคลังอาจเป็น HEIC จึงแปลงเป็น JPEG
-      let uri: string;
-      try {
-        uri = await prepareLeaveEvidence(asset);
-      } catch {
-        discardLeaveEvidence(asset.uri);
-        setError("เปิดภาพไม่สำเร็จ ลองเลือกใหม่อีกครั้ง");
-        return;
-      }
-      discardLeaveEvidence(asset.uri);
       discardLeaveEvidence(evidence?.uri ?? null);
+      const uri = candidateUri;
       evidenceUri.current = uri;
-      setEvidence({ ...asset, uri });
+      setEvidence({ uri, fileName });
+      setDocumentDetails({ ...EMPTY_DOCUMENT_DETAILS });
+      candidateUri = null;
       setOcrText(null);
       setOcrError(null);
-      if (sessionId) {
-        await autoReadEvidence(sessionId, uri);
-      }
+      if (sessionId) await autoReadEvidence(sessionId, uri);
     } catch {
-      setError("เปิดภาพหลักฐานไม่ได้ กรุณาลองเลือกภาพใหม่");
+      setError("เปิดหลักฐานไม่ได้ กรุณาลองใหม่หรือเลือกวิธีแนบไฟล์อื่น");
     } finally {
+      discardLeaveEvidence(candidateUri);
       setBusy(false);
     }
   }
@@ -153,7 +182,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   }
 
   async function submit() {
-    if (busy) return;
+    if (busy || reading) return;
     if (!sessionId) {
       setError("กรุณาเลือกคาบที่ต้องการลา");
       return;
@@ -163,19 +192,20 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
       return;
     }
     if (!evidence) {
-      setError("กรุณาเลือกภาพหลักฐานการลา");
+      setError("กรุณาเลือกหลักฐานการลา");
       return;
     }
     setBusy(true);
     setSubmitting(true);
     setError(null);
     try {
-      await submitLeave(sessionId, reason.trim(), evidence.uri);
+      await submitLeave(sessionId, reason.trim(), evidence.uri, documentDetails);
       discardLeaveEvidence(evidence.uri);
       evidenceUri.current = null;
       setEvidence(null);
       setOcrText(null);
       setReason("");
+      setDocumentDetails({ ...EMPTY_DOCUMENT_DETAILS });
       setSessionId(null);
       setCourseId(null);
       setOcrError(null);
@@ -228,7 +258,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>ยื่นคำขอลา</Text>
-          <Text style={styles.help}>เลือกคาบและแนบภาพหลักฐาน</Text>
+          <Text style={styles.help}>เลือกคาบและแนบหลักฐาน</Text>
         </View>
         {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับ</Text>
@@ -266,19 +296,36 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
           style={styles.input}
         />
 
-        <Text style={styles.heading}>แนบภาพหลักฐาน</Text>
-        <Pressable
-          style={styles.secondary}
-          onPress={pickEvidence}
-          disabled={busy}
-        >
-          <Text>
-            {evidence
-              ? evidence.fileName || "เลือกภาพแล้ว"
-              : "เลือกภาพจากเครื่อง"}
-          </Text>
-        </Pressable>
-        <Text style={styles.help}>รองรับ JPG/PNG ขนาดไม่เกิน 25 MB</Text>
+        <Text style={styles.heading}>ข้อมูลร่างจากหลักฐาน</Text>
+        <Text style={styles.help}>ตรวจแก้ก่อนส่ง ช่องที่อ่านไม่พบเว้นว่างได้ วันที่เหล่านี้ไม่เปลี่ยนคาบเรียนที่เลือก</Text>
+        {DOCUMENT_FIELDS.map(([key, label]) => (
+          <View key={key}>
+            <Text>{label}</Text>
+            <TextInput accessibilityLabel={label} value={documentDetails[key]}
+              maxLength={key === 'facility' ? 200 : 10} editable={!busy && !reading}
+              placeholder={key === 'facility' ? 'ชื่อสถานพยาบาล (ถ้ามี)' : 'YYYY-MM-DD เช่น 2026-11-08'}
+              onChangeText={value => setDocumentDetails(current => ({ ...current, [key]: value }))}
+              style={styles.input} />
+          </View>
+        ))}
+        <SelectField
+          label="แนบหลักฐานการลา"
+          placeholder="เลือกวิธีแนบหลักฐาน"
+          value={null}
+          options={[
+            { value: "camera", label: "ถ่ายรูป" },
+            { value: "photos", label: "เลือกจากคลังภาพ" },
+            { value: "files", label: "เลือกไฟล์ PDF / รูปภาพ" },
+          ]}
+          onChange={(source) => {
+            if (source === "camera" || source === "photos" || source === "files") {
+              void pickEvidence(source);
+            }
+          }}
+          disabled={busy || reading}
+        />
+        {evidence && <Text accessibilityLiveRegion="polite">ไฟล์ที่เลือก: {evidence.fileName}</Text>}
+        <Text style={styles.help}>รองรับ PDF, JPG และ PNG ขนาดไม่เกิน 25 MB · แนบได้ครั้งละ 1 ไฟล์</Text>
         {reading ? (
           <View style={styles.readingStatus}>
             <ActivityIndicator color={colors.action} />
@@ -296,9 +343,13 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
         {ocrError && <Text accessibilityRole="alert" style={styles.error}>{ocrError}</Text>}
         {ocrText !== null && (
           <View accessibilityLiveRegion="polite">
-            <Text>{ocrText || "ไม่พบข้อความ กรุณากรอกเหตุผลเอง"}</Text>
+            <Pressable style={styles.secondary} accessibilityState={{ expanded: showOcrText }}
+              onPress={() => setShowOcrText(value => !value)}>
+              <Text>{showOcrText ? 'ซ่อนข้อความต้นฉบับ' : 'ดูข้อความต้นฉบับที่ OCR อ่านได้'}</Text>
+            </Pressable>
+            {showOcrText && <Text>{ocrText || "ไม่พบข้อความ กรุณากรอกข้อมูลเอง"}</Text>}
             <Text style={styles.help}>
-              ระบบนำข้อความจากหลักฐานมาใส่ในช่องเหตุผลด้านบนแล้ว ตรวจสอบหรือแก้ไขได้ก่อนส่ง
+              ระบบแยกข้อมูลที่อ่านพบลงฟอร์มร่างแล้ว ตรวจสอบและแก้ไขก่อนส่ง
             </Text>
           </View>
         )}
@@ -336,6 +387,9 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
             </View>
             <Text>{formatLeaveSession(request.session)}</Text>
             <Text>เหตุผล: {request.reason}</Text>
+            {DOCUMENT_FIELDS.map(([key, label]) => request.documentDetails?.[key] ? (
+              <Text key={key}>{label}: {request.documentDetails[key]}</Text>
+            ) : null)}
             <Text style={styles.help}>
               OCR: {OCR_STATUS_LABEL[request.ocrStatus]}
             </Text>
