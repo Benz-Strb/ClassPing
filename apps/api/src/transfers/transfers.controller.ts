@@ -7,12 +7,14 @@ import {
   Patch,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import { DocumentUploadErrorsInterceptor } from '../enrollment/upload-errors.interceptor.js';
 import type { AppUser } from '../users/users.service.js';
+import { TransferOcrLimitGuard } from './transfer-ocr-limit.guard.js';
 import { TransfersService } from './transfers.service.js';
 import type { TransferFile } from './transfers.types.js';
 
@@ -65,6 +67,7 @@ export class TransfersController {
   }
   @Post('curricula/:id/document')
   @Roles('teacher')
+  @UseGuards(TransferOcrLimitGuard)
   @UseInterceptors(
     DocumentUploadErrorsInterceptor,
     FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }),
@@ -78,6 +81,7 @@ export class TransfersController {
     return this.transfers.uploadCurriculum(user, id, file, payload);
   }
   @Post('preview')
+  @UseGuards(TransferOcrLimitGuard)
   @UseInterceptors(DocumentUploadErrorsInterceptor, FileInterceptor('document', { limits: { fileSize: 10 * 1024 * 1024 }, defParamCharset: 'utf8' }))
   preview(@CurrentUser() user: AppUser, @UploadedFile() file?: TransferFile) { return this.transfers.preview(user, file); }
   @Post('curricula')
