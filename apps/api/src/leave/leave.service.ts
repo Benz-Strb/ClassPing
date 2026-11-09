@@ -143,17 +143,6 @@ export class LeaveService {
       );
     }
 
-    let ocr: Awaited<ReturnType<LeaveOcrClient['readLeaveDocument']>> | null = null;
-    let ocrStatus: 'completed' | 'failed' = 'failed';
-    try {
-      ocr = await this.ocr.readLeaveDocument(
-        evidence.buffer,
-        evidence.mimetype,
-      );
-      ocrStatus = 'completed';
-    } catch {
-      // OCR เป็นข้อมูลช่วยตรวจ หลักฐานยังต้องส่งให้อาจารย์ตรวจเองได้เมื่อบริการภายนอกล่ม
-    }
     let request;
     try {
       request = await this.repo.createRequest({
@@ -161,8 +150,8 @@ export class LeaveService {
         sessionId,
         reason: cleanReason,
         documentDetails: details,
-        ocrText: ocr?.lines.map((line) => line.text).join('\n') ?? '',
-        ocrStatus,
+        ocrText: '',
+        ocrStatus: 'pending',
       });
     } catch (error) {
       if (
@@ -193,7 +182,19 @@ export class LeaveService {
       throw error;
     }
 
-    return { id: request.id, status: 'pending', ocrStatus, ocr };
+    // OCR อ่านทั้งใบใช้เวลานาน ไม่ให้นักศึกษารอ อ่านต่อเบื้องหลังแล้วเก็บไว้ให้อาจารย์ดู
+    void this.readOcrLater(request.id, evidence);
+    return { id: request.id, status: 'pending', ocrStatus: 'pending' };
+  }
+
+  private async readOcrLater(requestId: string, evidence: LeaveEvidence) {
+    try {
+      const ocr = await this.ocr.readLeaveDocument(evidence.buffer, evidence.mimetype);
+      await this.repo.saveOcrResult(requestId, ocr.lines.map((line) => line.text).join('\n'), 'completed');
+    } catch {
+      // OCR เป็นข้อมูลช่วยตรวจ อาจารย์ยังดูรูปหลักฐานเองได้เมื่อบริการล่ม
+      await this.repo.saveOcrResult(requestId, '', 'failed').catch(() => undefined);
+    }
   }
 
   listSessions(user: AppUser): Promise<LeaveSessionOption[]> {
