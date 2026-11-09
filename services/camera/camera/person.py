@@ -1,5 +1,7 @@
 """ตัวหาคน (YOLOX-s) กับตัวตามคน (ByteTrack) ใช้ค่าตามที่วัดไว้ตอนทดลองหน้าประตู"""
 
+import logging
+
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -8,6 +10,8 @@ from trackers import ByteTrackTracker
 
 from camera.door import Box
 
+log = logging.getLogger("camera")
+
 SIZE = 640
 CONFIDENCE = 0.4
 NMS_IOU = 0.45
@@ -15,15 +19,27 @@ NMS_IOU = 0.45
 TRACK_FPS = 15
 # วัดแล้ว 3 thread เร็วเท่าค่าเดิม แต่ใช้ CPU ราวครึ่งเดียว
 THREADS = 3
+# Mac ชิป Apple: ให้ GPU รันแทน วัดแล้ว 25 ms/ภาพ ใช้ CPU ราว 11% ที่ 15 ภาพ/วินาที
+# (CPU 3 thread 135 ms/ภาพ เกือบ 300%) คะแนนต่างจาก CPU ไม่เกิน 0.0002
+COREML = ("CoreMLExecutionProvider", {"MLComputeUnits": "CPUAndGPU"})
+
+
+def providers() -> list:
+    if COREML[0] in ort.get_available_providers():
+        return [COREML, "CPUExecutionProvider"]
+    return ["CPUExecutionProvider"]
 
 
 class YoloxDetector:
     """YOLOX-s: ย่อแบบ letterbox (เติม 114) ภาพ BGR 0-255 ผลดิบต้องถอด grid เอง แล้วทำ NMS"""
 
     def __init__(self, model_path: str):
+        chosen = providers()
         options = ort.SessionOptions()
-        options.intra_op_num_threads = THREADS
-        self.session = ort.InferenceSession(model_path, options, providers=["CPUExecutionProvider"])
+        # GPU ทำงานหลัก thread ที่เหลือแค่วนรอ วัดแล้ว 1 thread ใช้ CPU 11 ms/ภาพ 3 thread 41 ms
+        options.intra_op_num_threads = 1 if chosen[0] == COREML else THREADS
+        self.session = ort.InferenceSession(model_path, options, providers=chosen)
+        log.info("หาคนด้วย %s", self.session.get_providers()[0])
         grids, strides = [], []
         for stride in (8, 16, 32):
             n = SIZE // stride
