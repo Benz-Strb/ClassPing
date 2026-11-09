@@ -47,7 +47,7 @@ export function MainNavigation() {
 
   const links = loading || failed ? [{ href: "/", label: "หน้าหลัก" }] : navigationFor(me?.role ?? null);
   if (pathname === "/login" || pathname.startsWith("/auth/")) return null;
-  const iconFor = (href: string) => href.includes("courses") ? "courses" : href.includes("leave") ? "leave" : href === "/me" ? "user" : href.startsWith('/live') ? 'camera' : href.startsWith('/admin') ? 'admin' : href.startsWith('/transfers') ? 'transfer' : href === '/login' ? 'login' : "home";
+  const iconFor = (href: string) => href.includes("courses") || href.includes("curricula") ? "courses" : href.includes("transfers") ? "transfer" : href.includes("leave") ? "leave" : href === "/me" ? "user" : href.startsWith('/live') ? 'camera' : href.startsWith('/admin') ? 'admin' : href.startsWith('/transfers') ? 'transfer' : href === '/login' ? 'login' : "home";
   return (
     <nav aria-label="เมนูหลัก" className="app-navigation">
       <div className="navigation-heading">

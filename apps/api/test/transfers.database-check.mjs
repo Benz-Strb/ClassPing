@@ -32,6 +32,15 @@ await db.exec(
     'utf8',
   ),
 );
+await db.exec(
+  await readFile(
+    new URL(
+      '../../../supabase/migrations/20261108120000_teacher_reviews_transfers.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
+);
 const admin = '10000000-0000-4000-8000-000000000001',
   student = '10000000-0000-4000-8000-000000000002',
   teacher = '10000000-0000-4000-8000-000000000003';
@@ -87,7 +96,7 @@ await rejects(
   review,
   [
     first,
-    teacher,
+    admin,
     JSON.stringify([
       { itemId: a.id, decision: 'approved' },
       { itemId: b.id, decision: 'rejected', note: 'No match' },
@@ -95,12 +104,12 @@ await rejects(
   ],
   'FORBIDDEN',
 );
-await rejects(review, [first, admin, '[]'], 'INVALID_REVIEW');
+await rejects(review, [first, teacher, '[]'], 'INVALID_REVIEW');
 await rejects(
   review,
   [
     first,
-    admin,
+    teacher,
     JSON.stringify([
       { itemId: a.id, decision: 'approved' },
       { itemId: a.id, decision: 'approved' },
@@ -112,7 +121,7 @@ await rejects(
   review,
   [
     first,
-    admin,
+    teacher,
     JSON.stringify([
       { itemId: a.id, decision: 'approved' },
       { itemId: b.id, decision: 'approved' },
@@ -133,7 +142,7 @@ await rejects(
   review,
   [
     first,
-    admin,
+    teacher,
     JSON.stringify([
       { itemId: a.id, decision: 'approved' },
       { itemId: b.id, decision: 'rejected', note: '' },
@@ -143,7 +152,7 @@ await rejects(
 );
 await db.query(review, [
   first,
-  admin,
+  teacher,
   JSON.stringify([
     { itemId: a.id, decision: 'approved', note: 'Verified' },
     { itemId: b.id, decision: 'rejected', note: 'No match' },
@@ -153,6 +162,8 @@ const row = (
   await db.query('select * from public.transfer_requests where id=$1', [first])
 ).rows[0];
 assert.equal(row.status, 'partially_approved');
+assert.equal(row.reviewed_by, teacher);
+checks++;
 assert.equal(row.items[0].note, 'Verified');
 assert.equal(row.items[1].decision, 'rejected');
 checks += 3;
@@ -169,7 +180,7 @@ await rejects(
   review,
   [
     first,
-    admin,
+    teacher,
     JSON.stringify([
       { itemId: a.id, decision: 'approved' },
       { itemId: b.id, decision: 'rejected', note: 'No match' },
@@ -182,7 +193,7 @@ await rejects(
   review,
   [
     duplicate,
-    admin,
+    teacher,
     JSON.stringify([
       { itemId: 'new', decision: 'approved' },
       { itemId: 'dup', decision: 'approved' },
@@ -211,7 +222,7 @@ checks++;
 const approved = await create([item('all', 'IT104')]);
 await db.query(review, [
   approved,
-  admin,
+  teacher,
   JSON.stringify([{ itemId: 'all', decision: 'approved' }]),
 ]);
 assert.equal(
@@ -226,7 +237,7 @@ checks++;
 const rejected = await create([item('no', 'IT105', false)]);
 await db.query(review, [
   rejected,
-  admin,
+  teacher,
   JSON.stringify([
     { itemId: 'no', decision: 'rejected', note: 'Missing equivalency' },
   ]),

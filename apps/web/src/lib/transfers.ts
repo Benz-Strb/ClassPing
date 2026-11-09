@@ -1,6 +1,6 @@
 import { apiFetch } from "./api";
 export const TRANSFER_STATUS = {
-  pending: "รอแอดมินพิจารณา",
+  pending: "รออาจารย์พิจารณา",
   approved: "อนุมัติทั้งหมด",
   partially_approved: "อนุมัติบางรายวิชา",
   rejected: "ปฏิเสธ",

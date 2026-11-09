@@ -5,11 +5,12 @@ import { ADMIN_REPO, SupabaseAdminRepo } from './admin.repo.js';
 import { AdminService } from './admin.service.js';
 import { CatalogController } from './catalog.controller.js';
 import { CatalogService } from './catalog.service.js';
+import { CurriculaController } from './curricula.controller.js';
 import { CATALOG_REPO, SupabaseCatalogRepo } from './catalog.repo.js';
 
 @Module({
   imports: [ChatModule],
-  controllers: [AdminController, CatalogController],
+  controllers: [AdminController, CatalogController, CurriculaController],
   providers: [
     AdminService,
     CatalogService,
