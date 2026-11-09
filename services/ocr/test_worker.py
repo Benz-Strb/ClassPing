@@ -83,6 +83,16 @@ class WorkerTests(unittest.TestCase):
         self.assertNotIn('app.engine', sys.modules)
         self.assertNotIn('insightface', sys.modules)
 
+    def test_timetable_upload_auth_images_and_pdf(self):
+        self.assertEqual(self.client.post('/schedules/ocr', content=b'bad').status_code, 401)
+        for extension, mime in [('PNG', 'image/png'), ('PDF', 'application/pdf')]:
+            data = io.BytesIO()
+            Image.new('RGB', (100, 100), 'white').save(data, format=extension)
+            response = self.client.post('/schedules/ocr', headers=self.headers,
+                files={'image': (f'timetable.{extension.lower()}', data.getvalue(), mime)})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()['data']['lines']), 2)
+
 
 if __name__ == '__main__':
     unittest.main()

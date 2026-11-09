@@ -17,6 +17,6 @@ import { SchedulesService, SESSION_SYNCER } from './schedules.service.js';
     { provide: SESSION_SYNCER, useExisting: SessionsService },
     { provide: CLOCK, useValue: () => new Date() },
   ],
-  exports: [SCHEDULES_REPO],
+  exports: [SCHEDULES_REPO, SchedulesService],
 })
 export class SchedulesModule {}

@@ -13,6 +13,6 @@ import { RosterService } from './roster.service.js';
     { provide: COURSES_REPO, useClass: SupabaseCoursesRepo },
     { provide: ROSTER_REPO, useClass: SupabaseRosterRepo },
   ],
-  exports: [CoursesService, RosterService],
+  exports: [CoursesService, RosterService, ROSTER_REPO],
 })
 export class CoursesModule {}

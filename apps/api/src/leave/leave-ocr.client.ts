@@ -12,6 +12,14 @@ const unavailable = () => new AppError(503, 'LEAVE_OCR_UNAVAILABLE', 'บริ�
 export class LeaveOcrClient {
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
 
+  async readTimetableDocument(image: Buffer, mime: string): Promise<LeaveOcrResult> {
+    try { return await this.readLeaveDocument(image, mime, '/schedules/ocr'); }
+    catch (error) {
+      if (error instanceof AppError && error.getStatus() === 503) throw new AppError(503, 'TIMETABLE_OCR_UNAVAILABLE', 'บริการอ่านตารางเรียนยังไม่พร้อม กรุณาลองใหม่');
+      throw error;
+    }
+  }
+
   async readTransferDocument(image: Buffer, mime: string): Promise<LeaveOcrResult> {
     try { return await this.readLeaveDocument(image, mime, '/transfers/ocr'); }
     catch (error) {

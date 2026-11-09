@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DeleteCourseButton } from "@/components/delete-course-button";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -49,6 +50,7 @@ export default function AdminCoursesPage() {
               <button disabled={saving} className="text-blue-700 underline disabled:opacity-50" onClick={() => { setEditing(course.id); setForm({ code: course.code, name: course.name, section: course.section ?? "", teacherId: teacher?.role === "teacher" ? teacher.id : "" }); setStatus(""); codeInput.current?.focus(); }}>แก้ไขรายวิชา</button>
               <Link href={`/courses/${course.id}/schedule`} className="text-blue-700 underline">ตารางเรียน</Link>
               <Link href={`/courses/${course.id}/students`} className="text-blue-700 underline">นักศึกษา</Link>
+              <DeleteCourseButton course={course} disabled={saving} onError={setError} onDeleted={() => { setData(value => value ? { ...value, courses: value.courses.filter(item => item.id !== course.id) } : null); if (editing === course.id) { setEditing(null); setForm(EMPTY); } setStatus(`ลบวิชา ${course.code} แล้ว`); }} />
             </div>
           </li>;
         })}</ul>}
