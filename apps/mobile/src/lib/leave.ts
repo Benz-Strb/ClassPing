@@ -64,7 +64,7 @@ export async function submitLeave(
   return apiFetch<{
     id: string;
     status: "pending";
-    ocrStatus: "completed" | "failed";
+    ocrStatus: "pending" | "completed" | "failed";
   }>("/leave-requests", { method: "POST", body: form }, LEAVE_TIMEOUT_MS);
 }
 
