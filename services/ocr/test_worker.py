@@ -83,6 +83,17 @@ class WorkerTests(unittest.TestCase):
         self.assertNotIn('app.engine', sys.modules)
         self.assertNotIn('insightface', sys.modules)
 
+    def test_local_mlx_reader_wins_over_typhoon_api_key(self):
+        import types
+        from unittest import mock
+
+        made = []
+        fake = types.SimpleNamespace(MlxTyphoonReader=lambda path: made.append(path) or Reader())
+        env = {'TYPHOON_OCR_MLX_MODEL': ' /models/typhoon ', 'TYPHOON_OCR_API_KEY': 'k', 'LEAVE_OCR_SERVICE_TOKEN': 'x' * 32}
+        with mock.patch.dict(sys.modules, {'app.typhoon_mlx': fake}), mock.patch.dict('os.environ', env):
+            worker.build_app()
+        self.assertEqual(made, ['/models/typhoon'])
+
 
 if __name__ == '__main__':
     unittest.main()
