@@ -166,6 +166,19 @@ describe('TransfersService', () => {
       service.documentUrl({ ...student, role: 'admin' }, ID, 'request'),
     ).rejects.toMatchObject({ status: 403 });
   });
+  it('ไม่ส่งคำขอเก่าของนักศึกษาคนอื่นที่ใช้เติมคำแนะนำให้นักศึกษา แต่อาจารย์เห็น', async () => {
+    const previousApproval = { requestId: DOC, reviewedAt: '2026-11-01T00:00:00.000Z' };
+    const withHistory = { ...pending, items: [{ ...pending.items[0], matchSource: 'history', previousApproval }] };
+    repo.listRequests.mockResolvedValue([withHistory]);
+    repo.insertRequest.mockResolvedValue(withHistory);
+    const [mine] = await service.list(student);
+    expect(mine.items[0]).not.toHaveProperty('previousApproval');
+    expect(mine).not.toHaveProperty('documentPath');
+    const created = await service.submit(student, input, file);
+    expect(created.items[0]).not.toHaveProperty('previousApproval');
+    const [forTeacher] = await service.list(teacher);
+    expect(forTeacher.items[0]).toMatchObject({ previousApproval });
+  });
   it('อาจารย์เห็นคำขอทุกคนและเปิดหลักฐานได้ นักศึกษาเห็นเฉพาะของตัวเอง', async () => {
     await service.list(teacher);
     expect(repo.listRequests).toHaveBeenLastCalledWith(undefined);
