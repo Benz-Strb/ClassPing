@@ -46,7 +46,10 @@ class InsightFaceEngine:
             allowed_modules=["detection", "recognition", "landmark_3d_68"],
             providers=PROVIDERS.get(settings.provider, PROVIDERS["cpu"]),
         )
-        self._app.prepare(ctx_id=-1, det_size=(settings.det_size, settings.det_size))
+        # ctx_id ติดลบ InsightFace จะบังคับทุกโมเดลกลับไปใช้ CPU แม้ตั้ง CoreML ไว้
+        # วัดแล้ว CoreML ใช้ CPU 36 ms/ภาพ จาก 2,600 ms ค่าใบหน้า cosine >= 0.9998 กรอบหน้าเท่าเดิม
+        ctx_id = -1 if settings.provider == "cpu" else 0
+        self._app.prepare(ctx_id=ctx_id, det_size=(settings.det_size, settings.det_size))
 
     def analyze(self, image: np.ndarray) -> list[DetectedFace]:
         faces = []

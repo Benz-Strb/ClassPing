@@ -164,3 +164,18 @@ def test_model_liveness_scores_in_range(real_engine, group_image):
         if face["liveness"] is not None:
             assert 0.0 <= face["liveness"] <= 1.0
     assert any(face["liveness"] is not None for face in big)
+
+
+def test_coreml_matches_cpu(model_settings, real_engine, group_image):
+    import onnxruntime as ort
+
+    if "CoreMLExecutionProvider" not in ort.get_available_providers():
+        pytest.skip("เครื่องนี้ไม่มี CoreML")
+    coreml = InsightFaceEngine(load_settings({"FACE_SERVICE_TOKEN": TOKEN, "FACE_PROVIDER": "coreml"}))
+    cpu_faces = sorted(real_engine.analyze(group_image), key=lambda f: f.bbox)
+    gpu_faces = sorted(coreml.analyze(group_image), key=lambda f: f.bbox)
+    assert len(gpu_faces) == len(cpu_faces) > 0
+    for a, b in zip(cpu_faces, gpu_faces, strict=True):
+        assert float(a.embedding @ b.embedding) > 0.999
+        assert np.allclose(a.bbox, b.bbox, atol=1)
+        assert abs(a.det_score - b.det_score) < 0.01
