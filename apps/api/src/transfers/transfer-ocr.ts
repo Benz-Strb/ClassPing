@@ -10,6 +10,7 @@ export interface ExtractedCourse {
   sourceName: string;
   credits: number;
   grade: string;
+  studyYear?: number | null;
 }
 export interface TransferDraft {
   sourceInstitution: string;
@@ -53,7 +54,10 @@ export function extractTransferDraft(lines: { text: string }[]): TransferDraft {
     /(?:สาขาวิชา|สาขา\s*[:：]|major\s*[:：]|program(?:me)?\s*[:：])/iu.test(l),
   );
   const courses = new Map<string, ExtractedCourse>();
+  let studyYear: number | undefined;
   for (let i = 0; i < rows.length; i++) {
+    const yearHeading = rows[i].match(/(?:ชั้นปี(?:ที่)?|ปีที่|year)\s*[:：.]?\s*([1-4])(?!\d)/iu);
+    if (yearHeading && !/^[A-Zก-๙]{0,6}\s*\d{3,8}\s/u.test(rows[i])) studyYear = Number(yearHeading[1]);
     let line = rows[i]
       .replace(/^\|\s*/u, '')
       .replace(/\s*\|$/u, '')
@@ -78,6 +82,7 @@ export function extractTransferDraft(lines: { text: string }[]): TransferDraft {
         sourceName: parsed[2].trim().slice(0, 200),
         credits,
         grade: parsed[4] ?? '',
+        ...(studyYear !== undefined && { studyYear }),
       });
   }
   const warnings: string[] = [
@@ -113,12 +118,12 @@ export function suggestItems(
   history: TransferRequest[],
 ): Omit<TransferItem, 'id'>[] {
   return courses.map((course) => {
-    const previous = major
+    const historical = history.length
       ? history
           .flatMap((request) =>
             request.curriculumId === doc.curriculumId &&
             normalize(request.sourceInstitution) === normalize(institution) &&
-            normalize(request.sourceMajor ?? '') === normalize(major) &&
+            (!major || !request.sourceMajor || normalize(request.sourceMajor) === normalize(major)) &&
             request.reviewedAt
               ? request.items
                   .filter(
@@ -128,12 +133,15 @@ export function suggestItems(
                       normalize(item.sourceCode) ===
                         normalize(course.sourceCode) &&
                       nameKey(item.sourceName) === nameKey(course.sourceName) &&
-                      course.credits >= item.match.minCredits,
+                      course.credits === item.credits &&
+                      course.credits >= item.match.minCredits &&
+                      !!normalize(course.grade) &&
+                      normalize(item.grade) === normalize(course.grade),
                   )
                   .map((item) => ({ request, item }))
               : [],
           )
-          .find(({ item }) =>
+          .filter(({ item }) =>
             (doc.courses ?? []).some(
               (target) =>
                 target.sourceCode === item.match!.targetCode &&
@@ -141,7 +149,9 @@ export function suggestItems(
                 target.credits === item.match!.targetCredits,
             ),
           )
-      : undefined;
+      : [];
+    const targetsSeen = new Set(historical.map(({ item }) => `${item.match!.targetCode}|${item.match!.targetName}|${item.match!.targetCredits}`));
+    const previous = targetsSeen.size === 1 ? historical.sort((a, b) => b.request.reviewedAt!.localeCompare(a.request.reviewedAt!))[0] : undefined;
     if (previous)
       return {
         ...course,
@@ -150,6 +160,7 @@ export function suggestItems(
           minCredits: previous.item.match!.minCredits,
         },
         matchSource: 'history',
+        autoApprovalSuggested: true,
         previousApproval: {
           requestId: previous.request.id,
           reviewedAt: previous.request.reviewedAt!,

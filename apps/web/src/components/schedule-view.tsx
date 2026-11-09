@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -99,18 +101,18 @@ export function ScheduleView() {
     );
   }
 
-  function removeSchedule(schedule: Schedule) {
+  async function removeSchedule(schedule: Schedule) {
     const label = `${WEEKDAYS[schedule.weekday]} ${schedule.startTime}-${schedule.endTime}`;
-    if (!window.confirm(`ลบตารางวัน${label} ใช่ไหม`)) return;
+    if (!(await confirmAction(`ลบตารางวัน${label} ใช่ไหม`))) return;
     void run(() => apiFetch(`/schedules/${schedule.id}`, { method: "DELETE" }));
   }
 
-  function cancelDay(session: SessionView) {
+  async function cancelDay(session: SessionView) {
     const started = session.status !== "upcoming";
     const question = started
       ? `คาบนี้เริ่มแล้ว งดสอน ${formatDate(session.onDate)} จะลบคาบนี้ กล้องหยุดเช็คชื่อ และรายงานไม่นับคาบนี้ ใช่ไหม`
       : `งดสอน ${formatDate(session.onDate)} ใช่ไหม`;
-    if (!window.confirm(question)) return;
+    if (!(await confirmAction(question))) return;
     void run(() =>
       apiFetch(`/schedules/${session.scheduleId}/overrides/${session.onDate}`, {
         method: "PUT",
@@ -171,14 +173,13 @@ export function ScheduleView() {
       <div className="space-y-3">
         <h2 className="font-medium">ตารางประจำ</h2>
         {data.schedules.length === 0 && <p className="text-gray-600">ยังไม่มีตารางเรียน</p>}
-        <ul className="divide-y rounded-lg border">
-          {data.schedules.map((schedule) => (
-            <li key={schedule.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
-              <span>
-                <span className="font-medium">{WEEKDAYS[schedule.weekday]}</span>{" "}
-                {schedule.startTime}-{schedule.endTime} · {schedule.roomName}
-              </span>
-              <span className="space-x-3 text-sm">
+        {data.schedules.length > 0 && <div className="overflow-x-auto rounded-lg border"><table>
+          <thead><tr><th scope="col">วัน</th><th scope="col">เวลาเริ่ม</th><th scope="col">เวลาจบ</th><th scope="col">ห้อง</th><th scope="col">จัดการ</th></tr></thead>
+          <tbody>{[...data.schedules].sort((a, b) => (a.weekday + 6) % 7 - (b.weekday + 6) % 7 || a.startTime.localeCompare(b.startTime)).map((schedule) => (
+            <tr key={schedule.id}>
+              <th scope="row">{WEEKDAYS[schedule.weekday]}</th>
+              <td>{schedule.startTime}</td><td>{schedule.endTime}</td><td>{schedule.roomName}</td>
+              <td className="space-x-3 whitespace-nowrap text-sm">
                 <button
                   onClick={() => {
                     setEditing(schedule.id);
@@ -199,10 +200,10 @@ export function ScheduleView() {
                 >
                   ลบ
                 </button>
-              </span>
-            </li>
-          ))}
-        </ul>
+              </td>
+            </tr>
+          ))}</tbody>
+        </table></div>}
 
         {form ? (
           <form onSubmit={saveSchedule} className="space-y-3 rounded-lg border p-4">

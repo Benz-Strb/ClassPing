@@ -287,4 +287,30 @@ describe('TransfersService', () => {
     expect(repo.review).not.toHaveBeenCalled();
   });
 
+  it('requires a teacher recheck before finalizing automatically suggested approvals', async () => {
+    repo.getRequest.mockResolvedValue({ ...pending, items: pending.items.map(item => ({ ...item, autoApprovalSuggested: true })) });
+    await expect(service.review(teacher, ID, { decisions: [{ itemId: ITEM, decision: 'approved' }] })).rejects.toMatchObject({ code: 'RECHECK_REQUIRED' });
+    expect(repo.review).not.toHaveBeenCalled();
+    await service.review(teacher, ID, { confirmedRecommendations: true, decisions: [{ itemId: ITEM, decision: 'approved' }] });
+    expect(repo.review).toHaveBeenCalledOnce();
+  });
+
+  it('keeps history-based automatic suggestions pending until a teacher confirms', async () => {
+    repo.getCurriculumDocument.mockResolvedValue({ id: DOC, curriculumId: ID, active: true, courses: [{ sourceCode: mapping.targetCode, sourceName: mapping.targetName, credits: mapping.targetCredits, grade: '' }] });
+    repo.listRequests.mockResolvedValue([{ ...pending, sourceMajor: 'CS', curriculumId: ID, reviewedAt: '2026-11-08', status: 'approved', items: pending.items.map(item => ({ ...item, decision: 'approved' })) }]);
+    await service.submit(student, { ...input, sourceMajor: 'CS' }, file);
+    expect(repo.insertRequest.mock.calls[0][0].items[0].autoApprovalSuggested).toBe(true);
+    expect(repo.review).not.toHaveBeenCalled();
+    expect(repo.insertRequest.mock.calls[0][0]).not.toHaveProperty('status', 'approved');
+  });
+
+  it('persists reviewed study-year assignments in curriculum document courses', async () => {
+    repo.catalogCurriculum.mockResolvedValue(true);
+    repo.addCurriculumDocument.mockResolvedValue({ id: DOC });
+    const draft = { sourceInstitution: 'DPU', sourceMajor: 'CS', courses: [{ sourceCode: 'IT101', sourceName: 'Programming', credits: 3, grade: '', studyYear: 2 }], ocrText: '' };
+    await service.uploadCurriculum(teacher, ID, file, draft);
+    expect(repo.addCurriculumDocument.mock.calls[0][3].courses[0].studyYear).toBe(2);
+    await expect(service.uploadCurriculum(teacher, ID, file, { ...draft, courses: [{ ...draft.courses[0], studyYear: 5 }] })).rejects.toMatchObject({ status: 400 });
+  });
+
 });

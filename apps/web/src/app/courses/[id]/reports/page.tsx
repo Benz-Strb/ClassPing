@@ -1,5 +1,7 @@
 "use client";
 
+import { notify } from "@/components/notifications";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { API_URL, apiFetch } from "@/lib/api";
@@ -191,7 +193,7 @@ export default function CourseReportsPage() {
       a.remove();
       window.URL.revokeObjectURL(downloadUrl);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดาวน์โหลด");
+      notify(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการดาวน์โหลด", "error");
     } finally {
       setDownloading(null);
     }
