@@ -31,6 +31,9 @@ const FACES_MS = 1000;
 // ลองใหม่ก็ไม่หาย หยุดต่อแล้วบอกผู้ใช้
 const PERMANENT = ["NOT_LIVE", "NO_CAMERA", "SESSION_NOT_FOUND", "MEDIA_NOT_CONFIGURED"];
 
+// ภาพจากกล้องหน้าห้องกลับซ้ายขวา กลับคืนตอนแสดง กรอบหน้าต้องกลับตามด้วย
+const MIRROR = true;
+
 const KIND = {
   match: { label: "", box: "border-green-400", tag: "bg-green-500" },
   review: { label: "ไม่แน่ใจ", box: "border-yellow-300", tag: "bg-yellow-500" },
@@ -149,7 +152,7 @@ export function LiveViewer() {
 
       <div className="grid gap-4 md:grid-cols-[1fr_15rem]">
         <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-          <video ref={video} autoPlay muted playsInline className="h-full w-full" />
+          <video ref={video} autoPlay muted playsInline className={`h-full w-full ${MIRROR ? "-scale-x-100" : ""}`} />
           {state === "playing" &&
             showBoxes &&
             faces.map((face) => (
@@ -157,7 +160,7 @@ export function LiveViewer() {
                 key={face.n}
                 className={`absolute border-2 ${KIND[face.kind].box}`}
                 style={{
-                  left: `${face.box[0] * 100}%`,
+                  left: `${(MIRROR ? 1 - face.box[2] : face.box[0]) * 100}%`,
                   top: `${face.box[1] * 100}%`,
                   width: `${(face.box[2] - face.box[0]) * 100}%`,
                   height: `${(face.box[3] - face.box[1]) * 100}%`,
