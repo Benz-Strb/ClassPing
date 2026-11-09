@@ -29,15 +29,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "ใช้กล้องถ่ายหน้าเพื่อลงทะเบียนใบหน้า",
+          "cameraPermission": "ใช้กล้องลงทะเบียนใบหน้าและถ่ายหลักฐานการลา",
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "เลือกภาพหน้าจอบัตรนักศึกษาเพื่อยืนยันตัวตน",
-          "cameraPermission": false,
+          "photosPermission": "เลือกภาพบัตรนักศึกษาและหลักฐานการลา",
+          "cameraPermission": "ใช้กล้องถ่ายหลักฐานการลา",
           "microphonePermission": false
         }
       ]

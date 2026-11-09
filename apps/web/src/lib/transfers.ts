@@ -24,6 +24,8 @@ export interface TransferItem {
   credits: number;
   grade: string;
   match: TransferMapping | null;
+  matchSource?: 'history' | 'curriculum' | 'mapping';
+  previousApproval?: { requestId: string; reviewedAt: string };
   decision?: "approved" | "rejected";
   note?: string;
 }
@@ -33,6 +35,9 @@ export interface TransferRequest {
   studentCode: string | null;
   curriculumName: string;
   sourceInstitution: string;
+  sourceMajor?: string;
+  ocrText?: string;
+  curriculumDocumentId?: string | null;
   status: keyof typeof TRANSFER_STATUS;
   items: TransferItem[];
   documentName: string;
@@ -46,6 +51,10 @@ export interface TransferCurriculum {
   year: number;
   fileName: string;
   sourceInstitutions: string[];
+  sourceInstitution?: string;
+  sourceMajor?: string;
+  courses?: ExtractedCourse[];
+  ocrText?: string;
 }
 export const inputClass = "w-full rounded border border-gray-300 px-3 py-2";
 export const buttonClass =
@@ -62,3 +71,6 @@ export async function openTransferDocument(path: string) {
     throw error;
   }
 }
+
+export interface ExtractedCourse { sourceCode: string; sourceName: string; credits: number; grade: string }
+export interface TransferDraft { sourceInstitution: string; sourceMajor: string; courses: ExtractedCourse[]; ocrText: string; warnings: string[] }

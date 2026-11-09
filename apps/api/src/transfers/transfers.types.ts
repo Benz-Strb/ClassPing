@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ExtractedCourse } from './transfer-ocr.js';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 export const keyText = (max: number) =>
@@ -19,9 +20,13 @@ export type MappingInput = z.infer<typeof mappingSchema>;
 export interface TransferMapping extends MappingInput {
   id: string;
 }
+export const courseSchema = z.object({ sourceCode: keyText(60), sourceName: text(200), credits, grade: z.string().trim().max(20).default('') });
+export const curriculumDraftSchema = z.object({ sourceInstitution: keyText(200), sourceMajor: text(200), courses: z.array(courseSchema).min(1).max(1000), ocrText: z.string().max(200_000).default('') }).refine(v => new Set(v.courses.map(c => c.sourceCode)).size === v.courses.length, { message: 'รหัสรายวิชาต้องไม่ซ้ำกัน' });
 export const submitSchema = z
   .object({
-    curriculumDocumentId: z.uuid(),
+    curriculumDocumentId: z.uuid().nullable().optional(),
+    sourceMajor: z.string().trim().max(200).default(''),
+    ocrText: z.string().max(200_000).default(''),
     sourceInstitution: keyText(200),
     courses: z
       .array(
@@ -47,6 +52,7 @@ export const reviewSchema = z.object({
         .object({
           itemId: z.uuid(),
           decision: z.enum(['approved', 'rejected']),
+          targetCode: z.string().trim().max(60).optional(),
           note: z.string().trim().max(2000).default(''),
         })
         .refine((v) => v.decision !== 'rejected' || v.note.length > 0, {
@@ -64,6 +70,8 @@ export interface TransferItem {
   credits: number;
   grade: string;
   match: TransferMapping | null;
+  matchSource?: 'history' | 'curriculum' | 'mapping';
+  previousApproval?: { requestId: string; reviewedAt: string };
   decision?: 'approved' | 'rejected';
   note?: string;
 }
@@ -76,16 +84,22 @@ export interface CurriculumDocument {
   path: string;
   fileName: string;
   createdAt: string;
+  sourceInstitution?: string;
+  sourceMajor?: string;
+  courses?: ExtractedCourse[];
+  ocrText?: string;
 }
 export interface TransferRequest {
   id: string;
   studentId: string;
   studentName: string | null;
   studentCode: string | null;
-  curriculumId: string;
-  curriculumDocumentId: string;
+  curriculumId: string | null;
+  curriculumDocumentId: string | null;
   curriculumName: string;
   sourceInstitution: string;
+  sourceMajor?: string;
+  ocrText?: string;
   documentPath: string;
   documentName: string;
   status: 'pending' | 'approved' | 'partially_approved' | 'rejected';
@@ -102,13 +116,17 @@ export interface TransferFile {
 }
 export interface NewTransferRequest {
   studentId: string;
-  curriculumId: string;
-  curriculumDocumentId: string;
+  curriculumId: string | null;
+  curriculumDocumentId: string | null;
   curriculumName: string;
   sourceInstitution: string;
+  sourceMajor?: string;
+  ocrText?: string;
   documentPath: string;
   documentName: string;
   documentMime: string;
   documentSize: number;
   items: TransferItem[];
 }
+
+export type StoredReviewDecision = ReviewDecision & { match?: TransferMapping | null };

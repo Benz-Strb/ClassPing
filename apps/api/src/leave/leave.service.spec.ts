@@ -4,6 +4,7 @@ import type { LeaveOcrClient } from './leave-ocr.client.js';
 import type { AppUser } from '../users/users.service.js';
 import { LeaveController } from './leave.controller.js';
 import type { LeaveRepo, LeaveSessionOption } from './leave.repo.js';
+import { extractLeaveDraft, documentDetailsSchema } from './leave-draft.js';
 import { LeaveService, extractLeaveReason } from './leave.service.js';
 import { PreviewLimitGuard, SubmitLimitGuard } from './preview-limit.guard.js';
 
@@ -89,7 +90,7 @@ describe('LeaveService', () => {
     expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
   });
 
-  it('จำกัดเหตุผลร่างไว้ 1000 ตัวอักษรแต่เก็บข้อความอ่านเต็มให้ตรวจ', async () => {
+  it('ไม่ใช้ข้อความที่ไม่รู้จักเป็นเหตุผล แต่เก็บต้นฉบับให้ตรวจ', async () => {
     const { service, ocr } = setup();
     const text = 'ก'.repeat(1200);
     ocr.readLeaveDocument.mockResolvedValue({
@@ -99,8 +100,22 @@ describe('LeaveService', () => {
       service.preview(student, SESSION_ID, evidence),
     ).resolves.toEqual({
       text,
-      reason: text.slice(0, 1000),
+      ...extractLeaveDraft(text),
     });
+  });
+
+  it('บันทึกฟิลด์ที่ผู้ใช้ตรวจแก้แล้วแยกจากข้อความ OCR', async () => {
+    const { service, repo } = setup();
+    const details = { facility: 'คลินิกทดสอบ', documentDate: '2026-11-08', leaveStartDate: '2026-11-08', leaveEndDate: '2026-11-09' };
+    await service.submit(student, SESSION_ID, 'เหตุผลที่แก้แล้ว', evidence, details);
+    expect(repo.createRequest).toHaveBeenCalledWith(expect.objectContaining({ reason: 'เหตุผลที่แก้แล้ว', documentDetails: details }));
+  });
+
+  it('ปฏิเสธฟิลด์วันที่ผิดก่อนเรียก OCR หรือเขียนฐาน', async () => {
+    const { service, repo, ocr } = setup();
+    await expect(service.submit(student, SESSION_ID, 'ป่วย', evidence, { documentDate: '2026-02-30' })).rejects.toMatchObject({ status: 400 });
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
+    expect(repo.createRequest).not.toHaveBeenCalled();
   });
 
   it('ปฏิเสธร่างเมื่อไม่มีหลักฐาน ไฟล์ใหญ่ หรือไม่ใช่นักศึกษา', async () => {
@@ -125,7 +140,7 @@ describe('LeaveService', () => {
       service.preview(student, SESSION_ID, evidence),
     ).resolves.toEqual({
       text: 'ใบลาป่วย',
-      reason: 'ใบลาป่วย',
+      ...extractLeaveDraft('ใบลาป่วย'),
     });
     expect(repo.createRequest).not.toHaveBeenCalled();
     expect(repo.uploadEvidence).not.toHaveBeenCalled();
@@ -258,6 +273,7 @@ describe('LeaveService', () => {
       studentId: 'student-user',
       sessionId: SESSION_ID,
       reason: 'ป่วย',
+      documentDetails: documentDetailsSchema.parse({}),
       ocrText: '',
       ocrStatus: 'failed',
     });

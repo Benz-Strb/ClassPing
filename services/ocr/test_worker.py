@@ -51,6 +51,33 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertNotIn('private provider detail', response.text)
 
+    def test_transfers_images_and_scanned_pdf(self):
+        for extension, mime in [('PNG', 'image/png'), ('PDF', 'application/pdf')]:
+            data = io.BytesIO()
+            Image.new('RGB', (100, 100), 'white').save(data, format=extension)
+            response = self.client.post('/transfers/ocr', headers=self.headers,
+                files={'image': (f'curriculum.{extension.lower()}', data.getvalue(), mime)})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()['data']['lines']), 2)
+
+    def test_transfers_require_auth_and_reject_invalid_images(self):
+        self.assertEqual(self.client.post('/transfers/ocr', content=b'bad').status_code, 401)
+        response = self.client.post('/transfers/ocr', headers=self.headers, files={'image': ('bad.png', b'bad', 'image/png')})
+        self.assertEqual(response.status_code, 400)
+
+    def test_transfer_pdf_page_limit(self):
+        import pypdfium2 as pdfium
+        data = io.BytesIO()
+        document = pdfium.PdfDocument.new()
+        for _ in range(101):
+            page = document.new_page(100, 100)
+            page.close()
+        document.save(data)
+        document.close()
+        response = self.client.post('/transfers/ocr', headers=self.headers, files={'image': ('large.pdf', data.getvalue(), 'application/pdf')})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('100', response.json()['error']['message'])
+
     def test_health_and_no_face_engine(self):
         self.assertEqual(self.client.get('/health').json()['service'], 'leave-ocr')
         self.assertNotIn('app.engine', sys.modules)

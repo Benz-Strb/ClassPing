@@ -40,6 +40,7 @@ export interface LeaveRequest {
   session: LeaveSession;
   student: { id: string; studentId: string | null; fullName: string | null };
   reason: string;
+  documentDetails?: import('./leave').DocumentDetails;
   status: "pending" | "approved" | "rejected";
   reviewNote: string | null;
   ocrText: string;

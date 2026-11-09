@@ -1,3 +1,4 @@
+import type { DocumentDetails } from './leave-draft.js';
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { dbError } from '../common/db-error.js';
@@ -7,6 +8,7 @@ export interface LeaveRequestInput {
   studentId: string;
   sessionId: string;
   reason: string;
+  documentDetails?: DocumentDetails;
   ocrText: string;
   ocrStatus: 'completed' | 'failed';
 }
@@ -43,6 +45,7 @@ export interface LeaveRequestView {
   session: LeaveSessionOption;
   student: LeaveStudentView;
   reason: string;
+  documentDetails?: DocumentDetails;
   status: 'pending' | 'approved' | 'rejected';
   ocrText: string;
   ocrStatus: 'pending' | 'completed' | 'failed';
@@ -146,6 +149,7 @@ const toRequestView = (row: LeaveRelationRow): LeaveRequestView => ({
     fullName: row.users?.full_name ?? null,
   },
   reason: row.reason as string,
+  documentDetails: (row.document_details ?? {}) as DocumentDetails,
   status: row.status as LeaveRequestView['status'],
   reviewedBy: (row.reviewed_by as string | null) ?? null,
   reviewedAt: (row.reviewed_at as string | null) ?? null,
@@ -250,6 +254,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
         student_id: input.studentId,
         session_id: input.sessionId,
         reason: input.reason,
+        document_details: input.documentDetails ?? {},
         ocr_text: input.ocrText,
         ocr_status: input.ocrStatus,
       })
@@ -344,7 +349,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('leave_requests')
       .select(
-        'id, student_id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
+        'id, student_id, session_id, reason, document_details, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
       )
       .eq('student_id', studentId)
       .order('created_at', { ascending: false });
@@ -375,7 +380,7 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     const { data, error } = await this.db
       .from('leave_requests')
       .select(
-        'id, student_id, session_id, reason, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
+        'id, student_id, session_id, reason, document_details, status, ocr_text, ocr_status, reviewed_by, reviewed_at, review_note, created_at, leave_attachments(file_name, mime_type, file_size), sessions!inner(id, course_id, kind, title, on_date, starts_at, ends_at, cancelled_at, courses(id, code, name, section), rooms(name)), users!leave_requests_student_id_fkey(id, student_id, full_name)',
       )
       .in('session_id', sessionIds)
       .order('created_at', { ascending: false });
