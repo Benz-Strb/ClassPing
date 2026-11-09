@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,9 +28,9 @@ export default function AdminCamerasPage() {
   async function issue(room: Room, kind: "front" | "door") {
     const label = kind === "door" ? "ประตู" : "หน้าห้อง";
     const existing = data?.cameras.find((camera) => camera.roomId === room.id && camera.kind === kind);
-    if (!window.confirm(existing?.hasToken
+    if (!(await confirmAction(existing?.hasToken
       ? `ออก token ใหม่สำหรับกล้อง${label} ${room.name}? token เดิมจะใช้ไม่ได้ ต้องอัปเดตที่กล้องด้วย`
-      : `ออก token กล้อง${label}สำหรับ ${room.name}?`)) return;
+      : `ออก token กล้อง${label}สำหรับ ${room.name}?`))) return;
     setBusy(true); setError(null); setStatus(""); setSecret(null);
     try {
       const token = await apiFetch<CameraToken>(`/admin/cameras/${room.id}/token`, { method: "POST", body: JSON.stringify({ kind }) });

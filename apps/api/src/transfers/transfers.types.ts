@@ -20,7 +20,7 @@ export type MappingInput = z.infer<typeof mappingSchema>;
 export interface TransferMapping extends MappingInput {
   id: string;
 }
-export const courseSchema = z.object({ sourceCode: keyText(60), sourceName: text(200), credits, grade: z.string().trim().max(20).default('') });
+export const courseSchema = z.object({ sourceCode: keyText(60), sourceName: text(200), credits, grade: z.string().trim().max(20).default(''), studyYear: z.number().int().min(1).max(4).nullable().optional() });
 export const curriculumDraftSchema = z.object({ sourceInstitution: keyText(200), sourceMajor: text(200), courses: z.array(courseSchema).min(1).max(1000), ocrText: z.string().max(200_000).default('') }).refine(v => new Set(v.courses.map(c => c.sourceCode)).size === v.courses.length, { message: 'รหัสรายวิชาต้องไม่ซ้ำกัน' });
 export const submitSchema = z
   .object({
@@ -46,6 +46,7 @@ export const submitSchema = z
     { message: 'รายวิชาเดิมต้องไม่ซ้ำกัน' },
   );
 export const reviewSchema = z.object({
+  confirmedRecommendations: z.boolean().default(false),
   decisions: z
     .array(
       z
@@ -71,6 +72,7 @@ export interface TransferItem {
   grade: string;
   match: TransferMapping | null;
   matchSource?: 'history' | 'curriculum' | 'mapping';
+  autoApprovalSuggested?: boolean;
   previousApproval?: { requestId: string; reviewedAt: string };
   decision?: 'approved' | 'rejected';
   note?: string;
