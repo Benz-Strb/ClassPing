@@ -27,6 +27,11 @@ const extensions: Record<string, string> = {
 const missing = () =>
   new AppError(404, 'TRANSFER_NOT_FOUND', 'ไม่พบข้อมูลเทียบโอนนี้');
 const view = ({ documentPath: _path, ...request }: TransferRequest) => request;
+// คำขอเก่าที่ใช้เติมคำแนะนำเป็นของนักศึกษาคนอื่น ให้อาจารย์เห็นอย่างเดียว
+const studentView = (request: TransferRequest) => ({
+  ...view(request),
+  items: request.items.map(({ previousApproval: _previous, ...item }) => item),
+});
 const id = (value: string) => parseBody(z.uuid(), value);
 function allow(user: AppUser, roles: string[]) {
   if (!roles.includes(user.role))
@@ -132,7 +137,7 @@ export class TransfersService {
       await this.repo.listRequests(
         user.role === 'student' ? user.id : undefined,
       )
-    ).map(view);
+    ).map(user.role === 'student' ? studentView : view);
   }
   async submit(user: AppUser, value: unknown, file?: TransferFile) {
     allow(user, ['student']);
@@ -166,7 +171,7 @@ export class TransfersService {
     const path = `requests/${user.id}/${randomUUID()}.${extensions[file.mimetype]}`;
     await this.repo.upload(path, file);
     try {
-      return view(
+      return studentView(
         await this.repo.insertRequest({
           studentId: user.id,
           curriculumId: doc?.curriculumId ?? null,
