@@ -47,7 +47,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
     );
 
   return (
-    <main className="admin-workspace mx-auto space-y-8 p-4 sm:p-6">
+    <main className="admin-workspace fixed-workspace mx-auto p-4 sm:p-6">
       <header className="admin-heading space-y-4">
         <h1 className="text-2xl font-semibold">หลักสูตรและเทียบโอน</h1>
         <nav aria-label="เมนูหลักสูตรและเทียบโอน" className="admin-tabs">
@@ -63,7 +63,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </header>
-      {children}
+      <div className="workspace-body">{children}</div>
     </main>
   );
 }

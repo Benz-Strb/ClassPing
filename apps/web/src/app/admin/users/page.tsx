@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import { useRouter } from "next/navigation";
 import { RetryButton } from "@/components/retry-button";
 import { useEffect, useState } from "react";
@@ -59,9 +61,9 @@ export default function AdminUsersPage() {
 
   async function withdrawConsent(user: AdminUser) {
     if (
-      !window.confirm(
+      !(await confirmAction(
         `ถอนความยินยอมของ ${user.fullName ?? user.email}? ระบบจะลบข้อมูลใบหน้าและความยินยอม และผู้ใช้ต้องให้ความยินยอมใหม่ก่อนลงทะเบียนใบหน้าอีกครั้ง`,
-      )
+      ))
     )
       return;
     setBusyIds((current) => new Set(current).add(user.id));
@@ -89,7 +91,7 @@ export default function AdminUsersPage() {
 
   async function resetFace(user: AdminUser) {
     if (
-      !window.confirm(`รีเซ็ตใบหน้าของ ${user.fullName ?? user.email} หรือไม่`)
+      !(await confirmAction(`รีเซ็ตใบหน้าของ ${user.fullName ?? user.email} หรือไม่`))
     )
       return;
     setBusyIds((current) => new Set(current).add(user.id));

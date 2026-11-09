@@ -44,12 +44,9 @@ export function LiveSessions() {
   }
 
   return (
-    <section className="space-y-4">
+    <section className="live-sessions flex h-full min-h-0 flex-col gap-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">กล้องหน้าห้อง</h1>
-        <Link href="/courses" className="text-sm text-blue-600 underline">
-          วิชาทั้งหมด
-        </Link>
       </header>
       <p className="text-sm text-gray-600">
         เห็นเฉพาะคาบของวิชาที่สอนและคาบสอบที่คุม กล้องเปิดเฉพาะช่วงที่มีคาบ
@@ -70,6 +67,7 @@ export function LiveSessions() {
         )}
       </div>
 
+      <div className="workspace-body">
       {error && <p className="text-red-600">{error}</p>}
 
       {sessions === null ? (
@@ -110,6 +108,7 @@ export function LiveSessions() {
           ))}
         </ul>
       )}
+      </div>
     </section>
   );
 }

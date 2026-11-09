@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
@@ -144,14 +146,14 @@ export function ExamsView() {
       } catch (e) {
         // ทับคาบเรียนของวิชานี้ ถามก่อนว่าจะให้คาบสอบแทนไหม
         if (!(e instanceof ApiError) || e.code !== "REPLACES_CLASS") throw e;
-        if (!window.confirm(`${e.message}\n\nยืนยันไหม`)) throw new Cancelled();
+        if (!(await confirmAction(`${e.message}\n\nยืนยันไหม`))) throw new Cancelled();
         await send(true);
       }
     });
   }
 
-  function remove(exam: Exam) {
-    if (!window.confirm(`ลบคาบสอบ "${exam.title}" ใช่ไหม`)) return;
+  async function remove(exam: Exam) {
+    if (!(await confirmAction(`ลบคาบสอบ "${exam.title}" ใช่ไหม`))) return;
     void run(() => apiFetch(`/exams/${exam.id}`, { method: "DELETE" }));
   }
 
