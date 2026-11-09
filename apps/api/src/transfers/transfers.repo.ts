@@ -1,13 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 import { AppError } from '../common/app-error.js';
 import { dbError } from '../common/db-error.js';
+import type { ExtractedCourse } from './transfer-ocr.js';
 import type {
   CurriculumDocument,
   MappingInput,
   NewTransferRequest,
-  ReviewDecision,
+  StoredReviewDecision,
   TransferFile,
   TransferMapping,
   TransferRequest,
@@ -23,7 +25,10 @@ export interface TransfersRepo {
     curriculumId: string,
     path: string,
     file: TransferFile,
+    details?: { sourceInstitution: string; sourceMajor: string; courses: ExtractedCourse[]; ocrText: string },
   ): Promise<{ id: string }>;
+  createCatalog(name: string, year: number): Promise<string>;
+  assignCurriculum(requestId: string, doc: CurriculumDocument, items: TransferRequest['items']): Promise<void>;
   listMappings(curriculumId?: string): Promise<TransferMapping[]>;
   saveMapping(input: MappingInput): Promise<TransferMapping>;
   setMappingActive(id: string, active: boolean): Promise<{ id: string }>;
@@ -36,7 +41,8 @@ export interface TransfersRepo {
   review(
     id: string,
     reviewer: string,
-    decisions: ReviewDecision[],
+    decisions: StoredReviewDecision[],
+    expectedDocumentId?: string | null,
   ): Promise<void>;
 }
 type Row = Record<string, any>;
@@ -50,6 +56,8 @@ function request(row: Row): TransferRequest {
     curriculumDocumentId: row.curriculum_document_id,
     curriculumName: row.curriculum_name,
     sourceInstitution: row.source_institution,
+    sourceMajor: row.source_major ?? '',
+    ocrText: row.ocr_text ?? '',
     documentPath: row.document_path,
     documentName: row.document_name,
     status: row.status,
@@ -83,6 +91,10 @@ function document(row: Row): CurriculumDocument {
     path: row.path,
     fileName: row.file_name,
     createdAt: row.created_at,
+    sourceInstitution: row.source_institution ?? '',
+    sourceMajor: row.source_major ?? '',
+    courses: row.courses ?? [],
+    ocrText: row.ocr_text ?? '',
   };
 }
 async function all(query: {
@@ -146,11 +158,16 @@ export class SupabaseTransfersRepo implements TransfersRepo {
     curriculumId: string,
     path: string,
     file: TransferFile,
+    details?: { sourceInstitution: string; sourceMajor: string; courses: ExtractedCourse[]; ocrText: string },
   ) {
     const { data, error } = await this.db
       .from('transfer_curriculum_documents')
       .insert({
         curriculum_id: curriculumId,
+        source_institution: details?.sourceInstitution ?? '',
+        source_major: details?.sourceMajor ?? '',
+        courses: details?.courses ?? [],
+        ocr_text: details?.ocrText ?? '',
         path,
         file_name: file.originalname.replace(/^.*[\\/]/u, '').slice(0, 255),
         mime: file.mimetype,
@@ -160,6 +177,16 @@ export class SupabaseTransfersRepo implements TransfersRepo {
       .single();
     if (error) throw dbError();
     return data as { id: string };
+  }
+  async createCatalog(name: string, year: number) {
+    const { data, error } = await this.db.from('admin_catalog').insert({ kind: 'curricula', code: `OCR-${randomUUID().toUpperCase()}`, name, year, content: '', active: true }).select('id').single();
+    if (error || !data) throw dbError();
+    return data.id as string;
+  }
+  async assignCurriculum(requestId: string, doc: CurriculumDocument, items: TransferRequest['items']) {
+    const { data, error } = await this.db.from('transfer_requests').update({ curriculum_id: doc.curriculumId, curriculum_document_id: doc.id, curriculum_name: doc.curriculumName, items }).eq('id', requestId).eq('status', 'pending').select('id').maybeSingle();
+    if (error) throw dbError();
+    if (!data) throw new AppError(409, 'ALREADY_REVIEWED', 'คำขอนี้พิจารณาแล้ว');
   }
   async listMappings(curriculumId?: string) {
     let query = this.db
@@ -232,6 +259,8 @@ export class SupabaseTransfersRepo implements TransfersRepo {
         curriculum_document_id: input.curriculumDocumentId,
         curriculum_name: input.curriculumName,
         source_institution: input.sourceInstitution,
+        source_major: input.sourceMajor ?? '',
+        ocr_text: input.ocrText ?? '',
         document_path: input.documentPath,
         document_name: input.documentName,
         document_mime: input.documentMime,
@@ -276,11 +305,11 @@ export class SupabaseTransfersRepo implements TransfersRepo {
     if (error || !data?.signedUrl) throw dbError();
     return data.signedUrl;
   }
-  async review(id: string, reviewer: string, decisions: ReviewDecision[]) {
+  async review(id: string, reviewer: string, decisions: StoredReviewDecision[], expectedDocumentId?: string | null) {
     const { error } = await this.db.rpc('review_transfer_request', {
       p_request_id: id,
       p_reviewer_id: reviewer,
-      p_decisions: decisions,
+      p_decisions: decisions.map(decision => expectedDocumentId === undefined ? decision : { ...decision, expectedDocumentId }),
     });
     if (!error) return;
     if (error.code === '23505')
@@ -289,6 +318,7 @@ export class SupabaseTransfersRepo implements TransfersRepo {
         'TRANSFER_ALREADY_GRANTED',
         'มีผลอนุมัติวิชาเป้าหมายนี้แล้ว ไม่สามารถให้หน่วยกิตซ้ำ',
       );
+    if (error.message.includes('CURRICULUM_CHANGED')) throw new AppError(409, 'CURRICULUM_CHANGED', 'หลักสูตรเปลี่ยนระหว่างพิจารณา กรุณาโหลดข้อมูลแล้วตรวจใหม่');
     if (error.message.includes('ALREADY_REVIEWED'))
       throw new AppError(409, 'ALREADY_REVIEWED', 'คำขอนี้พิจารณาแล้ว');
     if (error.message.includes('INVALID_REVIEW'))
@@ -298,7 +328,7 @@ export class SupabaseTransfersRepo implements TransfersRepo {
         'ข้อมูลผลพิจารณาไม่ครบหรือไม่ถูกต้อง',
       );
     if (error.message.includes('FORBIDDEN'))
-      throw new AppError(403, 'FORBIDDEN', 'เฉพาะแอดมินเท่านั้น');
+      throw new AppError(403, 'FORBIDDEN', 'เฉพาะอาจารย์และผู้ดูแลระบบเท่านั้น');
     throw dbError();
   }
 }

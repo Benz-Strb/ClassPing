@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { LeaveAccess } from "@/components/leave-access";
 import {
+  DOCUMENT_FIELDS,
   formatSession,
   formatSubmittedAt,
   OCR_STATUS_LABEL,
@@ -124,6 +125,9 @@ function TeacherLeaveReviewPage() {
                 <p>
                   <strong>เหตุผล:</strong> {request.reason}
                 </p>
+                {DOCUMENT_FIELDS.map(([key, label]) => request.documentDetails?.[key] ? (
+                  <p key={key}><strong>{label}:</strong> {request.documentDetails[key]}</p>
+                ) : null)}
                 <p>
                   <strong>OCR:</strong> {OCR_STATUS_LABEL[request.ocrStatus]}
                 </p>

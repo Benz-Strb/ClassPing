@@ -1,3 +1,5 @@
+import { LeaveOcrClient } from '../leave/leave-ocr.client.js';
+import { extractTransferDraft, normalize, suggestItems } from './transfer-ocr.js';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -8,10 +10,13 @@ import type { AppUser } from '../users/users.service.js';
 import { TRANSFERS_REPO, type TransfersRepo } from './transfers.repo.js';
 import {
   mappingSchema,
+  curriculumDraftSchema,
   reviewSchema,
   submitSchema,
   type TransferFile,
   type TransferRequest,
+  type CurriculumDocument,
+  type StoredReviewDecision,
 } from './transfers.types.js';
 
 const extensions: Record<string, string> = {
@@ -59,7 +64,7 @@ function body(value: unknown): unknown {
 @Injectable()
 export class TransfersService {
   private readonly logger = new Logger(TransfersService.name);
-  constructor(@Inject(TRANSFERS_REPO) private readonly repo: TransfersRepo) {}
+  constructor(@Inject(TRANSFERS_REPO) private readonly repo: TransfersRepo, private readonly ocr: LeaveOcrClient) {}
 
   async curricula(user: AppUser) {
     allow(user, ['student', 'teacher']);
@@ -104,6 +109,7 @@ export class TransfersService {
     user: AppUser,
     curriculumId: string,
     file?: TransferFile,
+    details?: unknown,
   ) {
     allow(user, ['teacher']);
     id(curriculumId);
@@ -112,7 +118,9 @@ export class TransfersService {
     const path = `curricula/${curriculumId}/${randomUUID()}.${extensions[file.mimetype]}`;
     await this.repo.upload(path, file);
     try {
-      return await this.repo.addCurriculumDocument(curriculumId, path, file);
+      const parsed = details ? parseBody(curriculumDraftSchema, body(details)) : extractTransferDraft((await this.ocr.readTransferDocument(file.buffer, file.mimetype)).lines);
+      if (!parsed.courses.length) throw new AppError(400, 'NO_COURSES', 'ไม่พบรายวิชา กรุณาอ่านเอกสารและตรวจข้อมูลก่อนบันทึก');
+      return await this.repo.addCurriculumDocument(curriculumId, path, file, parsed);
     } catch (error) {
       await this.cleanup(path);
       throw error;
@@ -136,24 +144,16 @@ export class TransfersService {
       );
     const input = parseBody(submitSchema, body(value));
     validateFile(file);
-    const doc = await this.repo.getCurriculumDocument(
-      input.curriculumDocumentId,
-    );
-    if (!doc?.active) throw missing();
-    const mappings = await this.repo.listMappings(doc.curriculumId);
-    const items = input.courses.map((course) => ({
-      ...course,
-      id: randomUUID(),
-      match:
-        mappings.find(
-          (m) =>
-            m.active &&
-            m.curriculumId === doc.curriculumId &&
-            m.sourceInstitution === input.sourceInstitution &&
-            m.sourceCode === course.sourceCode &&
-            course.credits >= m.minCredits,
-        ) ?? null,
-    }));
+    let doc: CurriculumDocument | null = input.curriculumDocumentId ? await this.repo.getCurriculumDocument(input.curriculumDocumentId) : null;
+    if (input.curriculumDocumentId && !doc?.active) throw missing();
+    const mappings = await this.repo.listMappings(doc?.curriculumId);
+    const history = input.sourceMajor ? await this.repo.listRequests() : [];
+    if (!doc) {
+      const docs = await this.repo.listCurricula();
+      const ranked = docs.map(candidate => ({ doc: candidate, score: suggestItems(input.courses, input.sourceInstitution, input.sourceMajor, candidate, mappings, history).filter(i => i.match).length })).sort((a, b) => b.score - a.score);
+      if (ranked[0]?.score && (!ranked[1] || ranked[0].score > ranked[1].score)) doc = ranked[0].doc;
+    }
+    const items = (doc ? suggestItems(input.courses, input.sourceInstitution, input.sourceMajor, doc, mappings, history) : input.courses.map(course => ({ ...course, match: null }))).map(course => ({ ...course, id: randomUUID() }));
     const targets = items.flatMap((item) =>
       item.match ? [item.match.targetCode] : [],
     );
@@ -169,9 +169,11 @@ export class TransfersService {
       return view(
         await this.repo.insertRequest({
           studentId: user.id,
-          curriculumId: doc.curriculumId,
-          curriculumDocumentId: doc.id,
-          curriculumName: doc.curriculumName,
+          curriculumId: doc?.curriculumId ?? null,
+          curriculumDocumentId: doc?.id ?? null,
+          curriculumName: doc?.curriculumName ?? 'รออาจารย์เลือกหลักสูตรปลายทาง',
+          sourceMajor: input.sourceMajor,
+          ocrText: input.ocrText,
           sourceInstitution: input.sourceInstitution,
           documentPath: path,
           documentName: file.originalname
@@ -196,7 +198,7 @@ export class TransfersService {
     const path =
       kind === 'request'
         ? request.documentPath
-        : (await this.repo.getCurriculumDocument(request.curriculumDocumentId))
+        : (request.curriculumDocumentId ? await this.repo.getCurriculumDocument(request.curriculumDocumentId) : null)
             ?.path;
     if (!path) throw missing();
     return { url: await this.repo.sign(path) };
@@ -218,16 +220,47 @@ export class TransfersService {
         'INCOMPLETE_REVIEW',
         'ต้องพิจารณารายวิชาให้ครบและไม่ซ้ำ',
       );
+    const decisions: StoredReviewDecision[] = [];
+    const doc = request.curriculumDocumentId ? await this.repo.getCurriculumDocument(request.curriculumDocumentId) : null;
     for (const decision of input.decisions) {
-      const item = request.items.find((i) => i.id === decision.itemId);
-      if (!item || (decision.decision === 'approved' && !item.match))
-        throw new AppError(
-          400,
-          'UNMATCHED_COURSE',
-          'อนุมัติได้เฉพาะรายวิชาที่มีคู่เทียบตามเกณฑ์',
-        );
+      const item = request.items.find(i => i.id === decision.itemId);
+      if (!item) throw new AppError(400, 'INVALID_REVIEW', 'ไม่พบรายวิชาที่พิจารณา');
+      let match = item.match;
+      if (decision.targetCode !== undefined) {
+        const target = doc?.courses?.find(c => normalize(c.sourceCode) === normalize(decision.targetCode!));
+        if (!target || item.credits < target.credits) throw new AppError(400, 'UNMATCHED_COURSE', 'คู่เทียบไม่อยู่ในหลักสูตรหรือหน่วยกิตไม่ถึงเกณฑ์');
+        match = { id: doc!.id, curriculumId: doc!.curriculumId, sourceInstitution: request.sourceInstitution, sourceCode: item.sourceCode, sourceName: item.sourceName, minCredits: target.credits, targetCode: target.sourceCode, targetName: target.sourceName, targetCredits: target.credits, active: true };
+      }
+      if (decision.decision === 'approved' && (!match || !doc?.active)) throw new AppError(400, 'UNMATCHED_COURSE', 'กรุณาเลือกหลักสูตรและคู่เทียบก่อนอนุมัติ');
+      decisions.push(decision.targetCode ? { ...decision, match } : decision);
     }
-    await this.repo.review(request.id, user.id, input.decisions);
+    const targetCodes = decisions.filter(d => d.decision === 'approved').map(d => (d.match ?? request.items.find(i => i.id === d.itemId)?.match)?.targetCode);
+    if (new Set(targetCodes).size !== targetCodes.length) throw new AppError(400, 'DUPLICATE_TARGET', 'ห้ามให้หน่วยกิตวิชาเป้าหมายซ้ำในคำขอเดียวกัน');
+    await this.repo.review(request.id, user.id, decisions, request.curriculumDocumentId);
+    return { id: request.id };
+  }
+  async preview(user: AppUser, file?: TransferFile) {
+    allow(user, ['student', 'teacher']);
+    validateFile(file);
+    return extractTransferDraft((await this.ocr.readTransferDocument(file.buffer, file.mimetype)).lines);
+  }
+  async createCurriculum(user: AppUser, value: unknown, file?: TransferFile) {
+    allow(user, ['teacher']);
+    validateFile(file);
+    const input = parseBody(z.object({ name: z.string().trim().min(1).max(200), year: z.number().int().min(1900).max(2700), draft: curriculumDraftSchema }), body(value));
+    const curriculumId = await this.repo.createCatalog(input.name, input.year);
+    return this.uploadCurriculum(user, curriculumId, file, input.draft);
+  }
+  async assign(user: AppUser, requestId: string, value: unknown) {
+    allow(user, ['teacher']);
+    const { curriculumDocumentId } = parseBody(z.object({ curriculumDocumentId: z.uuid() }), value);
+    const request = await this.repo.getRequest(id(requestId));
+    const doc = await this.repo.getCurriculumDocument(curriculumDocumentId);
+    if (!request || !doc?.active) throw missing();
+    if (request.status !== 'pending') throw new AppError(409, 'ALREADY_REVIEWED', 'คำขอนี้พิจารณาแล้ว');
+    const [mappings, history] = await Promise.all([this.repo.listMappings(doc.curriculumId), this.repo.listRequests()]);
+    const items = suggestItems(request.items, request.sourceInstitution, request.sourceMajor ?? '', doc, mappings, history).map((item, index) => ({ ...item, id: request.items[index].id }));
+    await this.repo.assignCurriculum(request.id, doc, items);
     return { id: request.id };
   }
   private async cleanup(path: string) {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppUser } from '../users/users.service.js';
 import { TransfersService } from './transfers.service.js';
+import type { LeaveOcrClient } from '../leave/leave-ocr.client.js';
 import type { TransfersRepo } from './transfers.repo.js';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -97,7 +98,7 @@ describe('TransfersService', () => {
     repo.insertRequest.mockResolvedValue(pending);
     repo.getRequest.mockResolvedValue(pending);
     repo.listRequests.mockResolvedValue([pending]);
-    service = new TransfersService(repo as unknown as TransfersRepo);
+    service = new TransfersService(repo as unknown as TransfersRepo, { readTransferDocument: vi.fn() } as unknown as LeaveOcrClient);
   });
   it('จับคู่จากข้อมูล server เท่านั้น และเก็บเอกสารก่อนสร้างคำขอ', async () => {
     const result = await service.submit(
@@ -224,7 +225,7 @@ describe('TransfersService', () => {
     });
     expect(repo.review).toHaveBeenCalledWith(ID, teacher.id, [
       { itemId: ITEM, decision: 'approved', note: 'ตรวจเอกสารแล้ว' },
-    ]);
+    ], DOC);
   });
   it('ห้ามอนุมัติวิชาที่ยังจับคู่ไม่ได้', async () => {
     repo.getRequest.mockResolvedValue({
@@ -256,4 +257,21 @@ describe('TransfersService', () => {
       }),
     ).rejects.toMatchObject({ status: 400 });
   });
+  it('นักศึกษาส่งเอกสารได้แม้ยังไม่มีหลักสูตรปลายทาง', async () => {
+    repo.listCurricula.mockResolvedValue([]);
+    repo.listMappings.mockResolvedValue([]);
+    await service.submit(student, { ...input, curriculumDocumentId: null, sourceMajor: 'CS' }, file);
+    expect(repo.insertRequest.mock.calls[0][0]).toMatchObject({ curriculumId: null, curriculumDocumentId: null, sourceMajor: 'CS', items: [{ match: null }] });
+  });
+  it('อาจารย์เลือกคู่เทียบจากหลักสูตรได้แต่ห้ามส่งวิชาที่ไม่มีในหลักสูตร', async () => {
+    repo.getCurriculumDocument.mockResolvedValue({ id: DOC, curriculumId: ID, active: true, courses: [{ sourceCode: 'IT102', sourceName: 'Programming II', credits: 3, grade: '' }] });
+    await service.review({ ...admin, role: 'teacher' }, ID, { decisions: [{ itemId: ITEM, decision: 'approved', targetCode: 'IT102' }] });
+    expect(repo.review.mock.calls[0][2][0].match.targetCode).toBe('IT102');
+    await expect(service.review({ ...admin, role: 'teacher' }, ID, { decisions: [{ itemId: ITEM, decision: 'approved', targetCode: 'INVENTED' }] })).rejects.toMatchObject({ status: 400 });
+  });
+  it('นักศึกษาไม่มีสิทธิ์พิจารณาคำขอ', async () => {
+    await expect(service.review(student, ID, { decisions: [{ itemId: ITEM, decision: 'approved' }] })).rejects.toMatchObject({ status: 403 });
+    expect(repo.review).not.toHaveBeenCalled();
+  });
+
 });
