@@ -15,6 +15,8 @@ import { TransfersController } from '../src/transfers/transfers.controller.js';
 import { TRANSFERS_REPO } from '../src/transfers/transfers.repo.js';
 import { LeaveOcrClient } from '../src/leave/leave-ocr.client.js';
 import { TransfersService } from '../src/transfers/transfers.service.js';
+import { TransferOcrLimitGuard } from '../src/transfers/transfer-ocr-limit.guard.js';
+import { CLOCK } from '../src/common/clock.js';
 import type {
   CurriculumDocument,
   MappingInput,
@@ -152,6 +154,8 @@ describe('Transfers HTTP flow', () => {
       controllers: [TransfersController],
       providers: [
         TransfersService,
+        TransferOcrLimitGuard,
+        { provide: CLOCK, useValue: () => new Date() },
         { provide: LeaveOcrClient, useValue: { readTransferDocument: vi.fn().mockResolvedValue({ lines: [{ text: 'School A University' }, { text: 'Major: CS' }, { text: 'IT101 Programming 3' }] }) } },
         { provide: TRANSFERS_REPO, useValue: repo },
         { provide: APP_GUARD, useClass: FakeAuth },
@@ -378,8 +382,14 @@ describe('Transfers HTTP flow', () => {
     expect(row.items[0].decision).toBeUndefined();
     await request(app.getHttpServer()).post(`/transfers/requests/${row.id}/review`).set('x-role', 'teacher').send({ decisions: [{ itemId: row.items[0].id, decision: 'approved' }] }).expect(200);
     const next = await request(app.getHttpServer()).post('/transfers/requests').set('x-user', 'student-2').field('payload', JSON.stringify(draft)).attach('document', PDF, { filename: 'second.pdf', contentType: 'application/pdf' }).expect(201);
-    expect(next.body.data).toMatchObject({ status: 'pending', items: [{ matchSource: 'history', previousApproval: { requestId: row.id } }] });
+    expect(next.body.data).toMatchObject({ status: 'pending', items: [{ matchSource: 'history' }] });
     expect(next.body.data.items[0].decision).toBeUndefined();
+    // คำขอเก่าเป็นของนักศึกษาคนอื่น นักศึกษาไม่ได้เห็น อาจารย์เห็น
+    expect(next.body.data.items[0]).not.toHaveProperty('previousApproval');
+    const mine = await request(app.getHttpServer()).get('/transfers/requests').set('x-user', 'student-2').expect(200);
+    expect(mine.body.data.every((r: { items: object[] }) => r.items.every((item) => !('previousApproval' in item)))).toBe(true);
+    const all = await request(app.getHttpServer()).get('/transfers/requests').set('x-role', 'teacher').expect(200);
+    expect(all.body.data.find((r: { id: string }) => r.id === next.body.data.id).items[0]).toMatchObject({ previousApproval: { requestId: row.id } });
   });
 
 });
