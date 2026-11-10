@@ -6,7 +6,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import type { Me } from "@/lib/types";
 
-const STUDENT_MESSAGE = "เว็บไซต์สำหรับผู้ดูแลระบบและอาจารย์เท่านั้น นักศึกษากรุณาใช้งานผ่านแอป ClassPing รวมถึงการยื่นลาและเทียบโอน";
+const STUDENT_MESSAGE = "เว็บไซต์สำหรับผู้ดูแลระบบและอาจารย์เท่านั้น นักศึกษากรุณาใช้งานผ่านแอป ClassPing รวมถึงการยื่นลา";
 
 const WebUserContext = createContext<Me | null>(null);
 
@@ -74,7 +74,7 @@ export function WebAccess({ children }: { children: ReactNode }) {
   const redirect = checked && !authCallback
     ? !user && pathname !== "/" && pathname !== "/login"
       ? "/login"
-      : pathname === "/leave" || pathname === "/transfers" || pathname.startsWith("/transfers/")
+      : pathname === "/leave"
         ? "/courses"
         : null
     : null;

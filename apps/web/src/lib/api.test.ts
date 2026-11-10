@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 it("แปลงเครือข่ายล้มเหลวเป็น ApiError กลางโดยไม่เผยรายละเอียดภายใน", async () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("private internal address")));
-  const result = apiFetch("/transfers/requests");
+  const result = apiFetch("/courses");
   await expect(result).rejects.toBeInstanceOf(ApiError);
   await expect(result).rejects.toMatchObject({ status: 0, code: "NETWORK", message: "ต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง" });
 });
