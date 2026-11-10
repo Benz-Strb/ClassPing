@@ -13,7 +13,7 @@ export function MainNavigation() {
   const me = useWebUser();
   const links = navigationFor(me?.role ?? null);
   if (pathname === "/login" || pathname.startsWith("/auth/")) return null;
-  const iconFor = (href: string) => href.includes("courses") || href.includes("curricula") ? "courses" : href.includes("transfers") ? "transfer" : href.includes("leave") ? "leave" : href === "/me" ? "user" : href.startsWith('/live') ? 'camera' : href.startsWith('/admin') ? 'admin' : href.startsWith('/transfers') ? 'transfer' : href === '/login' ? 'login' : "home";
+  const iconFor = (href: string) => href.includes("courses") || href.includes("curricula") ? "courses" : href.includes("leave") ? "leave" : href === "/me" ? "user" : href.startsWith('/live') ? 'camera' : href.startsWith('/admin') ? 'admin' : href === '/login' ? 'login' : "home";
   return (
     <nav aria-label="เมนูหลัก" className="app-navigation">
       <div className="navigation-heading">
@@ -25,12 +25,12 @@ export function MainNavigation() {
       </div>
       <div id="main-navigation-links" className="navigation-links" data-open={open}>
         {links.map(({ href, label }) => (
-          <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={pathname === href || (href === "/documents" && (pathname.startsWith("/documents/") || pathname.startsWith("/leave/") || pathname === "/admin/transfers" || pathname === "/admin/leave-statuses")) || (href !== "/" && href !== "/admin" && pathname.startsWith(`${href}/`)) ? "page" : undefined} className="navigation-link">
+          <Link key={href} href={href} onClick={() => setOpen(false)} aria-current={pathname === href || (href === "/documents" && (pathname.startsWith("/documents/") || pathname.startsWith("/leave/") || pathname === "/admin/leave-statuses")) || (href !== "/" && href !== "/admin" && pathname.startsWith(`${href}/`)) ? "page" : undefined} className="navigation-link">
             <span aria-hidden="true" className="navigation-icon" style={{ maskImage: `url(/icons/${iconFor(href)}.svg)` }} />
             {label}
           </Link>
         ))}
-        <div className="navigation-footer">{me && <Link href="/me" className="navigation-account" onClick={() => setOpen(false)}><span className="navigation-avatar" aria-hidden="true">{(me.fullName ?? me.email).slice(0, 1).toUpperCase()}</span><span><strong>{me.fullName ?? 'บัญชีของฉัน'}</strong><small>{me.role === 'admin' ? 'ผู้ดูแลระบบ' : me.role === 'teacher' ? 'อาจารย์' : 'นักศึกษา'}</small></span></Link>}<p>DPU · @dpu.ac.th</p></div>
+        <div className="navigation-footer">{me && <Link href="/me" className="navigation-account" onClick={() => setOpen(false)}><span className="navigation-avatar" aria-hidden="true">{(me.fullName ?? me.email).slice(0, 1).toUpperCase()}</span><span><strong>{me.fullName ?? 'บัญชีของฉัน'}</strong><small>{me.role === 'admin' ? 'ผู้ดูแลระบบ' : 'อาจารย์'}</small></span></Link>}<p>DPU · @dpu.ac.th</p></div>
       </div>
     </nav>
   );

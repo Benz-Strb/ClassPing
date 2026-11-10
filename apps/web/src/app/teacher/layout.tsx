@@ -8,11 +8,10 @@ import { handleApiError } from "@/lib/auth-error";
 import type { Me } from "@/lib/types";
 
 const LINKS = [
-  { href: "/teacher/transfers", label: "เทียบโอน" },
   { href: "/teacher/curricula", label: "หลักสูตร" },
 ];
 
-// งานหลักสูตรและเทียบโอนเป็นของอาจารย์ บทบาทอื่นถูกส่งกลับ ส่วน API ตรวจสิทธิ์ซ้ำเอง
+// งานหลักสูตรเป็นของอาจารย์ บทบาทอื่นถูกส่งกลับ ส่วน API ตรวจสิทธิ์ซ้ำเอง
 export default function TeacherLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -49,8 +48,8 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   return (
     <main className="admin-workspace fixed-workspace mx-auto p-4 sm:p-6">
       <header className="admin-heading space-y-4">
-        <h1 className="text-2xl font-semibold">หลักสูตรและเทียบโอน</h1>
-        <nav aria-label="เมนูหลักสูตรและเทียบโอน" className="admin-tabs">
+        <h1 className="text-2xl font-semibold">หลักสูตร</h1>
+        <nav aria-label="เมนูหลักสูตร" className="admin-tabs">
           {LINKS.map((link) => (
             <Link
               key={link.href}

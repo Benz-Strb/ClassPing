@@ -20,14 +20,6 @@ export class LeaveOcrClient {
     }
   }
 
-  async readTransferDocument(image: Buffer, mime: string): Promise<LeaveOcrResult> {
-    try { return await this.readLeaveDocument(image, mime, '/transfers/ocr'); }
-    catch (error) {
-      if (error instanceof AppError && error.getStatus() === 503) throw new AppError(503, 'TRANSFER_OCR_UNAVAILABLE', 'บริการอ่านเอกสารเทียบโอนยังไม่พร้อม กรุณาลองใหม่');
-      throw error;
-    }
-  }
-
   async readLeaveDocument(image: Buffer, mime: string, route = '/leave/ocr'): Promise<LeaveOcrResult> {
     if (!this.config.leaveOcrServiceToken) throw unavailable();
     const form = new FormData();
