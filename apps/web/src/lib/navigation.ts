@@ -7,6 +7,7 @@ const ADMIN = [
   { href: '/admin', label: 'ภาพรวม' },
   { href: '/admin/users', label: 'ผู้ใช้' },
   { href: '/admin/rooms', label: 'ห้องเรียน' },
+  { href: '/live', label: 'ดูกล้อง' },
   { href: '/admin/cameras', label: 'กล้องประจำห้อง' },
   { href: '/admin/video-views', label: 'ประวัติการดูกล้อง' },
   { href: '/admin/courses', label: 'รายวิชาและตารางเรียน' },
