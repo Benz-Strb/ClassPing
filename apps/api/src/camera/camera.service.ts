@@ -25,7 +25,7 @@ export interface CameraSession {
 }
 
 const FRAMES_PER_SECOND = 1;
-// วิดีโอดูสด/อัดเก็บ วัดจากเว็บแคมจริงตอนแผน 7 Task 0 (1500 kbps ≈ 689 MB/ชม.)
+// วิดีโอดูสด/อัดเก็บ (กล้องหน้าห้องและกล้องประตู) วัดจากเว็บแคมจริงตอนแผน 7 Task 0 (1500 kbps ≈ 689 MB/ชม.)
 const VIDEO_FPS = 15;
 const VIDEO_BITRATE_KBPS = 1500;
 // MediaMTX ถามสิทธิ์แค่ตอนเริ่มต่อ กล้องถามคาบทุก 30 วิ เริ่มส่งใหม่เมื่อไหร่ก็ได้ token ใหม่
@@ -125,7 +125,7 @@ export class CameraService {
 
   private streamFor(camera: CameraIdentity, sessionId: string): CameraSession['stream'] {
     const { mediaTokenSecret, mediaServerSecret } = this.config;
-    if (camera.kind !== 'front' || !mediaTokenSecret || !mediaServerSecret) return null;
+    if (!mediaTokenSecret || !mediaServerSecret) return null;
     const path = cameraPath(camera.id);
     const token = signMediaToken(mediaTokenSecret, {
       sub: camera.id,

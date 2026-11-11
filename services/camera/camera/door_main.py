@@ -15,7 +15,8 @@ import cv2
 
 from camera.api import ApiDown, BadToken, CameraApi, Session
 from camera.door import Crossing, DoorCounter
-from camera.loop import POLL_SECONDS, RETRY_SECONDS, CameraError
+from camera.loop import POLL_SECONDS, RETRY_SECONDS, STREAM_RETRY_SECONDS, CameraError, Streamer
+from camera.stream import Streamer as FfmpegStreamer
 from camera.webcam import Webcam
 
 log = logging.getLogger("camera")
@@ -193,12 +194,15 @@ class DoorLoop:
         counter: Counter,
         sender: Sender,
         now: Callable[[], datetime],
+        streamer: Streamer | None = None,
     ):
         self.poller = poller
         self.camera = camera
         self.counter = counter
         self.sender = sender
         self.now = now
+        self.streamer = streamer
+        self.next_stream_try: datetime | None = None
         self.on_frame: Callable[[object], None] | None = None
         self.session: Session | None = None
         self.next_open: datetime | None = None
@@ -229,6 +233,7 @@ class DoorLoop:
                 return RETRY_SECONDS
             self._fps_since, self._fps_frames = now, 0
         self.session = session
+        self._keep_streaming(now)
 
         frame = self.camera.latest_raw()
         if frame is None or frame is self._last_frame:
@@ -248,6 +253,18 @@ class DoorLoop:
             log.info("ประมวลผล %.1f ภาพ/วินาที", self._fps_frames / elapsed)
             self._fps_since, self._fps_frames = now, 0
 
+    # วิดีโอดูสด/อัดเก็บแยกจากการนับคน วิดีโอพังการนับคนยังทำงานต่อ
+    def _keep_streaming(self, now: datetime) -> None:
+        stream = self.session.stream if self.session else None
+        if stream is None or self.streamer is None or self.streamer.alive:
+            return
+        if self.next_stream_try is not None and now < self.next_stream_try:
+            return
+        if self.streamer.running:
+            self.streamer.stop()
+        self.next_stream_try = now + timedelta(seconds=STREAM_RETRY_SECONDS)
+        self.streamer.start(stream.url, stream.fps, stream.bitrate_kbps)
+
     def _open(self, session: Session) -> None:
         try:
             self.camera.open()
@@ -258,6 +275,9 @@ class DoorLoop:
 
     def _close(self) -> None:
         log.info("หยุดนับคนที่ประตู %s", self.session.course)
+        if self.streamer is not None:
+            self.streamer.stop()
+        self.next_stream_try = None
         self.camera.close()
         self.counter.reset()
         self._last_frame = None
@@ -343,7 +363,13 @@ def main() -> int:
     api = CameraApi(api_url, token)
     sender = DoorSender(api)
     poller = SessionPoller(api)
-    loop = DoorLoop(poller, camera, counter, sender, lambda: datetime.now(UTC))
+    # วิดีโอส่งเมื่อ API บอกที่ส่งมาเท่านั้น ตั้ง DOOR_CAMERA_MIRROR=1 ถ้ากล้องให้ภาพกลับด้าน
+    streamer = FfmpegStreamer(
+        source=camera.latest_raw,
+        max_width=1280,
+        mirror=os.environ.get("DOOR_CAMERA_MIRROR", "").strip() == "1",
+    )
+    loop = DoorLoop(poller, camera, counter, sender, lambda: datetime.now(UTC), streamer)
     preview = os.environ.get("DOOR_PREVIEW", "").strip() == "1"
     if preview:
         loop.on_frame = _preview(counter)
@@ -373,6 +399,7 @@ def main() -> int:
         return 0
     finally:
         # ปล่อยกล้องก่อน การรอ API ตอบต้องไม่ทำให้กล้องเปิดค้าง
+        streamer.stop()
         camera.close()
         poller.stop()
         sender.stop()
