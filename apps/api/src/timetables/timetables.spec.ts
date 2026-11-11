@@ -281,17 +281,13 @@ describe('timetable import and enrollment', () => {
     const buffer = Buffer.from('%PDF-test');
     const draft = await service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' });
     expect(draft.identity).toEqual(identity);
-    expect(draft.ownershipProof).toBeNull();
-    expect(draft.readProof).toEqual(expect.any(String));
-    expect(await service.verifyOwner(student, { ownershipProof: draft.readProof })).toMatchObject({ identity });
+    expect(draft.ownershipProof).toEqual(expect.any(String));
   });
-  it('shows another student document first and rejects it at explicit comparison', async () => {
+  it('rejects another student document automatically during upload', async () => {
     ocr.readTimetableDocument.mockResolvedValue({ lines: [{ text: 'เลขทะเบียน : 65000002 นายสมชาย ใจดี' }] });
     const buffer = Buffer.from('%PDF-test');
-    const draft = await service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' });
-    expect(draft.identity?.studentId).toBe('65000002');
-    expect(draft.ownershipProof).toBeNull();
-    await expect(service.verifyOwner(student, { ownershipProof: draft.readProof })).rejects.toMatchObject({ code: 'TIMETABLE_OWNER_MISMATCH' });
+    await expect(service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' })).rejects.toMatchObject({ code: 'TIMETABLE_OWNER_MISMATCH' });
+    expect(repo.candidates).not.toHaveBeenCalled();
   });
   it('requires a valid ownership proof to save or enroll even when clients bypass preview', async () => {
     await expect(service.save(student, { rows: [row], ownershipProof: 'forged' })).rejects.toMatchObject({ code: 'TIMETABLE_VERIFICATION_REQUIRED' });
