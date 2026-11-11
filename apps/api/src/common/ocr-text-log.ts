@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import type { AppUser } from '../users/users.service.js';
 
 const logger = new Logger('OcrTextLog');
-const defaultDirectory = '/Users/a1/Film/project classping/ClassPing/File-text-OCR-Log';
 const safeName = (value: string) => value.normalize('NFC').replace(/[<>:"/\\|?*\p{Cc}]/gu, '_').replace(/\.{2,}/g, '_').trim().slice(0, 80) || 'unknown';
 
 export function formatOcrText(type: 'ใบลา' | 'ตารางเรียน', text: string): string {
@@ -28,8 +27,10 @@ export async function writeOcrTextLog(
   type: 'ใบลา' | 'ตารางเรียน',
   text: string,
 ): Promise<void> {
+  // ใบลามักเป็นใบรับรองแพทย์ บันทึกเป็นไฟล์เฉพาะตอน debug ที่ตั้ง OCR_TEXT_LOG_DIR เอง และไม่ทำงานบนเครื่องจริง
+  const directory = process.env.OCR_TEXT_LOG_DIR?.trim();
+  if (!directory || process.env.NODE_ENV === 'production') return;
   try {
-    const directory = process.env.OCR_TEXT_LOG_DIR || defaultDirectory;
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const filename = `${safeName(user.studentId || user.id)}_${safeName(user.fullName || 'ไม่ระบุชื่อ')}_${type}.txt`;
     const timestamp = new Intl.DateTimeFormat('th-TH', {
