@@ -103,13 +103,15 @@ describe('CameraService.currentSession', () => {
     });
   });
 
-  it('ไม่มีคาบ หรือเป็นกล้องประตู ไม่ส่งวิดีโอ', async () => {
+  it('ไม่มีคาบ ไม่ส่งวิดีโอ', async () => {
     await expect(
       setup({ media: true, live: null }).service.currentSession(front),
     ).resolves.toMatchObject({ stream: null });
-    await expect(setup({ media: true }).service.currentSession(door)).resolves.toMatchObject({
-      stream: null,
-    });
+  });
+
+  it('กล้องประตูส่งวิดีโอไป path ของตัวเอง', async () => {
+    const { stream } = await setup({ media: true }).service.currentSession(door);
+    expect(stream?.url).toContain(`/cam/${door.id}?token=`);
   });
 
   it('หาคาบของห้องกล้องนี้ โดยเลื่อนเวลาเปิดตาม CAMERA_OPEN_BEFORE_MIN', async () => {
@@ -250,11 +252,11 @@ describe('CameraService.acceptDoorCrossing', () => {
 });
 
 describe('CameraService.currentSession (กล้องประตู)', () => {
-  it('กล้องประตูได้คาบแต่ stream เป็น null', async () => {
+  it('กล้องประตูได้คาบพร้อมที่ส่งวิดีโอ', async () => {
     const { service } = setup({ media: true });
     await expect(service.currentSession(door)).resolves.toMatchObject({
       session: { id: 's1' },
-      stream: null,
+      stream: { fps: 15, bitrateKbps: 1500 },
     });
   });
 });
