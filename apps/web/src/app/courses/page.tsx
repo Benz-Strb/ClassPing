@@ -51,7 +51,7 @@ export default function CoursesPage() {
       <div className="workspace-columns">
       <div className="workspace-primary">
       <section className="work-surface" aria-labelledby="my-courses-title">
-      <div className="surface-heading"><h2 id="my-courses-title">รายวิชาของฉัน</h2><span className="tool-note">{courses ? `${courses.length} รายวิชา` : ""}</span></div>
+      <div className="surface-heading"><h2 id="my-courses-title">รายวิชา</h2><span className="tool-note">{courses ? `${courses.length} รายวิชา` : ""}</span></div>
       {courses === null ? (
         error ? <RetryButton /> : <p role="status" className="surface-feedback text-gray-600">กำลังโหลดรายวิชา...</p>
       ) : courses.length === 0 ? (

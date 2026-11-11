@@ -25,15 +25,11 @@ export default function DocumentsPage() {
     <main className="mx-auto space-y-6 p-4 sm:p-6">
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">เอกสาร</h1>
-        <p className="tool-note">จัดการคำขอลาและการเทียบโอนรายวิชา</p>
+        <p className="tool-note">จัดการคำขอลา</p>
       </header>
       <section className="work-surface" aria-label="ประเภทเอกสาร">
         <Link href={me.role === "admin" ? "/admin/leave-statuses" : "/leave/review"} className="tool-link">
           <span>การลา<small className="tool-note block mt-1">{me.role === "admin" ? "ติดตามสถานะการพิจารณาคำขอลา" : "ตรวจเอกสารและพิจารณาคำขอลา"}</small></span>
-          <span aria-hidden="true">&rsaquo;</span>
-        </Link>
-        <Link href="/documents/transfers" className="tool-link">
-          <span>การเทียบโอนรายวิชา<small className="tool-note block mt-1">อ่านหลักสูตรด้วย OCR จับคู่รายวิชา และพิจารณาคำขอของนักศึกษา</small></span>
           <span aria-hidden="true">&rsaquo;</span>
         </Link>
       </section>
