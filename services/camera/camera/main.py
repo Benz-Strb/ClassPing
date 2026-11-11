@@ -30,7 +30,9 @@ def main() -> int:
     max_width = int(os.environ.get("FRAME_MAX_WIDTH", "").strip() or 1280)
     camera = Webcam(index=int(os.environ.get("CAMERA_INDEX", "").strip() or 0), max_width=max_width)
     # วิดีโอดูสด/อัดเก็บ ส่งเมื่อ API บอกที่ส่งมาเท่านั้น
-    streamer = Streamer(source=camera.latest_raw, max_width=max_width)
+    # เว็บแคมหน้าห้องให้ภาพกลับซ้ายขวา กลับก่อนส่ง ภาพสดและภาพย้อนหลังจะได้ถูกด้าน (CAMERA_MIRROR=0 ปิด)
+    mirror = os.environ.get("CAMERA_MIRROR", "").strip() != "0"
+    streamer = Streamer(source=camera.latest_raw, max_width=max_width, mirror=mirror)
     loop = CameraLoop(CameraApi(api_url, token), camera, lambda: datetime.now(UTC), streamer)
 
     log.info("รอคาบจาก %s (กล้องหมายเลข %d)", api_url, camera.index)
