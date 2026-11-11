@@ -1,4 +1,5 @@
 async function syncAcademicRhythm() {
+  figma.notify('ClassPing: starting local sync', {timeout:5000});
   const pages=figma.root.children.filter(p=>['01 · System & product map','02 · Teacher & admin','03 · Student & responsive'].includes(p.name));
   if(pages.length!==3)throw Error('Open the existing ClassPing product file.');
   const vars=await figma.variables.getLocalVariablesAsync(), V=new Map(vars.map(v=>[v.name,v]));
@@ -18,6 +19,7 @@ async function syncAcademicRhythm() {
   for(const page of [...pages].sort((a,b)=>(a.id==='0:1'?-1:b.id==='0:1'?1:0))){
     await figma.setCurrentPageAsync(page);
     const fonts=new Map();for(const t of page.findAllWithCriteria({types:['TEXT']}))for(const s of t.getStyledTextSegments(['fontName']))fonts.set(JSON.stringify(s.fontName),s.fontName);
+    figma.notify('Loading fonts · '+page.name, {timeout:10000});
     figma.ui.postMessage({status:'Loading fonts · '+page.name});
     await Promise.all([...fonts.values()].map(f=>Promise.race([figma.loadFontAsync(f),new Promise((_,reject)=>setTimeout(()=>reject(Error('Font timed out: '+f.family+' '+f.style)),20000))])));
     figma.ui.postMessage({status:'Updating layers · '+page.name});
