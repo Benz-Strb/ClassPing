@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_ADMIN } from '../supabase/supabase.module.js';
 import { dbError } from '../common/db-error.js';
 import { normalizeCode } from './timetable-draft.js';
+import type { SavedTimetable } from './saved-timetable.js';
 
 export interface MatchCourse {
   id: string;
@@ -33,6 +34,24 @@ interface CandidateRow {
 @Injectable()
 export class TimetablesRepo {
   constructor(@Inject(SUPABASE_ADMIN) private readonly db: SupabaseClient) {}
+
+  async saved(userId: string): Promise<SavedTimetable | null> {
+    const { data, error } = await this.db.from('saved_timetables')
+      .select('rows, saved_at, expires_at, identity, ownership_proof').eq('user_id', userId)
+      .gt('expires_at', new Date().toISOString()).maybeSingle();
+    if (error) throw dbError();
+    return data ? { rows: data.rows, savedAt: data.saved_at, expiresAt: data.expires_at, identity: data.identity, ownershipProof: data.ownership_proof } : null;
+  }
+
+  async save(userId: string, timetable: SavedTimetable): Promise<SavedTimetable> {
+    const { data, error } = await this.db.from('saved_timetables').upsert({
+      user_id: userId, rows: timetable.rows,
+      saved_at: timetable.savedAt, expires_at: timetable.expiresAt,
+      identity: timetable.identity, ownership_proof: timetable.ownershipProof,
+    }, { onConflict: 'user_id' }).select('rows, saved_at, expires_at, identity, ownership_proof').single();
+    if (error || !data) throw dbError();
+    return { rows: data.rows, savedAt: data.saved_at, expiresAt: data.expires_at, identity: data.identity, ownershipProof: data.ownership_proof };
+  }
 
   async candidates(codes: string[]): Promise<MatchCourse[]> {
     const wanted = new Set(codes.map(normalizeCode));

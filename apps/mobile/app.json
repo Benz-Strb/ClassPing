@@ -40,7 +40,8 @@
           "cameraPermission": "ใช้กล้องถ่ายหลักฐานการลา",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }
