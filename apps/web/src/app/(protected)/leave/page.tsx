@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RetryButton } from "@/components/retry-button";
-import { useRouter } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { LeaveAccess } from "@/components/leave-access";
@@ -22,7 +22,7 @@ import {
 const MAX_EVIDENCE_BYTES = 25 * 1024 * 1024;
 
 export default function LeavePage() {
-  return <LeaveAccess role="student"><StudentLeavePage /></LeaveAccess>;
+  redirect('/courses');
 }
 
 function StudentLeavePage() {

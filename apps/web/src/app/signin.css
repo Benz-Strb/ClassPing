@@ -1,0 +1,62 @@
+.signin-page { min-height: 100svh; display: flex; flex-direction: column; padding: 32px clamp(24px, 6vw, 96px); background: var(--cp-bg); }
+.signin-header, .signin-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.signin-logo { display: inline-flex; align-items: center; gap: 12px; color: #4d3282; font-size: 25px; font-weight: 700; letter-spacing: -.03em; text-decoration: none; }
+.signin-logo > span { position: relative; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--cp-action); color: white; font-size: 28px; }
+.signin-logo-dot { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border: 2px solid var(--cp-bg); border-radius: 50%; background: #b2d5b4; }
+.signin-university { font-size: 13px; color: var(--cp-muted); }
+.signin-body { flex: 1; width: min(100%, 1160px); margin: 0 auto; display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: clamp(40px, 7vw, 120px); padding: 80px 0; }
+.signin-intro h1 { font-size: clamp(36px, 3.5vw, 54px); font-weight: 500; line-height: 1.45; letter-spacing: -.025em; text-wrap: balance; }
+.signin-intro h1 > span { color: var(--cp-action); }
+.signin-intro > p { color: var(--cp-muted); font-size: 17px; line-height: 1.9; margin: 22px 0 0; }
+.signin-rhythm { position: relative; display: flex; justify-content: space-between; max-width: 400px; margin-top: 64px; }
+.rhythm-line { position: absolute; left: 36px; right: 36px; top: 28px; height: 1px; background: #d9cee8; }
+.rhythm-item { z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; color: var(--cp-muted); font-size: 13px; }
+.rhythm-node { display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid #d9cee8; border-radius: 16px; background: var(--cp-bg); color: var(--cp-action); }
+.rhythm-node svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.rhythm-active .rhythm-node { background: var(--cp-action); border-color: var(--cp-action); color: white; }
+.signin-form { width: 100%; padding: clamp(28px, 3.2vw, 48px); background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 16px; }
+.signin-form-mark { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 28px; border-radius: 12px; color: var(--cp-action); background: var(--cp-selected); }
+.signin-form-mark svg { width: 30px; height: 30px; }
+.signin-form h2 { font-size: 27px; font-weight: 500; line-height: 1.5; margin: 0; }
+.signin-description { margin: 10px 0 30px; color: var(--cp-muted); font-size: 15px; line-height: 1.8; }
+.signin-google { width: 100%; min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 16px; border: 0; border-radius: 10px; background: var(--cp-action); color: white; font-size: 15px; font-weight: 500; cursor: pointer; }
+.signin-google > svg { flex-shrink: 0; }
+.signin-google > svg:last-child { margin-left: auto; }
+.signin-google > span { flex: 1; text-align: left; }
+.signin-google:hover:not(:disabled) { background: var(--cp-action-hover); }
+.signin-google:disabled { cursor: wait; background: var(--cp-selected); color: #5d3c9e; }
+.signin-domain { margin: 14px 0 0; text-align: center; font-size: 12px; color: var(--cp-muted); }
+.signin-domain strong { font-weight: 500; color: #4d3282; }
+.signin-student { border-top: 1px solid var(--cp-border); padding-top: 24px; margin-top: 30px; }
+.signin-student > span { font-size: 13px; font-weight: 500; }
+.signin-student p { margin: 6px 0 0; font-size: 13px; line-height: 1.8; color: var(--cp-muted); }
+.signin-error { margin-top: 16px; padding: 12px; border-radius: 8px; background: #fff0ee; color: #ae2929; font-size: 13px; overflow-wrap: anywhere; }
+.signin-footer { color: var(--cp-muted); font-size: 12px; border-top: 1px solid var(--cp-border); padding-top: 20px; }
+@media (prefers-reduced-motion: no-preference) {
+  .signin-body { animation: signin-arrive 650ms cubic-bezier(.16, 1, .3, 1) both; }
+  .rhythm-active .rhythm-node { animation: signin-ping 4s ease-out 1s infinite; }
+  .signin-google { transition: background-color 160ms ease, transform 160ms ease; }
+  .signin-google:hover:not(:disabled) { transform: translateY(-2px); }
+  .signin-google:active:not(:disabled) { transform: translateY(0); }
+  @keyframes signin-arrive { from { opacity: .65; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes signin-ping { 0%, 65%, 100% { box-shadow: 0 0 0 0 rgb(118 82 197 / 0); } 20% { box-shadow: 0 0 0 12px rgb(118 82 197 / .1); } 45% { box-shadow: 0 0 0 24px rgb(118 82 197 / 0); } }
+}
+@media (max-width: 900px) {
+  .signin-page { padding: 24px; }
+  .signin-body { gap: 36px; }
+  .signin-intro h1 { font-size: 36px; }
+  .signin-intro > p { font-size: 15px; }
+  .signin-rhythm { margin-top: 40px; }
+}
+@media (max-width: 680px) {
+  .signin-page { padding: 24px 20px; }
+  .signin-university { display: none; }
+  .signin-body { grid-template-columns: 1fr; gap: 32px; padding: 44px 0; max-width: 440px; }
+  .signin-intro h1 { font-size: clamp(28px, 7vw, 36px); }
+  .signin-intro > p { margin-top: 14px; font-size: 14px; }
+  .signin-rhythm { display: none; }
+  .signin-form { padding: 28px 24px; }
+  .signin-form-mark { margin-bottom: 20px; }
+  .signin-form h2 { font-size: 24px; }
+  .signin-footer { align-items: flex-start; flex-direction: column; gap: 4px; font-size: 11px; }
+}
