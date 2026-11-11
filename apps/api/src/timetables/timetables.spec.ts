@@ -1,10 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   extractTimetable,
   normalizeName,
   type TimetableRow,
 } from './timetable-draft.js';
 import { matchTimetableRow, TimetablesService } from './timetables.service.js';
+import { signTimetableIdentity } from './timetable-identity.js';
+import type { AppConfig } from '../config/config.js';
+import { timetableExpiry } from './saved-timetable.js';
 import type { MatchCourse, TimetablesRepo } from './timetables.repo.js';
 import type { LeaveOcrClient } from '../leave/leave-ocr.client.js';
 import type { CoursesService } from '../courses/courses.service.js';
@@ -35,12 +39,43 @@ const course: MatchCourse = {
 };
 const student = {
   id: 'student-1',
-  studentId: '650001',
+  studentId: '65000001', fullName: 'นายสมชาย ใจดี',
   role: 'student',
 } as AppUser;
+const identity = { studentId: student.studentId!, fullName: student.fullName! };
+const ownershipProof = signTimetableIdentity(student.id, identity, '2099-01-01T00:00:00Z', 'test-secret');
 const teacher = { id: 'teacher-1', role: 'teacher' } as AppUser;
 
 describe('timetable extraction', () => {
+  it('extracts all seven fields and both CE360 meetings from the DPU registration report', () => {
+    const text = readFileSync(new URL('./fixtures/dpu-registration.txt', import.meta.url), 'utf8');
+    const draft = extractTimetable(text.split('\n').map(text => ({ text })));
+    expect(draft.rows).toEqual([
+      { courseCode: 'LW391', courseName: 'กฎหมายและจรรยาบรรณทางวิชาชีพเทคโนโลยีสารสนเทศ', section: '001', teacherName: 'ดร.จิรวุฒิ ลิปิพันธ์', weekday: 2, startTime: '13:30', endTime: '16:30', roomName: '51106' },
+      ...[1, 2].map(weekday => ({ courseCode: 'CE360', courseName: 'เทคโนโลยีบล็อกเชน', section: '511', teacherName: 'ดร.เด่นเดช รักษ์รัตนตรัย', weekday, startTime: '09:00', endTime: '10:30', roomName: '51106' })),
+      { courseCode: 'CE452', courseName: 'ความมั่นคงในเครือข่ายคอมพิวเตอร์', section: '511', teacherName: 'ผศ.ดร.ชัยพร เขมะภาตะพันธ์', weekday: 3, startTime: '09:00', endTime: '12:00', roomName: '51103' },
+      { courseCode: 'IG342', courseName: 'การพัฒนาแอปพลิเคชันบนอุปกรณ์เคลื่อนที่ 1', section: '501', teacherName: 'อ.ณพล ศิริภิบาล', weekday: 5, startTime: '09:00', endTime: '12:00', roomName: '61102' },
+      { courseCode: 'CE498', courseName: 'โครงงานวิศวกรรมคอมพิวเตอร์ 1', section: '315', teacherName: 'อ.ศุภดา สุทธา', weekday: 4, startTime: '09:00', endTime: '12:00', roomName: 'ออนไลน์' },
+    ]);
+  });
+  it('reads multiple meetings from the combined day/time/room column in OCR tables', () => {
+    const draft = extractTimetable([{ text: '<table><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>กลุ่มเรียน</th><th>ห้องเรียน/วันเวลาเรียน</th><th>อาจารย์ผู้สอน</th></tr><tr><td>CE360</td><td>เทคโนโลยีบล็อกเชน</td><td>511</td><td>จ. 09:00-10:30 ห้อง 51106<br>อ. 09:00-10:30 ห้อง 51106</td><td>ดร.เด่นเดช รักษ์รัตนตรัย</td></tr></table>' }]);
+    expect(draft.rows).toHaveLength(2);
+    expect(draft.rows.map(row => row.weekday)).toEqual([1, 2]);
+    expect(draft.rows.every(row => row.roomName === '51106' && row.section === '511' && row.teacherName === 'ดร.เด่นเดช รักษ์รัตนตรัย')).toBe(true);
+  });
+  it('reads all seven fields from labeled multiline OCR with numeric course codes', () => {
+    const draft = extractTimetable([
+      { text: 'รหัสวิชา: 01234567' },
+      { text: 'ชื่อวิชา: การพัฒนาโปรแกรม กลุ่มเรียน: 001' },
+      { text: 'ห้องเรียน: อาคาร 1 ห้อง 101 วัน: จันทร์ เวลาเรียน: 09.00–12.00' },
+      { text: 'อาจารย์ผู้สอน: ผศ. ดร. สมชาย ใจดี' },
+    ]);
+    expect(draft.rows).toEqual([{
+      ...row, courseCode: '01234567', courseName: 'การพัฒนาโปรแกรม',
+      roomName: 'อาคาร 1 ห้อง 101', teacherName: 'ผศ. ดร. สมชาย ใจดี',
+    }]);
+  });
   it('reads Thai Markdown tables and preserves instructor, section and times', () => {
     const draft = extractTimetable([
       { text: '| รหัสวิชา | ชื่อวิชา | กลุ่ม | อาจารย์ | วัน | เวลา | ห้อง |' },
@@ -139,7 +174,7 @@ describe('timetable import and enrollment', () => {
   const courses = { getOwned: vi.fn() };
   const schedules = { list: vi.fn(), create: vi.fn() };
   const rooms = { list: vi.fn() };
-  const repo = { candidates: vi.fn() };
+  const repo = { candidates: vi.fn(), saved: vi.fn(), save: vi.fn() };
   const roster = { listCodes: vi.fn(), addCodes: vi.fn() };
   const service = new TimetablesService(
     ocr as unknown as LeaveOcrClient,
@@ -148,6 +183,7 @@ describe('timetable import and enrollment', () => {
     rooms as unknown as RoomsRepo,
     repo as unknown as TimetablesRepo,
     roster as unknown as RosterRepo,
+    { supabaseServiceRoleKey: 'test-secret' } as AppConfig,
   );
   beforeEach(() => {
     vi.resetAllMocks();
@@ -167,8 +203,38 @@ describe('timetable import and enrollment', () => {
       roomId: 'room-1',
     });
   });
+  it('saves reviewed rows against the authenticated user even without a course match', async () => {
+    repo.save.mockImplementation(async (_id, value) => value);
+    const saved = await service.save(student, { ownershipProof,
+      rows: [row], userId: 'another-user', expiresAt: '2099-01-01',
+    });
+    expect(repo.save).toHaveBeenCalledWith(student.id, saved);
+    expect(saved.rows).toEqual([row]);
+    expect(saved.expiresAt).toBe(timetableExpiry(new Date(saved.savedAt)));
+    expect(repo.candidates).not.toHaveBeenCalled();
+    expect(roster.addCodes).not.toHaveBeenCalled();
+  });
+  it('loads only the authenticated user timetable', async () => {
+    repo.saved.mockResolvedValue(null);
+    expect(await service.saved(student)).toBeNull();
+    expect(repo.saved).toHaveBeenCalledWith(student.id);
+  });
+  it.each([{ courseName: '' }, { weekday: null }, { startTime: '25:00' }, { endTime: '08:00' }])('rejects incomplete reviewed rows: %j', async patch => {
+    await expect(service.save(student, { ownershipProof, rows: [{ ...row, ...patch }] })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+  it('rejects non-students before reading or saving personal timetables', async () => {
+    await expect(service.saved(teacher)).rejects.toMatchObject({ code: 'STUDENT_REQUIRED' });
+    await expect(service.save(teacher, { rows: [row] })).rejects.toMatchObject({ code: 'STUDENT_REQUIRED' });
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(repo.saved).not.toHaveBeenCalled();
+  });
+  it('keeps reviewed rows retryable when persistence fails', async () => {
+    repo.save.mockRejectedValue(new Error('database unavailable'));
+    await expect(service.save(student, { ownershipProof, rows: [row] })).rejects.toThrow('database unavailable');
+  });
   it('uses only the authenticated student code and rechecks submitted course ids', async () => {
-    const result = await service.enroll(student, {
+    const result = await service.enroll(student, { ownershipProof,
       rows: [{ ...row, courseId: 'forged-course' }],
       studentCode: 'someone-else',
     });
@@ -178,18 +244,18 @@ describe('timetable import and enrollment', () => {
     ]);
   });
   it('does not enroll unmatched or ambiguous rows', async () => {
-    await service.enroll(student, {
+    await service.enroll(student, { ownershipProof,
       rows: [{ ...row, teacherName: 'คนอื่น' }],
     });
     expect(roster.addCodes).not.toHaveBeenCalled();
   });
   it('handles duplicate rows and previously enrolled students without duplicate inserts', async () => {
-    await service.enroll(student, { rows: [row, row] });
+    await service.enroll(student, { ownershipProof, rows: [row, row] });
     expect(roster.addCodes).toHaveBeenCalledTimes(1);
     roster.listCodes.mockResolvedValue([student.studentId]);
     roster.addCodes.mockClear();
     expect(
-      (await service.enroll(student, { rows: [row] })).results[0].status,
+      (await service.enroll(student, { ownershipProof, rows: [row] })).results[0].status,
     ).toBe('existing');
     expect(roster.addCodes).not.toHaveBeenCalled();
   });
@@ -199,7 +265,7 @@ describe('timetable import and enrollment', () => {
     );
     repo.candidates.mockResolvedValue([{ ...course, schedules: [] }]);
     expect(
-      (await service.enroll(student, { rows: [row] })).results[0].status,
+      (await service.enroll(student, { ownershipProof, rows: [row] })).results[0].status,
     ).toBe('unmatched');
     expect(roster.addCodes).not.toHaveBeenCalled();
   });
@@ -209,6 +275,29 @@ describe('timetable import and enrollment', () => {
       service.preview(teacher, undefined, course.id),
     ).rejects.toThrow('not owned');
     expect(ocr.readTimetableDocument).not.toHaveBeenCalled();
+  });
+  it('verifies document owner before returning the preview and issues a server proof', async () => {
+    ocr.readTimetableDocument.mockResolvedValue({ lines: [{ text: 'เลขทะเบียน : 65000001 นายสมชาย ใจดี' }] });
+    const buffer = Buffer.from('%PDF-test');
+    const draft = await service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' });
+    expect(draft.identity).toEqual(identity);
+    expect(draft.ownershipProof).toBeNull();
+    expect(draft.readProof).toEqual(expect.any(String));
+    expect(await service.verifyOwner(student, { ownershipProof: draft.readProof })).toMatchObject({ identity });
+  });
+  it('shows another student document first and rejects it at explicit comparison', async () => {
+    ocr.readTimetableDocument.mockResolvedValue({ lines: [{ text: 'เลขทะเบียน : 65000002 นายสมชาย ใจดี' }] });
+    const buffer = Buffer.from('%PDF-test');
+    const draft = await service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' });
+    expect(draft.identity?.studentId).toBe('65000002');
+    expect(draft.ownershipProof).toBeNull();
+    await expect(service.verifyOwner(student, { ownershipProof: draft.readProof })).rejects.toMatchObject({ code: 'TIMETABLE_OWNER_MISMATCH' });
+  });
+  it('requires a valid ownership proof to save or enroll even when clients bypass preview', async () => {
+    await expect(service.save(student, { rows: [row], ownershipProof: 'forged' })).rejects.toMatchObject({ code: 'TIMETABLE_VERIFICATION_REQUIRED' });
+    await expect(service.enroll(student, { rows: [row], ownershipProof: 'forged' })).rejects.toMatchObject({ code: 'TIMETABLE_VERIFICATION_REQUIRED' });
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(roster.addCodes).not.toHaveBeenCalled();
   });
   it('rejects a disguised image before OCR', async () => {
     await expect(
