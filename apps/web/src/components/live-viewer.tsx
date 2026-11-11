@@ -2,36 +2,19 @@
 
 import Link from "next/link";
 import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ApiError, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
-import { formatTime } from "@/lib/time";
-import type { LiveFaces, LiveSession, LiveTicket } from "@/lib/types";
+import { bangkokDate, formatTime } from "@/lib/time";
+import type { CameraKind, LiveFaces, LiveSession } from "@/lib/types";
+import { CameraTile } from "./camera-tile";
 import { ExamBadge } from "./exam-badge";
 
-// มาจาก /mediamtx/reader.js ของ MediaMTX
-interface Reader {
-  close(): void;
-}
-declare global {
-  interface Window {
-    MediaMTXWebRTCReader?: new (conf: {
-      url: string;
-      token: string;
-      onError: (err: string) => void;
-      onTrack: (evt: RTCTrackEvent) => void;
-    }) => Reader;
-  }
-}
-
-const RETRY_MS = 3000;
 // กล้องตรวจหน้าวินาทีละครั้ง
 const FACES_MS = 1000;
-// ลองใหม่ก็ไม่หาย หยุดต่อแล้วบอกผู้ใช้
-const PERMANENT = ["NOT_LIVE", "NO_CAMERA", "SESSION_NOT_FOUND", "MEDIA_NOT_CONFIGURED"];
 
-// ภาพจากกล้องหน้าห้องกลับซ้ายขวา กลับคืนตอนแสดง กรอบหน้าต้องกลับตามด้วย
+// โปรแกรมกล้องกลับภาพหน้าห้องก่อนส่งแล้ว แต่กรอบหน้ามาจากภาพที่ยังไม่กลับ ต้องกลับกรอบเอง
 const MIRROR = true;
 
 const KIND = {
@@ -40,74 +23,47 @@ const KIND = {
   unknown: { label: "ไม่รู้จัก", box: "border-gray-300", tag: "bg-gray-500" },
 };
 
+const LABEL: Record<CameraKind, string> = { front: "กล้องหน้าห้อง", door: "กล้องประตู" };
+
+// หน้ากล้องวงจรปิดของคาบ: เห็นทุกกล้องในห้องพร้อมกัน
 export function LiveViewer() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const router = useRouter();
-  const video = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<LiveSession | null>(null);
-  const [state, setState] = useState<"connecting" | "playing" | "reconnecting" | "stopped">(
-    "connecting",
-  );
+  const [cameras, setCameras] = useState<CameraKind[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [frontLive, setFrontLive] = useState(false);
   const [faces, setFaces] = useState<LiveFaces["faces"]>([]);
   const [showBoxes, setShowBoxes] = useState(true);
+  const onFrontLive = useCallback((live: boolean) => setFrontLive(live), []);
 
+  // รู้ก่อนว่าห้องมีกล้องอะไร จะได้ไม่ต่อกล้องที่ไม่มี
   useEffect(() => {
-    if (!ready || !window.MediaMTXWebRTCReader) return;
-    const Reader = window.MediaMTXWebRTCReader;
-    let reader: Reader | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let closed = false;
-
-    // token ใช้ได้แค่ตอนเริ่มต่อ หลุดเมื่อไหร่ขอ token ใหม่แล้วต่อใหม่
-    async function connect() {
-      try {
-        const ticket = await apiFetch<LiveTicket>(`/sessions/${sessionId}/live`, {
-          method: "POST",
-        });
-        if (closed) return;
-        setSession(ticket.session);
-        reader = new Reader({
-          url: ticket.whepUrl,
-          token: ticket.token,
-          onError: () => {
-            reader?.close();
-            reader = null;
-            if (closed) return;
-            setState("reconnecting");
-            timer = setTimeout(() => void connect(), RETRY_MS);
-          },
-          onTrack: (evt) => {
-            if (video.current) video.current.srcObject = evt.streams[0];
-            setError(null);
-            setState("playing");
-          },
-        });
-      } catch (e) {
-        if (closed) return;
-        if (e instanceof ApiError && (PERMANENT.includes(e.code) || e.status === 403)) {
-          setState("stopped");
-          setError(e.message);
-          return;
-        }
-        setError(await handleApiError(e, router));
-        setState("reconnecting");
-        timer = setTimeout(() => void connect(), RETRY_MS);
-      }
-    }
-
-    void connect();
+    let cancelled = false;
+    apiFetch<LiveSession[]>(`/live/sessions?date=${bangkokDate(new Date())}`)
+      .then((rows) => {
+        if (cancelled) return;
+        const found = rows.find((s) => s.id === sessionId) ?? null;
+        setSession(found);
+        // ไม่เจอในวันนี้ (เช่นคาบข้ามเที่ยงคืน) ลองต่อทั้งสองกล้อง
+        const list: CameraKind[] = [];
+        if (!found || found.hasCamera) list.push("front");
+        if (!found || found.hasDoorCamera) list.push("door");
+        setCameras(list);
+      })
+      .catch(async (e: unknown) => {
+        const message = await handleApiError(e, router);
+        if (!cancelled) setError(message);
+      });
     return () => {
-      closed = true;
-      if (timer) clearTimeout(timer);
-      reader?.close();
+      cancelled = true;
     };
-  }, [ready, sessionId, router]);
+  }, [sessionId, router]);
 
   // กรอบหน้ามาจากการตรวจเช็คชื่อ อาจช้ากว่าภาพเล็กน้อย
   useEffect(() => {
-    if (state !== "playing") return;
+    if (!frontLive) return;
     let stop = false;
     // คำขอก่อนหน้ายังไม่เสร็จก็ไม่เริ่มคำขอใหม่ คำตอบเก่าจะได้ไม่ทับของใหม่
     let running = false;
@@ -128,7 +84,28 @@ export function LiveViewer() {
       clearInterval(timer);
       setFaces([]);
     };
-  }, [state, sessionId]);
+  }, [frontLive, sessionId]);
+
+  const boxes =
+    showBoxes &&
+    faces.map((face) => (
+      <div
+        key={face.n}
+        className={`absolute border-2 ${KIND[face.kind].box}`}
+        style={{
+          left: `${(MIRROR ? 1 - face.box[2] : face.box[0]) * 100}%`,
+          top: `${face.box[1] * 100}%`,
+          width: `${(face.box[2] - face.box[0]) * 100}%`,
+          height: `${(face.box[3] - face.box[1]) * 100}%`,
+        }}
+      >
+        <span
+          className={`absolute -top-6 left-0 rounded px-1.5 text-sm font-semibold text-white ${KIND[face.kind].tag}`}
+        >
+          {face.n}
+        </span>
+      </div>
+    ));
 
   return (
     <section className="live-viewer space-y-4">
@@ -146,47 +123,36 @@ export function LiveViewer() {
             {session.kind === "exam" && <ExamBadge title={session.title} />}
           </>
         ) : (
-          "กล้องหน้าห้อง"
+          "กล้องวงจรปิด"
         )}
       </h1>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_15rem]">
-        <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-          <video ref={video} autoPlay muted playsInline className={`h-full w-full ${MIRROR ? "-scale-x-100" : ""}`} />
-          {state === "playing" &&
-            showBoxes &&
-            faces.map((face) => (
-              <div
-                key={face.n}
-                className={`absolute border-2 ${KIND[face.kind].box}`}
-                style={{
-                  left: `${(MIRROR ? 1 - face.box[2] : face.box[0]) * 100}%`,
-                  top: `${face.box[1] * 100}%`,
-                  width: `${(face.box[2] - face.box[0]) * 100}%`,
-                  height: `${(face.box[3] - face.box[1]) * 100}%`,
-                }}
-              >
-                <span
-                  className={`absolute -top-6 left-0 rounded px-1.5 text-sm font-semibold text-white ${KIND[face.kind].tag}`}
-                >
-                  {face.n}
-                </span>
-              </div>
-            ))}
-          {state !== "playing" && (
-            <p className="absolute inset-0 flex items-center justify-center text-white">
-              {state === "stopped"
-                ? "ไม่มีภาพจากกล้อง"
-                : state === "reconnecting"
-                  ? "ภาพหลุด กำลังต่อใหม่..."
-                  : "กำลังต่อกล้อง..."}
-            </p>
-          )}
+      {error && <p className="text-red-600">{error}</p>}
+      {cameras === null ? (
+        !error && <p>กำลังโหลด...</p>
+      ) : cameras.length === 0 ? (
+        <p className="text-gray-600">ห้องนี้ไม่มีกล้อง</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {cameras.map((camera) => (
+            <CameraTile
+              key={camera}
+              sessionId={sessionId}
+              camera={camera}
+              label={LABEL[camera]}
+              ready={ready}
+              onLive={camera === "front" ? onFrontLive : undefined}
+            >
+              {camera === "front" && boxes}
+            </CameraTile>
+          ))}
         </div>
+      )}
 
+      {cameras?.includes("front") && (
         <aside className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="font-medium">คนในภาพ</h2>
+            <h2 className="font-medium">คนในภาพหน้าห้อง</h2>
             <label className="flex items-center gap-1 text-sm text-gray-600">
               <input
                 type="checkbox"
@@ -196,12 +162,12 @@ export function LiveViewer() {
               แสดงกรอบ
             </label>
           </div>
-          {state !== "playing" ? (
-            <p className="text-sm text-gray-500">ไม่มีภาพจากกล้อง</p>
+          {!frontLive ? (
+            <p className="text-sm text-gray-500">แสดงเฉพาะตอนดูสด</p>
           ) : faces.length === 0 ? (
             <p className="text-sm text-gray-500">ยังไม่เห็นใครในภาพ</p>
           ) : (
-            <ol className="divide-y rounded-lg border text-sm">
+            <ol className="grid divide-y rounded-lg border text-sm sm:grid-cols-2 sm:divide-y-0">
               {faces.map((face) => (
                 <li key={face.n} className="flex items-start gap-2 px-3 py-2">
                   <span
@@ -228,9 +194,10 @@ export function LiveViewer() {
           )}
           <p className="text-xs text-gray-500">กรอบอัปเดตทุก 1 วินาที อาจช้ากว่าภาพเล็กน้อย</p>
         </aside>
-      </div>
-      {error && <p className="text-red-600">{error}</p>}
-      <p className="text-sm text-gray-500">ไม่มีเสียง · มีการบันทึกการเปิดดูทุกครั้ง</p>
+      )}
+      <p className="text-sm text-gray-500">
+        ไม่มีเสียง · มีการบันทึกการเปิดดูสดและย้อนหลังทุกครั้ง · ดูย้อนหลังทั้งคาบได้หลังจบคาบ
+      </p>
     </section>
   );
 }
