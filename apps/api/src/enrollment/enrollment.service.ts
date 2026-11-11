@@ -138,7 +138,7 @@ export class EnrollmentService {
       rows.find((r) => r.pose === 'front'),
     );
     await this.removeQuietly(await this.repo.deleteByUser(user.id, 'front'));
-    await this.users.setIdentity(user.id, score, readStudyInfo(text.lines));
+    await this.users.setIdentity(user.id, score, readStudyInfo(text.lines, user.studentId!));
     return { done: ['front'], complete: false, verified: true };
   }
 
