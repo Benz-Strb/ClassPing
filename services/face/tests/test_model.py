@@ -5,7 +5,6 @@
 
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -15,8 +14,7 @@ from app.config import load_settings
 from app.engine import InsightFaceEngine
 from app.liveness import InsightFaceLiveness
 from app.main import create_app
-from app.ocr import PaddleTextReader
-from tests.conftest import TOKEN, FakeReader
+from tests.conftest import TOKEN
 from tests.images import crop_with_margin, jpeg
 
 pytestmark = pytest.mark.model
@@ -45,14 +43,9 @@ def single_image(real_engine, group_image):
 
 
 @pytest.fixture(scope="session")
-def real_reader():
-    return PaddleTextReader()
-
-
-@pytest.fixture(scope="session")
-def model_client(model_settings, real_engine, real_reader):
+def model_client(model_settings, real_engine):
     return TestClient(
-        create_app(model_settings, real_engine, real_reader), raise_server_exceptions=False
+        create_app(model_settings, real_engine), raise_server_exceptions=False
     )
 
 
@@ -125,24 +118,6 @@ def test_model_strangers_score_low(real_engine, single_image, group_image):
         assert result.score < 0.35
 
 
-def test_rapid_reader_reads_card_text(real_reader):
-    """ตัวหนังสือแบบบนบัตรนักศึกษาออนไลน์ วาดขึ้นเอง ไม่ใช่บัตรจริง"""
-    image = np.full((360, 900, 3), 230, dtype=np.uint8)
-    cv2.putText(image, "66112106", (40, 110), cv2.FONT_HERSHEY_SIMPLEX, 2.5, (120, 40, 120), 5)
-    cv2.putText(
-        image,
-        "System Generate Date : 23-10-2569",
-        (40, 250),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1.2,
-        (60, 60, 60),
-        2,
-    )
-    texts = " | ".join(text for text, _ in real_reader.read(image))
-    assert "66112106" in texts
-    assert "23-10-2569" in texts
-
-
 LIVENESS_FILE = Path.home() / ".insightface/models/liveness/liveness.onnx"
 
 
@@ -150,7 +125,7 @@ LIVENESS_FILE = Path.home() / ".insightface/models/liveness/liveness.onnx"
 def test_model_liveness_scores_in_range(real_engine, group_image):
     settings = load_settings({"FACE_SERVICE_TOKEN": TOKEN, "LIVENESS_MODEL": str(LIVENESS_FILE)})
     client = TestClient(
-        create_app(settings, real_engine, FakeReader(), liveness=InsightFaceLiveness(settings)),
+        create_app(settings, real_engine, liveness=InsightFaceLiveness(settings)),
         raise_server_exceptions=False,
     )
     res = client.post(

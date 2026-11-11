@@ -94,6 +94,13 @@ class WorkerTests(unittest.TestCase):
             worker.build_app()
         self.assertEqual(made, ['/models/typhoon'])
 
+    def test_requires_typhoon_settings(self):
+        from unittest import mock
+
+        env = {'TYPHOON_OCR_MLX_MODEL': '', 'TYPHOON_OCR_API_KEY': ' ', 'LEAVE_OCR_SERVICE_TOKEN': 'x' * 32}
+        with mock.patch.dict('os.environ', env), self.assertRaisesRegex(ValueError, 'TYPHOON_OCR'):
+            worker.build_app()
+
     def test_timetable_upload_auth_images_and_pdf(self):
         self.assertEqual(self.client.post('/schedules/ocr', content=b'bad').status_code, 401)
         for extension, mime in [('PNG', 'image/png'), ('PDF', 'application/pdf')]:

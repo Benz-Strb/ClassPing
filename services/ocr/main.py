@@ -84,15 +84,16 @@ def create_app(reader, token: str) -> FastAPI:
     return app
 
 
-def build_app():
+def make_reader():
     # รันในเครื่องก่อน เอกสารจะได้ไม่ออกไปเซิร์ฟเวอร์ Typhoon แม้ตั้ง API key ไว้
     if os.getenv('TYPHOON_OCR_MLX_MODEL', '').strip():
         from app.typhoon_mlx import MlxTyphoonReader
-        reader = MlxTyphoonReader(os.path.expanduser(os.environ['TYPHOON_OCR_MLX_MODEL'].strip()))
-    elif os.getenv('TYPHOON_OCR_API_KEY', '').strip():
+        return MlxTyphoonReader(os.path.expanduser(os.environ['TYPHOON_OCR_MLX_MODEL'].strip()))
+    if os.getenv('TYPHOON_OCR_API_KEY', '').strip():
         from app.typhoon_ocr import TyphoonTextReader
-        reader = TyphoonTextReader()
-    else:
-        from app.ocr import PaddleTextReader
-        reader = PaddleTextReader()
-    return create_app(reader, os.getenv('LEAVE_OCR_SERVICE_TOKEN', ''))
+        return TyphoonTextReader()
+    raise ValueError('ต้องตั้ง TYPHOON_OCR_MLX_MODEL หรือ TYPHOON_OCR_API_KEY')
+
+
+def build_app():
+    return create_app(make_reader(), os.getenv('LEAVE_OCR_SERVICE_TOKEN', ''))

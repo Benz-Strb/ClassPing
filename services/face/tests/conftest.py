@@ -36,16 +36,6 @@ class FakeEngine:
         return list(self.faces)
 
 
-class FakeReader:
-    """แทน OCR จริงในเทสต์ คืนบรรทัดที่กำหนดไว้"""
-
-    def __init__(self, lines: list[tuple[str, float]] | None = None):
-        self.lines = lines or []
-
-    def read(self, image: np.ndarray) -> list[tuple[str, float]]:
-        return list(self.lines)
-
-
 class FakeLiveness:
     """แทนโมเดล liveness จริง คืนคะแนนที่กำหนด และจดรูปที่ได้รับ"""
 
@@ -71,13 +61,8 @@ def engine():
 
 
 @pytest.fixture
-def reader():
-    return FakeReader()
-
-
-@pytest.fixture
-def app(settings, engine, reader):
-    return create_app(settings, engine, reader)
+def app(settings, engine):
+    return create_app(settings, engine)
 
 
 @pytest.fixture
