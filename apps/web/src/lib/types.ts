@@ -108,6 +108,8 @@ export interface Exam {
   locked: boolean;
 }
 
+export type CameraKind = "front" | "door";
+
 export interface LiveSession {
   id: string;
   kind: "class" | "exam";
@@ -121,6 +123,7 @@ export interface LiveSession {
   // กล้องกำลังเปิดอยู่ ดูสดได้
   cameraOpen: boolean;
   hasCamera: boolean;
+  hasDoorCamera: boolean;
   canDownload: boolean;
 }
 
@@ -156,6 +159,8 @@ export interface Recording {
   };
   // ไฟล์อัดแยกเป็นช่วง ๆ ตามที่กล้องต่ออยู่ duration เป็นวินาที
   segments: { start: string; duration: number }[];
+  // กล้องที่ห้องนี้มี
+  cameras: CameraKind[];
   expiresOn: string | null;
   canDownload: boolean;
 }
