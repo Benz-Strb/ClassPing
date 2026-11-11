@@ -9,7 +9,6 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 recordings/
-File-text-OCR-Log/*
-!File-text-OCR-Log/.gitkeep
+/File-text-OCR-Log/
 *.[mM][dD]
 !/DESIGN.md
