@@ -22,7 +22,7 @@ def create_app(reader, token: str) -> FastAPI:
 
     @app.middleware('http')
     async def protect_upload(request, call_next):
-        if request.url.path in ('/leave/ocr', '/transfers/ocr', '/schedules/ocr'):
+        if request.url.path in ('/leave/ocr', '/schedules/ocr'):
             if not hmac.compare_digest(token, request.headers.get('x-ocr-token', '')):
                 return JSONResponse(status_code=401, content={'error': {'code': 'UNAUTHORIZED'}})
             length = request.headers.get('content-length', '')
@@ -62,8 +62,7 @@ def create_app(reader, token: str) -> FastAPI:
             return JSONResponse(status_code=503, content={'error': {'code': 'OCR_UNAVAILABLE', 'message': 'บริการอ่านข้อความหลักฐานยังไม่พร้อม'}})
 
     @app.post('/schedules/ocr')
-    @app.post('/transfers/ocr')
-    async def transfer_read(image: UploadFile = File(...), x_ocr_token: str = Header(default='')):
+    async def schedule_read(image: UploadFile = File(...), x_ocr_token: str = Header(default='')):
         if not hmac.compare_digest(token, x_ocr_token):
             return JSONResponse(status_code=401, content={'error': {'code': 'UNAUTHORIZED'}})
         data = await image.read(10 * 1024 * 1024 + 1)
@@ -71,7 +70,7 @@ def create_app(reader, token: str) -> FastAPI:
         if len(data) > 10 * 1024 * 1024:
             return JSONResponse(status_code=413, content={'error': {'message': 'ไฟล์ต้องไม่เกิน 10 MB'}})
 
-        def recognize_transfer():
+        def recognize_schedule():
             from contextlib import closing
             import pypdfium2 as pdfium
             from app.documents import PDF_LOCK
@@ -96,7 +95,7 @@ def create_app(reader, token: str) -> FastAPI:
                         lines.extend({'text': text, 'score': score} for text, score in result if text.strip())
             return {'data': {'lines': lines}}
         try:
-            return await run_in_threadpool(recognize_transfer)
+            return await run_in_threadpool(recognize_schedule)
         except FaceError as error:
             return JSONResponse(status_code=error.status, content={'error': {'code': error.code, 'message': error.message}})
         except Exception:

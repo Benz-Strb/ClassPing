@@ -15,7 +15,7 @@ interface Me {
 }
 
 const ROLE_LABEL: Record<Me["role"], string> = {
-  student: "นักศึกษา",
+  student: "อาจารย์",
   teacher: "อาจารย์",
   admin: "ผู้ดูแลระบบ",
 };
@@ -57,23 +57,13 @@ export default function MePage() {
         <span className="account-avatar" aria-hidden="true">{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</span>
         <div><h2>{me.fullName ?? me.email}</h2><p className="text-gray-600 break-all">{me.email}</p></div>
       </section>
-      <dl className="account-details"><div><dt>บทบาท</dt><dd>{ROLE_LABEL[me.role]}</dd></div>{me.studentId && <div><dt>รหัสนักศึกษา</dt><dd>{me.studentId}</dd></div>}</dl>
+      <dl className="account-details"><div><dt>บทบาท</dt><dd>{ROLE_LABEL[me.role]}</dd></div>{me.studentId && <div><dt>รหัสอาจารย์</dt><dd>{me.studentId}</dd></div>}</dl>
       {me.role === "admin" && (
         <Link
           href="/admin"
           className="block w-fit rounded-lg bg-blue-700 px-4 py-2 text-white hover:bg-blue-800"
         >
           ระบบผู้ดูแล
-        </Link>
-      )}
-      {me.role === "teacher" && (
-        <Link href="/leave/review" className="block text-blue-700 underline">
-          ตรวจคำขอลา
-        </Link>
-      )}
-      {me.role === "teacher" && (
-        <Link href="/teacher/transfers" className="block text-blue-700 underline">
-          พิจารณาเทียบโอนและหลักสูตร
         </Link>
       )}
       <button onClick={signOut} className="rounded-lg border px-4 py-2">
