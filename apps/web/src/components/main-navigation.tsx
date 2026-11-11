@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ProfileAvatar } from "@/components/profile-avatar";
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -30,7 +31,7 @@ export function MainNavigation() {
             {label}
           </Link>
         ))}
-        <div className="navigation-footer">{me && <Link href="/me" className="navigation-account" onClick={() => setOpen(false)}><span className="navigation-avatar" aria-hidden="true">{(me.fullName ?? me.email).slice(0, 1).toUpperCase()}</span><span><strong>{me.fullName ?? 'บัญชีของฉัน'}</strong><small>{me.role === 'admin' ? 'ผู้ดูแลระบบ' : 'อาจารย์'}</small></span></Link>}<p>DPU · @dpu.ac.th</p></div>
+        <div className="navigation-footer">{me && <Link href="/me" className="navigation-account" onClick={() => setOpen(false)}><ProfileAvatar user={me} className="navigation-avatar" /><span><strong>{me.fullName ?? 'บัญชีของฉัน'}</strong><small>{me.role === 'admin' ? 'ผู้ดูแลระบบ' : 'อาจารย์'}</small></span></Link>}<p>DPU · @dpu.ac.th</p></div>
       </div>
     </nav>
   );

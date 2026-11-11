@@ -18,6 +18,8 @@ interface GoogleIdentityData {
   email_verified?: boolean;
   full_name?: string;
   name?: string;
+  avatar_url?: string;
+  picture?: string;
   custom_claims?: { hd?: string };
 }
 
@@ -61,6 +63,15 @@ export class AuthGuard implements CanActivate {
       email: google.email,
       fullName: google.full_name ?? google.name ?? null,
     });
+    const picture = google.avatar_url ?? google.picture;
+    if (typeof picture === 'string') {
+      try {
+        const url = new URL(picture);
+        if (url.protocol === 'https:' && (url.hostname === 'googleusercontent.com' || url.hostname.endsWith('.googleusercontent.com'))) {
+          req.user = { ...req.user as object, avatarUrl: url.href };
+        }
+      } catch {}
+    }
     return true;
   }
 

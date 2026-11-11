@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
-// ใช้ฝั่ง browser เท่านั้น เอาไว้ login และถือ session
+// Browser และ server ใช้ session cookie ร่วมกัน
 // ข้อมูลอื่นทั้งหมดดึงผ่าน API ของเรา (apiFetch)
-export const supabase = createClient(
+export const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
   // ปิด detectSessionInUrl เพราะหน้า /auth/callback แลก code เอง

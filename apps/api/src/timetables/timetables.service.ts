@@ -5,6 +5,7 @@ import { parseBody } from '../common/validate.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { ROSTER_REPO, type RosterRepo } from '../courses/roster.repo.js';
 import { LeaveOcrClient } from '../leave/leave-ocr.client.js';
+import { writeOcrTextLog } from '../common/ocr-text-log.js';
 import { RoomsRepo } from '../rooms/rooms.repo.js';
 import {
   SchedulesService,
@@ -168,8 +169,12 @@ export class TimetablesService {
         'DOCUMENT_TYPE',
         'รองรับ PDF, JPG และ PNG เท่านั้น',
       );
-    const draft = extractTimetable(
-      (await this.ocr.readTimetableDocument(file.buffer, file.mimetype)).lines,
+    const ocr = await this.ocr.readTimetableDocument(file.buffer, file.mimetype);
+    const draft = extractTimetable(ocr.lines);
+    await writeOcrTextLog(
+      courseId && draft.identity ? { ...user, ...draft.identity } : user,
+      'ตารางเรียน',
+      ocr.lines.map((line) => line.text).join('\n'),
     );
     if (!courseId) checkTimetableIdentity(user, draft.identity);
     return {

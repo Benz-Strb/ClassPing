@@ -90,6 +90,20 @@ async function rejection(promise: Promise<unknown>) {
 }
 
 describe('AuthGuard', () => {
+  it.each([
+    ['https://lh3.googleusercontent.com/a/avatar', 'https://lh3.googleusercontent.com/a/avatar'],
+    ['https://example.com/avatar', undefined],
+    ['javascript:alert(1)', undefined],
+  ])('ใช้รูป Google ที่ปลอดภัย: %s', async (picture, expected) => {
+    const req: Record<string, unknown> = { headers: { authorization: 'Bearer t' } };
+    const result = async () => ({ data: { user: googleUser('66112106@dpu.ac.th', {
+      identities: [googleIdentity('66112106@dpu.ac.th', { picture })],
+    }) }, error: null });
+    const guard = new AuthGuard(reflector(), db(result), config, users);
+    await guard.canActivate(context(req));
+    expect((req.user as { avatarUrl?: string }).avatarUrl).toBe(expected);
+  });
+
   it('ไม่มี Authorization ได้ 401 UNAUTHORIZED', async () => {
     const guard = new AuthGuard(reflector(), db(okUser('66112106@dpu.ac.th')), config, users);
     expect(await rejection(guard.canActivate(context({ headers: {} })))).toEqual({
