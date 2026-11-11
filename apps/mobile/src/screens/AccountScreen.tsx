@@ -14,7 +14,13 @@ export function AccountScreen({me, face, banner, onSignOut}: {me: Me; face: Face
       <View style={styles.identity}><Text style={styles.name}>{me.fullName ?? me.email}</Text><Text selectable style={styles.muted}>{me.email}</Text></View>
     </View>
     <View style={styles.details}>
-      {[["บทบาท", ROLE[me.role]], ...(me.studentId ? [["รหัสนักศึกษา", me.studentId], ["ลงทะเบียนใบหน้า", face?.complete ? 'เรียบร้อยแล้ว' : 'ยังไม่ครบ']] : [])].map(([label, value]) => <View key={label} style={styles.row}><Text style={styles.muted}>{label}</Text><Text selectable style={styles.value}>{value}</Text></View>)}
+      {[
+        ["บทบาท", ROLE[me.role]],
+        ...(me.studentId ? [["รหัสนักศึกษา", me.studentId]] : []),
+        ...(me.faculty ? [["คณะ", me.faculty]] : []),
+        ...(me.major ? [["สาขา", me.major]] : []),
+        ...(me.studentId ? [["ลงทะเบียนใบหน้า", face?.complete ? 'เรียบร้อยแล้ว' : 'ยังไม่ครบ']] : []),
+      ].map(([label, value]) => <View key={label} style={styles.row}><Text style={styles.muted}>{label}</Text><Text selectable style={styles.value}>{value}</Text></View>)}
     </View>
     {banner}
     {me.role !== 'student' && <Text style={styles.muted}>จัดการรายวิชาและข้อมูลระบบผ่านเว็บไซต์ ClassPing</Text>}
