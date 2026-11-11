@@ -103,6 +103,7 @@ function TeacherLeaveReviewPage() {
           {requests.map((request) => (
             <li
               key={request.id}
+              id={`request-${request.id}`}
               className="space-y-3 rounded-lg border bg-white p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
