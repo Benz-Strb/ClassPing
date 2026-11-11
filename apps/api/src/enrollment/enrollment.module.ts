@@ -5,6 +5,7 @@ import { EnrollmentController } from './enrollment.controller.js';
 import { ENROLLMENT_REPO, SupabaseEnrollmentRepo } from './enrollment.repo.js';
 import { EnrollmentService } from './enrollment.service.js';
 import { LeaveOcrClient } from '../leave/leave-ocr.client.js';
+import { IdentityLimitGuard } from './identity-limit.guard.js';
 
 @Module({
   imports: [UsersModule],
@@ -12,6 +13,7 @@ import { LeaveOcrClient } from '../leave/leave-ocr.client.js';
   providers: [
     EnrollmentService,
     LeaveOcrClient,
+    IdentityLimitGuard,
     { provide: ENROLLMENT_REPO, useClass: SupabaseEnrollmentRepo },
     { provide: CLOCK, useValue: () => new Date() },
   ],
