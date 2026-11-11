@@ -20,7 +20,17 @@ export class LeaveOcrClient {
     }
   }
 
-  async readLeaveDocument(image: Buffer, mime: string, route = '/leave/ocr'): Promise<LeaveOcrResult> {
+  // บัตรนักศึกษาใช้ตัวอ่านเดียวกับใบลา (Typhoon ในเครื่อง) ภาพไม่ถูกเก็บ
+  // แอปรอยืนยันตัวตนไม่เกิน 60 วิ เวลาที่เหลือเผื่อให้ตรวจหน้า
+  async readCard(image: Buffer, mime: string): Promise<LeaveOcrResult> {
+    try { return await this.readLeaveDocument(image, mime, '/leave/ocr', 40_000); }
+    catch (error) {
+      if (error instanceof AppError && error.getStatus() === 503) throw new AppError(503, 'CARD_OCR_UNAVAILABLE', 'อ่านบัตรไม่ได้ตอนนี้ ลองใหม่อีกครั้ง');
+      throw error;
+    }
+  }
+
+  async readLeaveDocument(image: Buffer, mime: string, route = '/leave/ocr', timeoutMs = 110_000): Promise<LeaveOcrResult> {
     if (!this.config.leaveOcrServiceToken) throw unavailable();
     const form = new FormData();
     form.append('image', new Blob([new Uint8Array(image)], { type: mime }), 'evidence');
@@ -29,7 +39,7 @@ export class LeaveOcrClient {
       response = await fetch(`${this.config.leaveOcrServiceUrl ?? 'http://127.0.0.1:8002'}${route}`, {
         method: 'POST', body: form,
         headers: { 'X-OCR-Token': this.config.leaveOcrServiceToken },
-        signal: AbortSignal.timeout(110_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch { throw unavailable(); }
     const payload = await response.json().catch(() => null) as {

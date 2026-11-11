@@ -6,11 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import { API_URL, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
 import { bangkokDate, formatDate, formatTime } from "@/lib/time";
-import type { Recording } from "@/lib/types";
+import type { CameraKind, Recording } from "@/lib/types";
 import { ExamBadge } from "./exam-badge";
 import { HlsVideo } from "./hls-video";
 
 type Segment = Recording["segments"][number];
+
+const LABEL: Record<CameraKind, string> = { front: "กล้องหน้าห้อง", door: "กล้องประตู" };
 
 const endOf = (seg: Segment) => new Date(Date.parse(seg.start) + seg.duration * 1000).toISOString();
 
@@ -22,16 +24,39 @@ function length(seconds: number) {
 export function RecordingView() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const router = useRouter();
+  const [camera, setCamera] = useState<CameraKind>("front");
   const [data, setData] = useState<Recording | null>(null);
+  const [ended, setEnded] = useState(false);
   const [playing, setPlaying] = useState<{ start: string; src: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<Recording>(`/sessions/${sessionId}/recording`)
-      .then(setData)
-      .catch(async (e: unknown) => setError(await handleApiError(e, router)));
-  }, [sessionId, router]);
+    let cancelled = false;
+    apiFetch<Recording>(`/sessions/${sessionId}/recording?camera=${camera}`)
+      .then((rec) => {
+        if (cancelled) return;
+        // ห้องไม่มีกล้องหน้าห้อง เปิดกล้องที่มีแทน
+        if (!rec.cameras.includes(camera) && rec.cameras[0]) setCamera(rec.cameras[0]);
+        else {
+          setEnded(Date.parse(rec.session.endsAt) <= Date.now());
+          setData(rec);
+        }
+      })
+      .catch(async (e: unknown) => {
+        const message = await handleApiError(e, router);
+        if (!cancelled) setError(message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, camera, router]);
+
+  function switchTo(next: CameraKind) {
+    setPlaying(null);
+    setError(null);
+    setCamera(next);
+  }
 
   // ลิงก์อายุสั้นจาก API ทุกครั้งที่เปิด ระบบบันทึกว่าใครเปิดดู/ดาวน์โหลด
   async function open(seg: Segment, download: boolean) {
@@ -40,7 +65,7 @@ export function RecordingView() {
     try {
       const { url } = await apiFetch<{ url: string }>(`/sessions/${sessionId}/recording/link`, {
         method: "POST",
-        body: JSON.stringify({ start: seg.start, duration: seg.duration, download }),
+        body: JSON.stringify({ start: seg.start, duration: seg.duration, download, camera }),
       });
       if (download) {
         // API ตอบเป็นไฟล์แนบ เบราว์เซอร์ดาวน์โหลดโดยไม่ออกจากหน้านี้
@@ -74,9 +99,34 @@ export function RecordingView() {
         {session.kind === "exam" && <ExamBadge title={session.title} />}
       </h1>
 
+      {data.cameras.length > 1 && (
+        <div className="flex gap-2" role="tablist">
+          {data.cameras.map((kind) => (
+            <button
+              key={kind}
+              role="tab"
+              aria-selected={kind === camera}
+              onClick={() => switchTo(kind)}
+              className={`rounded-lg border px-3 py-1 text-sm ${kind === camera ? "bg-gray-900 text-white" : ""}`}
+            >
+              {LABEL[kind]}
+            </button>
+          ))}
+        </div>
+      )}
+
       {playing && <HlsVideo key={playing.src} src={playing.src} onError={setError} />}
 
-      {data.segments.length === 0 ? (
+      {/* ระหว่างคาบย้อนดูได้จากแถบเวลาในหน้าดูสด หน้านี้เปิดให้หลังจบคาบ */}
+      {!ended ? (
+        <p className="text-gray-600">
+          ดูย้อนหลังได้หลังจบคาบ ระหว่างคาบลากแถบเวลาในหน้า{" "}
+          <Link href={`/live/${sessionId}`} className="text-blue-600 underline">
+            ดูสด
+          </Link>{" "}
+          เพื่อย้อนดูได้
+        </p>
+      ) : data.segments.length === 0 ? (
         <p className="text-gray-600">ไม่มีไฟล์อัดของคาบนี้</p>
       ) : (
         <ul className="divide-y rounded-lg border">

@@ -1,6 +1,17 @@
 import { Readable } from 'node:stream';
 import type { ReadableStream } from 'node:stream/web';
-import { Body, Controller, Get, HttpCode, Inject, Logger, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Logger,
+  Param,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser, Public, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
@@ -16,8 +27,12 @@ export class RecordingController {
   constructor(private readonly recording: RecordingService) {}
 
   @Get()
-  list(@CurrentUser() user: AppUser, @Param('id') id: string): Promise<RecordingView> {
-    return this.recording.list(user, id);
+  list(
+    @CurrentUser() user: AppUser,
+    @Param('id') id: string,
+    @Query('camera') camera?: string,
+  ): Promise<RecordingView> {
+    return this.recording.list(user, id, camera);
   }
 
   @Post('link')

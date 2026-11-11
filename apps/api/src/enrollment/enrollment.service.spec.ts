@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../common/app-error.js';
 import type { CardRead, EnrollResult, FaceClient, FacePose } from '../face/face.client.js';
+import type { LeaveOcrClient } from '../leave/leave-ocr.client.js';
 import type { AppUser, UsersService } from '../users/users.service.js';
+import type { CardLine } from './card-check.js';
 import type { EnrollmentRepo, FaceRow } from './enrollment.repo.js';
 import { EnrollmentService } from './enrollment.service.js';
 import { PITCH_UP_SIGN, POSES, YAW_LEFT_SIGN, type Pose } from './pose-check.js';
@@ -102,14 +104,15 @@ class FakeFace {
   next: Partial<EnrollResult> | Error = {};
   calls = 0;
   // หน้าในบัตรเป็นคนเดียวกับรูปที่ enroll คืนค่าเริ่มต้น ([0.9, 0.1])
-  card: CardRead = {
+  // lines = ตัวหนังสือที่ OCR service (ของปลอมใน setup) อ่านได้จากบัตรใบเดียวกัน
+  card: CardRead & { lines: CardLine[] } = {
     lines: CARD_LINES,
     faces: [{ bbox: [0, 0, 120, 140], detScore: 0.9, embedding: [1, 0], pose: null }],
   };
   cardCalls = 0;
   async readCard(): Promise<CardRead> {
     this.cardCalls++;
-    return this.card;
+    return { faces: this.card.faces };
   }
   async enroll(): Promise<EnrollResult> {
     this.calls++;
@@ -159,10 +162,22 @@ function setup() {
       withdrawn.push(userId);
     },
   } as unknown as UsersService;
-  const service = new EnrollmentService(repo, users, face as unknown as FaceClient, () => NOW, {
-    matchAcceptMin: 0.5,
-  });
-  return { repo, face, consented, withdrawn, identities, studyInfos, service };
+  const ocr = {
+    calls: 0,
+    readCard: async () => {
+      ocr.calls++;
+      return { lines: face.card.lines };
+    },
+  };
+  const service = new EnrollmentService(
+    repo,
+    users,
+    face as unknown as FaceClient,
+    ocr as unknown as LeaveOcrClient,
+    () => NOW,
+    { matchAcceptMin: 0.5 },
+  );
+  return { repo, face, ocr, consented, withdrawn, identities, studyInfos, service };
 }
 
 describe('EnrollmentService.consent', () => {
@@ -452,12 +467,43 @@ describe('EnrollmentService.verifyIdentity', () => {
   });
 
   it('หน้าสดยังไม่ผ่าน ไม่ต้องอ่านบัตร', async () => {
-    const { service, face } = setup();
+    const { service, face, ocr } = setup();
     face.next = { pose: ANGLE.left };
     expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
       code: 'WRONG_POSE',
     });
     expect(face.cardCalls).toBe(0);
+    expect(ocr.calls).toBe(0);
+  });
+
+  it('อ่านตัวหนังสือบนบัตรจาก OCR service แม้ไม่มีคะแนนความมั่นใจ', async () => {
+    const { service, face, ocr, identities } = setup();
+    face.card = { ...face.card, lines: face.card.lines.map((l) => ({ ...l, score: null })) };
+    await service.verifyIdentity(unverified(), png(), jpeg());
+    expect(ocr.calls).toBe(1);
+    expect(identities).toHaveLength(1);
+  });
+
+  it('OCR service อ่านไฟล์บัตรไม่ได้ ได้ 400 CARD_INVALID', async () => {
+    const { service, ocr } = setup();
+    ocr.readCard = async () => {
+      throw new AppError(400, 'INVALID_EVIDENCE', 'อ่านไฟล์ไม่ได้');
+    };
+    expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
+      status: 400,
+      code: 'CARD_INVALID',
+    });
+  });
+
+  it('OCR service ไม่พร้อม ส่ง 503 ต่อ', async () => {
+    const { service, ocr } = setup();
+    ocr.readCard = async () => {
+      throw new AppError(503, 'CARD_OCR_UNAVAILABLE', 'อ่านบัตรไม่ได้ตอนนี้ ลองใหม่อีกครั้ง');
+    };
+    expect(await rejection(service.verifyIdentity(unverified(), png(), jpeg()))).toMatchObject({
+      status: 503,
+      code: 'CARD_OCR_UNAVAILABLE',
+    });
   });
 
   it('face service อ่านไฟล์บัตรไม่ได้ ได้ 400 CARD_INVALID', async () => {

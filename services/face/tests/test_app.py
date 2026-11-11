@@ -100,19 +100,3 @@ def test_body_without_length_rejected(client, auth):
 
 def test_load_settings_max_json_default():
     assert load_settings({"FACE_SERVICE_TOKEN": "t" * 32}).max_json_bytes == 8 * 1024 * 1024
-
-
-def test_make_leave_reader_without_key_returns_none(caplog):
-    from app.main import make_leave_reader
-
-    with caplog.at_level("WARNING"):
-        assert make_leave_reader({}) is None
-        assert make_leave_reader({"TYPHOON_OCR_API_KEY": "  "}) is None
-    assert "TYPHOON_OCR_API_KEY" in caplog.text
-
-
-def test_make_leave_reader_with_key_returns_reader():
-    from app.main import make_leave_reader
-    from app.typhoon_ocr import TyphoonTextReader
-
-    assert isinstance(make_leave_reader({"TYPHOON_OCR_API_KEY": "k"}), TyphoonTextReader)
