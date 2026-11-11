@@ -26,7 +26,6 @@ const days = ['อาทิตย์', 'จันทร์', 'อังคาร
 const fields = [['courseCode', 'รหัสวิชา', 'CE360'], ['courseName', 'ชื่อวิชา', 'ชื่อรายวิชา'], ['section', 'กลุ่มเรียน', '001'], ['teacherName', 'อาจารย์ผู้สอน', 'ชื่อและนามสกุล'], ['startTime', 'เวลาเริ่มเรียน', '09:00'], ['endTime', 'เวลาสิ้นสุดเรียน', '12:00'], ['roomName', 'ห้องเรียน / ออนไลน์', '51106 หรือ ออนไลน์']] as const;
 
 export function TimetableUpload({ onImported }: { onImported: () => void }) {
-  const [readProof, setReadProof] = useState<string | null>(null);
   const [identity, setIdentity] = useState<TimetableIdentity | null>(null);
   const [ownershipProof, setOwnershipProof] = useState<string | null>(null);
   const [hasRead, setHasRead] = useState(false);
@@ -52,15 +51,6 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
     return () => { active = false; };
   }, []);
   function edit(value: Row[]) { if (persisted || busy) return; setRows(value); setMatches(null); setResults([]); setError(null); }
-  async function verifyOwner() {
-    if (busy || !readProof) return;
-    setBusy('กำลังตรวจสอบชื่อและเลขนักศึกษา…'); setError(null);
-    try {
-      const value = await apiFetch<{ identity: TimetableIdentity; ownershipProof: string }>('/me/timetable/verify-owner', { method: 'POST', body: JSON.stringify({ ownershipProof: readProof }) });
-      setIdentity(value.identity); setOwnershipProof(value.ownershipProof);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'ตรวจสอบไม่สำเร็จ กรุณาลองใหม่'); }
-    finally { setBusy(null); }
-  }
   async function saveTimetable() {
     if (busy || persisted) return;
     if (!ownershipProof || !identity) { setError("กรุณาอัปโหลดตารางเพื่อตรวจสอบชื่อและเลขนักศึกษาก่อน Save"); return; }
@@ -108,8 +98,8 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
       setEditing(null); setShowText(false);
       setBusy('กำลังอ่านตารางเรียน…');
       const body = new FormData(); body.append('document', file);
-      const draft = await apiFetch<{ identity: TimetableIdentity | null; ownershipProof: string | null; readProof: string | null; rows: Row[]; matches: Match[]; warnings: string[]; ocrText: string }>('/me/timetable/preview', { method: 'POST', body }, 120_000);
-      setReadProof(draft.readProof); setIdentity(draft.identity); setOwnershipProof(draft.ownershipProof); setRows(draft.rows); setMatches(draft.matches); setWarnings(draft.warnings); setOcrText(draft.ocrText); setResults([]); setHasRead(true); setPersisted(false); setExpiresAt(null);
+      const draft = await apiFetch<{ identity: TimetableIdentity | null; ownershipProof: string | null; rows: Row[]; matches: Match[]; warnings: string[]; ocrText: string }>('/me/timetable/preview', { method: 'POST', body }, 120_000);
+      setIdentity(draft.identity); setOwnershipProof(draft.ownershipProof); setRows(draft.rows); setMatches(draft.matches); setWarnings(draft.warnings); setOcrText(draft.ocrText); setResults([]); setHasRead(true); setPersisted(false); setExpiresAt(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'อ่านตารางเรียนไม่สำเร็จ'); }
     finally {
       for (const cached of [file, pickedImage]) {
@@ -148,10 +138,7 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
     {busy && <View style={styles.busy}><ActivityIndicator color={colors.action} /><View style={styles.busyCopy}><Text accessibilityRole="alert" style={styles.label}>{busy}</Text><Text style={styles.note}>ระบบจะจัดข้อมูลเป็นการ์ดรายวิชาให้อัตโนมัติ</Text></View></View>}
     {error && <View style={styles.errorBox}><Text accessibilityRole="alert" style={styles.error}>{error}</Text></View>}
     {hasRead && <>
-      {!ownershipProof && <View style={styles.feedback}>
-        {!identity && <Text style={styles.error}>อ่านชื่อและเลขทะเบียนไม่ได้ กรุณาอัปโหลดเอกสารที่เห็นส่วนหัวครบ</Text>}
-        <Pressable disabled={!!busy || !readProof} style={styles.primary} onPress={() => void verifyOwner()}><Text style={styles.primaryText}>ตรวจสอบกับบัญชี</Text></Pressable>
-      </View>}
+
       {persisted && expiresAt && <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.label}>บันทึกตารางเรียนไว้กับบัญชีแล้ว</Text><Text style={styles.note}>เปิดดูได้ถึง {new Date(expiresAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })}</Text></View>}
       {rows.length > 0 && <TimetableGrid rows={rows} identity={identity ?? undefined} disabled={!!busy} />}
       <View style={styles.summary}>
