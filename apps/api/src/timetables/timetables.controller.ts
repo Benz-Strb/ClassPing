@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Post,
+  Put,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -15,6 +17,18 @@ import { TimetablesService, type TimetableFile } from './timetables.service.js';
 @Controller()
 export class TimetablesController {
   constructor(private readonly timetables: TimetablesService) {}
+
+  @Get('me/timetable')
+  @Roles('student')
+  saved(@CurrentUser() user: AppUser) {
+    return this.timetables.saved(user);
+  }
+
+  @Put('me/timetable')
+  @Roles('student')
+  save(@CurrentUser() user: AppUser, @Body() body: unknown) {
+    return this.timetables.save(user, body);
+  }
 
   @Post('courses/:id/timetable/preview')
   @Roles('teacher', 'admin')
@@ -60,6 +74,11 @@ export class TimetablesController {
   @Roles('student')
   matches(@CurrentUser() user: AppUser, @Body() body: unknown) {
     return this.timetables.matches(user, body);
+  }
+  @Post('me/timetable/verify-owner')
+  @Roles('student')
+  verifyOwner(@CurrentUser() user: AppUser, @Body() body: unknown) {
+    return this.timetables.verifyOwner(user, body);
   }
   @Post('me/timetable/enroll')
   @Roles('student')
