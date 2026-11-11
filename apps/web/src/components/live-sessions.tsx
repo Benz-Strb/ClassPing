@@ -93,10 +93,10 @@ export function LiveSessions() {
                         ดูสด
                       </Link>
                     )}
-                    {/* ระหว่างคาบย้อนดูได้จากแถบเวลาในหน้าดูสด ไฟล์ทั้งคาบเปิดให้หลังจบคาบ */}
+                    {/* ระหว่างคาบย้อนดูได้จากแถบเวลาในหน้าดูสด จบคาบแล้วเปิดหน้าเดียวกันที่ต้นคาบ */}
                     {s.status === "ended" && (
                       <Link
-                        href={`/live/${s.id}/recording`}
+                        href={`/live/${s.id}`}
                         className="text-blue-600 hover:underline"
                       >
                         ดูย้อนหลัง
