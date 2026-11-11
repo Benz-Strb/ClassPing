@@ -25,3 +25,19 @@ it('เก็บข้อความไทยต่อท้าย แยกน
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('ไม่บันทึกถ้าไม่ได้ตั้ง OCR_TEXT_LOG_DIR หรือรันแบบ production', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ocr-log-'));
+  const student = { id: 'user-1', studentId: '650001', fullName: 'สมชาย ใจดี' };
+  try {
+    vi.stubEnv('OCR_TEXT_LOG_DIR', '');
+    await expect(writeOcrTextLog(student, 'ใบลา', 'ลาป่วย')).resolves.toBeUndefined();
+    vi.stubEnv('OCR_TEXT_LOG_DIR', directory);
+    vi.stubEnv('NODE_ENV', 'production');
+    await writeOcrTextLog(student, 'ใบลา', 'ลาป่วย');
+    expect(await readdir(directory)).toEqual([]);
+  } finally {
+    vi.unstubAllEnvs();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
