@@ -38,9 +38,7 @@ export interface DetectResult {
 }
 
 export interface CardRead {
-  // ทุกบรรทัดที่อ่านได้ ไม่เก็บและไม่ log
-  lines: { text: string; score: number }[];
-  // หน้าในบัตร ใหญ่สุดก่อน
+  // หน้าในบัตร ใหญ่สุดก่อน ตัวหนังสือบนบัตรอ่านที่ OCR service
   faces: DetectedFace[];
 }
 
@@ -57,8 +55,8 @@ export interface MatchResult {
 }
 
 const TIMEOUT_MS = 10_000;
-// OCR บน CPU ช้ากว่างานอื่น บัตรใบเดียววัดได้ราว 5 วิ
-const SLOW_PATHS: Record<string, number> = { '/leave/ocr': 120_000, '/cards/read': 30_000 };
+// ภาพบัตรใหญ่ได้ถึง 25 MB ถอดรหัสภาพนานกว่ารูปหน้า
+const SLOW_PATHS: Record<string, number> = { '/cards/read': 30_000 };
 
 // ปัญหาของรูปที่ผู้ใช้แก้เองได้ (ถ่ายใหม่) ส่งต่อให้แอปแสดงข้อความ
 // code อื่นจาก service (เช่น BAD_EMBEDDING, REQUEST_TOO_LARGE, 404) เป็นบั๊กหรือตั้งค่าผิดฝั่งระบบ
@@ -73,15 +71,8 @@ const USER_FACING_CODES = new Set([
   'IMAGE_TOO_LARGE',
 ]);
 
-// code เดิมคงไว้ แต่ข้อความของเส้นทาง OCR ใบลาไม่พูดถึงใบหน้า
-const unavailable = (path = '') =>
-  new AppError(
-    503,
-    'FACE_SERVICE_UNAVAILABLE',
-    path === '/leave/ocr'
-      ? 'อ่านข้อความจากหลักฐานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง'
-      : 'ระบบตรวจใบหน้าใช้งานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง',
-  );
+const unavailable = () =>
+  new AppError(503, 'FACE_SERVICE_UNAVAILABLE', 'ระบบตรวจใบหน้าใช้งานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง');
 
 // เรียก face service (Python) ที่รันแยกอยู่ ผลที่ผู้ใช้ควรรู้ (เช่น MULTIPLE_FACES) ส่งต่อตามเดิม
 @Injectable()
@@ -102,10 +93,6 @@ export class FaceClient {
 
   readCard(image: Buffer, mime: string): Promise<CardRead> {
     return this.post('/cards/read', imageForm(image, mime));
-  }
-
-  readLeaveDocument(image: Buffer, mime: string): Promise<{ lines: { text: string; score: number | null }[] }> {
-    return this.post('/leave/ocr', imageForm(image, mime));
   }
 
   // โมเดลที่ service ใช้อยู่ embedding ต่างโมเดลเอามาเทียบกันไม่ได้
@@ -150,7 +137,7 @@ export class FaceClient {
       });
     } catch (error) {
       this.logger.warn(`เรียก face service ไม่ได้: ${String(error)}`);
-      throw unavailable(path);
+      throw unavailable();
     }
 
     const payload = (await res.json().catch(() => null)) as {
@@ -162,7 +149,7 @@ export class FaceClient {
     // ถ้าส่ง 401 ต่อไป เว็บ/แอปจะสั่งออกจากระบบโดยไม่จำเป็น
     if (res.status >= 500 || res.status === 401 || !payload) {
       this.logger.warn(`face service ตอบ ${res.status} ที่ ${path}`);
-      throw unavailable(path);
+      throw unavailable();
     }
     if (!res.ok) {
       const code = payload.error?.code;
@@ -170,12 +157,12 @@ export class FaceClient {
         throw new AppError(res.status, code, payload.error?.message ?? 'ตรวจใบหน้าไม่สำเร็จ');
       }
       this.logger.error(`face service ตอบ ${res.status} ${code ?? ''} ที่ ${path}`);
-      throw unavailable(path);
+      throw unavailable();
     }
     // ตอบสำเร็จแต่ไม่มี data แปลว่า service ผิดปกติ (หรือ URL ชี้ไปผิดที่)
     if (payload.data === undefined) {
       this.logger.warn(`face service ตอบ ${res.status} แต่ไม่มี data ที่ ${path}`);
-      throw unavailable(path);
+      throw unavailable();
     }
     return payload.data;
   }

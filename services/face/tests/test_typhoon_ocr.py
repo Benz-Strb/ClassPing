@@ -34,15 +34,3 @@ def test_typhoon_uses_v15_and_removes_temporary_image(monkeypatch):
     )
     assert not paths[0].exists()
 
-
-@pytest.mark.parametrize(('reference', 'output', 'expected'), [
-    ('ลาป่วย', 'ลาป่วย', 0),
-    ('abc', 'axc', 1 / 3),
-    ('abc', '', 1),
-    ('abc', 'abcc', 1 / 3),
-    ('a b\nc', 'abc', 0),
-])
-def test_comparison_cer(reference, output, expected):
-    from scripts.compare_ocr import character_error_rate
-
-    assert character_error_rate(reference, output) == expected
