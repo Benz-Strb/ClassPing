@@ -1,24 +1,18 @@
 """CLI: emit the same OCR lines returned by POST /schedules/ocr."""
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from threading import Lock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'face'))
+from main import make_reader
 from timetable import read_timetable_lines
 
 
 class LazyReader:
     def read(self, image):
-        if os.getenv('TYPHOON_OCR_API_KEY', '').strip():
-            from app.typhoon_ocr import TyphoonTextReader
-            reader = TyphoonTextReader()
-        else:
-            from app.ocr import PaddleTextReader
-            reader = PaddleTextReader()
-        return reader.read(image)
+        return make_reader().read(image)
 
 
 if __name__ == '__main__':
