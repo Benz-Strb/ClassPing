@@ -3,7 +3,6 @@ import { StyleSheet, View } from "react-native";
 import { Pressable, ScrollView, Text } from "../ui/primitives";
 import { colors } from "../ui/theme";
 import { LeaveScreen } from "./LeaveScreen";
-import { TransfersScreen } from "./TransfersScreen";
 import { TimetableUpload } from "./TimetableUpload";
 
 export function DocumentsScreen({
@@ -15,8 +14,7 @@ export function DocumentsScreen({
   focusTick: number;
   onTimetableImported: () => void;
 }) {
-  const [section, setSection] = useState<"leave" | "transfers" | "timetable">("leave");
-  const [visitedTransfers, setVisitedTransfers] = useState(false);
+  const [section, setSection] = useState<"leave" | "timetable">("leave");
   const [visitedTimetable, setVisitedTimetable] = useState(false);
   return (
     <View style={styles.root}>
@@ -28,7 +26,6 @@ export function DocumentsScreen({
           {(
             [
               { key: "leave", label: "การลา" },
-              { key: "transfers", label: "เทียบโอนรายวิชา" },
               { key: "timetable", label: "ตารางเรียน" },
             ] as const
           ).map((item) => (
@@ -38,7 +35,6 @@ export function DocumentsScreen({
               accessibilityState={{ selected: section === item.key }}
               onPress={() => {
                 setSection(item.key);
-                if (item.key === "transfers") setVisitedTransfers(true);
                 if (item.key === "timetable") setVisitedTimetable(true);
               }}
               style={[styles.tab, section === item.key && styles.selected]}
@@ -64,20 +60,6 @@ export function DocumentsScreen({
           focusTick={focusTick}
         />
       </View>
-      {visitedTransfers && (
-        <View
-          style={[styles.root, section !== "transfers" && styles.hidden]}
-          accessibilityElementsHidden={section !== "transfers"}
-          importantForAccessibility={
-            section === "transfers" ? "auto" : "no-hide-descendants"
-          }
-        >
-          <TransfersScreen
-            active={active && section === "transfers"}
-            focusTick={focusTick}
-          />
-        </View>
-      )}
       {visitedTimetable && (
         <View
           style={[styles.root, section !== "timetable" && styles.hidden]}

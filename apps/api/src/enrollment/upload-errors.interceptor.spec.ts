@@ -42,7 +42,7 @@ describe('UploadErrorsInterceptor', () => {
     expect(e.message).toBe('ไฟล์หลักฐานใหญ่เกิน 25 MB');
   });
 
-  it('เอกสารเทียบโอนเกินขนาดได้ข้อความไทย', async () => {
+  it('เอกสารอัปโหลดเกินขนาดได้ข้อความไทย', async () => {
     const e = (await mapped(new PayloadTooLargeException('File too large'), new DocumentUploadErrorsInterceptor())) as AppError;
     expect(e.code).toBe('DOCUMENT_SIZE');
     expect(e.message).toBe('ไฟล์เอกสารใหญ่เกิน 10 MB');
