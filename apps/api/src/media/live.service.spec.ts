@@ -150,6 +150,17 @@ describe('LiveService.listForDate', () => {
 });
 
 describe('LiveService.startLive', () => {
+  it('ดูกล้องประตูได้ด้วย token ของ path กล้องประตู', async () => {
+    const DOOR = '33333333-3333-3333-3333-333333333333';
+    const { service } = setup([make({ doorCameraId: DOOR })]);
+    const result = await service.startLive(owner, S1, 'door');
+    expect(result.whepUrl).toBe(`http://media.test:8889/cam/${DOOR}/whep`);
+    expect(verifyMediaToken(SECRET, result.token, NOW)?.path).toBe(`cam/${DOOR}`);
+    expect(result.session).toMatchObject({ hasCamera: true, hasDoorCamera: true });
+    const noDoor = setup([make({})]).service;
+    expect((await rejection(noDoor.startLive(owner, S1, 'door'))).code).toBe('NO_CAMERA');
+  });
+
   it('ออก token ดูสดอายุ 60 วิ ผูก path ของกล้องในห้อง และบันทึกการเปิดดู', async () => {
     const { service, views } = setup([make({})]);
     const result = await service.startLive(owner, S1);

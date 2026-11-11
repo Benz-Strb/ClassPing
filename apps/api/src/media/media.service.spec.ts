@@ -107,7 +107,15 @@ describe('MediaService.authorize กล้องส่งวิดีโอ', ()
     await expect(setup().authorize(publish(`cam/${camA.id}`, 'tokA'))).resolves.toBe(false);
   });
 
-  it('token หมดอายุ เป็น token ดูสด กล้องถูกลบ หรือกล้องประตู ไม่ผ่าน', async () => {
+  it('กล้องประตูส่งวิดีโอเข้า path ของตัวเองได้', async () => {
+    await expect(
+      setup().authorize(
+        publish(`cam/${door.id}`, publishToken({ sub: door.id, path: `cam/${door.id}` })),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('token หมดอายุ เป็น token ดูสด กล้องถูกลบ หรือ token ของกล้องอื่น ไม่ผ่าน', async () => {
     const service = setup();
     const path = `cam/${camA.id}`;
     await expect(
@@ -120,10 +128,9 @@ describe('MediaService.authorize กล้องส่งวิดีโอ', ()
     await expect(
       service.authorize(publish(`cam/${gone}`, publishToken({ sub: gone, path: `cam/${gone}` }))),
     ).resolves.toBe(false);
+    // token ของกล้องหน้าห้องใช้ส่งเข้า path กล้องประตูไม่ได้
     await expect(
-      service.authorize(
-        publish(`cam/${door.id}`, publishToken({ sub: door.id, path: `cam/${door.id}` })),
-      ),
+      service.authorize(publish(`cam/${door.id}`, publishToken({ path: `cam/${door.id}` }))),
     ).resolves.toBe(false);
   });
 
