@@ -22,7 +22,7 @@ import {
 import { TimetablesRepo, type MatchCourse } from './timetables.repo.js';
 import { saveTimetableSchema, timetableExpiry } from './saved-timetable.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
-import { signTimetableIdentity, verifyTimetableIdentity } from './timetable-identity.js';
+import { checkTimetableIdentity, signTimetableIdentity, verifyTimetableIdentity } from './timetable-identity.js';
 
 export interface TimetableFile {
   buffer: Buffer;
@@ -163,10 +163,10 @@ export class TimetablesService {
     const draft = extractTimetable(
       (await this.ocr.readTimetableDocument(file.buffer, file.mimetype)).lines,
     );
+    if (!courseId) checkTimetableIdentity(user, draft.identity);
     return {
       ...draft,
-      ownershipProof: null,
-      readProof: !courseId && draft.identity ? signTimetableIdentity(user.id, draft.identity, timetableExpiry(new Date()), this.config.supabaseServiceRoleKey) : null,
+      ownershipProof: !courseId && draft.identity ? signTimetableIdentity(user.id, draft.identity, timetableExpiry(new Date()), this.config.supabaseServiceRoleKey) : null,
       matches: courseId
         ? []
         : await this.matches(user, { rows: draft.rows }, true),
