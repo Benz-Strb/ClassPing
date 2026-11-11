@@ -92,6 +92,9 @@ const FACULTY = /^(คณะ|วิทยาลัย|สถาบัน)/;
 const THAI_WORDS = /^[\u0E00-\u0E7F]+( [\u0E00-\u0E7F]+)*$/;
 // บรรทัดไทยล้วนที่ไม่ใช่ชื่อ เช่น "ปริญญาตรี กำลังศึกษาอยู่" ตอน OCR อ่านภาคเรียนหาย
 const NOT_NAME = /ปริญญา|ศึกษา|คณะ|วิทยาลัย|สถาบัน|สาขา/;
+// ภาพบัตรเป็นของที่ผู้ใช้ส่งมาเอง แต่งชื่อได้ จำกัดรูปแบบไว้: ชื่อ + นามสกุล (มีชื่อกลางได้) ไม่ยาวผิดปกติ
+const MAX_NAME_LENGTH = 100;
+const MAX_NAME_WORDS = 4;
 
 // บัตรเขียนชื่อกับนามสกุลแยกบรรทัดใต้รหัส Typhoon อาจคืนรวมเป็นบรรทัดเดียวก็ได้
 // โลโก้ DPU อยู่ข้างรหัส บางภาพ Typhoon อ่านโลโก้แทรกก่อนชื่อ จึงข้ามบรรทัดที่ไม่มีตัวไทยไปได้
@@ -105,7 +108,8 @@ function readThaiName(sure: string[], studentCode: string): string | null {
     words.push(line);
   }
   const name = words.join(' ');
-  return name.split(' ').length >= 2 ? name : null;
+  const count = name.split(' ').length;
+  return count >= 2 && count <= MAX_NAME_WORDS && name.length <= MAX_NAME_LENGTH ? name : null;
 }
 
 // อ่านไม่ได้ไม่ใช่เหตุให้ยืนยันบัตรไม่ผ่าน เก็บเป็นค่าว่างไว้

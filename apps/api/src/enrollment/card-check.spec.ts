@@ -267,6 +267,18 @@ describe('บัตรจริงที่ Typhoon อ่าน', () => {
     });
   });
 
+  it('ชื่อยาวผิดปกติหรือหลายคำเกินไป ไม่รับ คงชื่อเดิมไว้', () => {
+    const named = (lines: string[]) =>
+      readStudyInfo(
+        [{ text: '66112106', score: null }, ...lines.map((text) => ({ text, score: null }))],
+        '66112106',
+      ).fullNameTh;
+    expect(named(['ก'.repeat(60), 'ข'.repeat(41)])).toBeNull();
+    expect(named(['ก'.repeat(50), 'ข'.repeat(49)])).toBe(`${'ก'.repeat(50)} ${'ข'.repeat(49)}`);
+    expect(named(['หนึ่ง สอง', 'สาม สี่ ห้า'])).toBeNull();
+    expect(named(['หนึ่ง สอง', 'สาม สี่'])).toBe('หนึ่ง สอง สาม สี่');
+  });
+
   it('ไม่รู้รหัส หรือไม่เจอรหัสบนบัตร ไม่เดาชื่อ', () => {
     expect(readStudyInfo(TYPHOON_CARD).fullNameTh).toBeNull();
     expect(readStudyInfo(TYPHOON_CARD, '66112126').fullNameTh).toBeNull();
