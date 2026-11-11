@@ -20,6 +20,9 @@ import {
   type TimetableRow,
 } from './timetable-draft.js';
 import { TimetablesRepo, type MatchCourse } from './timetables.repo.js';
+import { saveTimetableSchema, timetableExpiry } from './saved-timetable.js';
+import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import { checkTimetableIdentity, signTimetableIdentity, verifyTimetableIdentity } from './timetable-identity.js';
 
 export interface TimetableFile {
   buffer: Buffer;
@@ -95,6 +98,7 @@ export class TimetablesService {
     private readonly rooms: RoomsRepo,
     private readonly repo: TimetablesRepo,
     @Inject(ROSTER_REPO) private readonly roster: RosterRepo,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   private student(user: AppUser): string {
@@ -109,6 +113,29 @@ export class TimetablesService {
   private staff(user: AppUser) {
     if (user.role !== 'teacher' && user.role !== 'admin')
       throw new AppError(403, 'FORBIDDEN', 'เฉพาะอาจารย์และผู้ดูแลระบบ');
+  }
+  async saved(user: AppUser) {
+    this.student(user);
+    const saved = await this.repo.saved(user.id);
+    if (!saved?.identity || !saved.ownershipProof) return null;
+    verifyTimetableIdentity(user, saved.ownershipProof, this.config.supabaseServiceRoleKey);
+    return saved;
+  }
+  async save(user: AppUser, body: unknown) {
+    this.student(user);
+    const { rows, ownershipProof } = parseBody(saveTimetableSchema, body);
+    const identity = verifyTimetableIdentity(user, ownershipProof, this.config.supabaseServiceRoleKey);
+    const savedAt = new Date();
+    return this.repo.save(user.id, {
+      rows, savedAt: savedAt.toISOString(), expiresAt: timetableExpiry(savedAt), identity,
+      ownershipProof: signTimetableIdentity(user.id, identity, timetableExpiry(savedAt), this.config.supabaseServiceRoleKey),
+    });
+  }
+  async verifyOwner(user: AppUser, body: unknown) {
+    this.student(user);
+    const { ownershipProof } = parseBody(saveTimetableSchema.pick({ ownershipProof: true }), body);
+    const identity = verifyTimetableIdentity(user, ownershipProof, this.config.supabaseServiceRoleKey);
+    return { identity, ownershipProof };
   }
   async preview(user: AppUser, file?: TimetableFile, courseId?: string) {
     if (courseId) {
@@ -136,8 +163,10 @@ export class TimetablesService {
     const draft = extractTimetable(
       (await this.ocr.readTimetableDocument(file.buffer, file.mimetype)).lines,
     );
+    if (!courseId) checkTimetableIdentity(user, draft.identity);
     return {
       ...draft,
+      ownershipProof: !courseId && draft.identity ? signTimetableIdentity(user.id, draft.identity, timetableExpiry(new Date()), this.config.supabaseServiceRoleKey) : null,
       matches: courseId
         ? []
         : await this.matches(user, { rows: draft.rows }, true),
@@ -155,6 +184,8 @@ export class TimetablesService {
   }
   async enroll(user: AppUser, body: unknown) {
     const studentCode = this.student(user);
+    const { ownershipProof } = parseBody(saveTimetableSchema.pick({ ownershipProof: true }), body);
+    verifyTimetableIdentity(user, ownershipProof, this.config.supabaseServiceRoleKey);
     const { rows } = parseBody(importSchema, body);
     const matches = await this.matches(user, { rows });
     const completed = new Set<string>();
