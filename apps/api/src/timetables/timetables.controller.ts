@@ -6,12 +6,14 @@ import {
   Post,
   Put,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import { DocumentUploadErrorsInterceptor } from '../enrollment/upload-errors.interceptor.js';
 import type { AppUser } from '../users/users.service.js';
+import { TimetablePreviewLimitGuard } from './timetable-limit.guard.js';
 import { TimetablesService, type TimetableFile } from './timetables.service.js';
 
 @Controller()
@@ -32,6 +34,7 @@ export class TimetablesController {
 
   @Post('courses/:id/timetable/preview')
   @Roles('teacher', 'admin')
+  @UseGuards(TimetablePreviewLimitGuard)
   @UseInterceptors(
     DocumentUploadErrorsInterceptor,
     FileInterceptor('document', {
@@ -57,6 +60,7 @@ export class TimetablesController {
   }
   @Post('me/timetable/preview')
   @Roles('student')
+  @UseGuards(TimetablePreviewLimitGuard)
   @UseInterceptors(
     DocumentUploadErrorsInterceptor,
     FileInterceptor('document', {

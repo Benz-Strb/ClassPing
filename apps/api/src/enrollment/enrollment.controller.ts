@@ -9,6 +9,7 @@ import {
   Query,
   UploadedFile,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
@@ -17,6 +18,7 @@ import type { AppUser } from '../users/users.service.js';
 import { EnrollmentService, type FaceStatus, type UploadedImage } from './enrollment.service.js';
 import { MAX_CARD_BYTES, MAX_IMAGE_BYTES, CardUploadErrorsInterceptor, UploadErrorsInterceptor } from './upload-errors.interceptor.js';
 import { AppError } from '../common/app-error.js';
+import { IdentityLimitGuard } from './identity-limit.guard.js';
 
 @Controller()
 export class EnrollmentController {
@@ -36,6 +38,7 @@ export class EnrollmentController {
   // ภาพบัตรอยู่ในหน่วยความจำของ request นี้เท่านั้น (multer เก็บใน memory เป็นค่าเริ่มต้น)
   @Post('me/identity')
   @HttpCode(200)
+  @UseGuards(IdentityLimitGuard)
   @UseInterceptors(
     CardUploadErrorsInterceptor,
     FileFieldsInterceptor(

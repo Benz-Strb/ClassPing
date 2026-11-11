@@ -82,15 +82,47 @@ export function checkCard(
 }
 
 export interface StudyInfo {
+  // ชื่อ-สกุลภาษาไทยบนบัตร (ไม่มีคำนำหน้า)
+  fullNameTh: string | null;
   faculty: string | null;
   major: string | null;
 }
 
+const FACULTY = /^(คณะ|วิทยาลัย|สถาบัน)/;
+const THAI_WORDS = /^[\u0E00-\u0E7F]+( [\u0E00-\u0E7F]+)*$/;
+// บรรทัดไทยล้วนที่ไม่ใช่ชื่อ เช่น "ปริญญาตรี กำลังศึกษาอยู่" ตอน OCR อ่านภาคเรียนหาย
+const NOT_NAME = /ปริญญา|ศึกษา|คณะ|วิทยาลัย|สถาบัน|สาขา/;
+// ภาพบัตรเป็นของที่ผู้ใช้ส่งมาเอง แต่งชื่อได้ จำกัดรูปแบบไว้: ชื่อ + นามสกุล (มีชื่อกลางได้) ไม่ยาวผิดปกติ
+const MAX_NAME_LENGTH = 100;
+const MAX_NAME_WORDS = 4;
+
+// บัตรเขียนชื่อกับนามสกุลแยกบรรทัดใต้รหัส Typhoon อาจคืนรวมเป็นบรรทัดเดียวก็ได้
+// โลโก้ DPU อยู่ข้างรหัส บางภาพ Typhoon อ่านโลโก้แทรกก่อนชื่อ จึงข้ามบรรทัดที่ไม่มีตัวไทยไปได้
+function readThaiName(sure: string[], studentCode: string): string | null {
+  const at = sure.findIndex((t) => t.includes(studentCode));
+  if (at < 0) return null;
+  const words: string[] = [];
+  for (const line of sure.slice(at + 1, at + 6)) {
+    if (!words.length && !/[\u0E00-\u0E7F]/.test(line)) continue;
+    if (!THAI_WORDS.test(line) || NOT_NAME.test(line)) break;
+    words.push(line);
+  }
+  const name = words.join(' ');
+  const count = name.split(' ').length;
+  return count >= 2 && count <= MAX_NAME_WORDS && name.length <= MAX_NAME_LENGTH ? name : null;
+}
+
 // อ่านไม่ได้ไม่ใช่เหตุให้ยืนยันบัตรไม่ผ่าน เก็บเป็นค่าว่างไว้
-export function readStudyInfo(lines: CardLine[]): StudyInfo {
+export function readStudyInfo(lines: CardLine[], studentCode = ''): StudyInfo {
   const sure = sureLines(lines);
-  return {
-    faculty: sure.find((t) => /^(คณะ|วิทยาลัย|สถาบัน)/.test(t)) ?? null,
-    major: sure.find((t) => t.startsWith('สาขา')) ?? null,
-  };
+  let faculty: string | null = null;
+  let major: string | null = null;
+  for (const line of sure) {
+    // Typhoon อ่านคณะกับสาขาเป็นบรรทัดเดียว "วิทยาลัย... สาขาวิชา..."
+    const split = line.indexOf('สาขา');
+    const before = (split < 0 ? line : line.slice(0, split)).trim();
+    if (!faculty && FACULTY.test(before)) faculty = before;
+    if (!major && split >= 0 && (split === 0 || FACULTY.test(before))) major = line.slice(split).trim();
+  }
+  return { fullNameTh: studentCode ? readThaiName(sure, studentCode) : null, faculty, major };
 }
