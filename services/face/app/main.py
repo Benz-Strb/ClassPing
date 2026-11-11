@@ -1,6 +1,5 @@
 import base64
 import hmac
-import logging
 import os
 
 import numpy as np
@@ -9,17 +8,12 @@ from pydantic import BaseModel, model_validator
 
 from app.config import Settings, load_settings
 from app.crops import face_crop
-from app.documents import MAX_DOCUMENT_BYTES, document_frames
 from app.engine import DetectedFace, FaceEngine, InsightFaceEngine
 from app.errors import FaceError, error_response, install_error_handlers
 from app.images import decode_image, read_upload
 from app.liveness import InsightFaceLiveness, LivenessModel
 from app.matching import match
-from app.ocr import PaddleTextReader, TextReader
 from app.quality import face_size, pick_enrollment_face, real_faces, sharpness
-from app.typhoon_ocr import TyphoonTextReader
-
-logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {"/health"}
 
@@ -59,7 +53,7 @@ def check_body_size(request: Request, settings: Settings):
     if length is None or not length.isdigit():
         return error_response(411, "LENGTH_REQUIRED", "ต้องระบุขนาดข้อมูลที่ส่ง")
     is_upload = request.headers.get("content-type", "").startswith("multipart/")
-    upload_limit = MAX_DOCUMENT_BYTES if request.url.path == "/leave/ocr" else settings.max_image_bytes
+    upload_limit = settings.max_image_bytes
     if request.url.path == "/cards/read":
         upload_limit = settings.max_card_bytes
     limit = upload_limit + MULTIPART_OVERHEAD if is_upload else settings.max_json_bytes
@@ -69,8 +63,7 @@ def check_body_size(request: Request, settings: Settings):
 
 
 def create_app(
-    settings: Settings, engine: FaceEngine, reader: TextReader,
-    leave_reader: TyphoonTextReader | None = None,
+    settings: Settings, engine: FaceEngine,
     liveness: LivenessModel | None = None,
 ) -> FastAPI:
     app = FastAPI(title="ClassPing face service", docs_url=None, redoc_url=None)
@@ -147,33 +140,15 @@ def create_app(
             }
         }
 
-    # บัตรนักศึกษา: ตัวหนังสือทุกบรรทัด + หน้าในบัตร ให้ API ตัดสินเอง
-    # ภาพอยู่ในหน่วยความจำอย่างเดียว ไม่บันทึกและไม่ log ข้อความที่อ่านได้
+    # บัตรนักศึกษา: หน้าในบัตร ให้ API ตัดสินเอง ตัวหนังสือบนบัตร API ขอจาก OCR service (Typhoon)
+    # ภาพอยู่ในหน่วยความจำอย่างเดียว ไม่บันทึก
     @app.post("/cards/read")
     def read_card(image: UploadFile):
         frame = decode_image(
             read_upload(image.file, settings.max_card_bytes), settings.max_card_bytes
         )
         faces = sorted(real_faces(engine.analyze(frame)), key=lambda f: -face_size(f.bbox))
-        return {
-            "data": {
-                "lines": [{"text": text, "score": score} for text, score in reader.read(frame)],
-                "faces": [detected_json(face, None) for face in faces],
-            }
-        }
-
-    @app.post("/leave/ocr")
-    def read_leave_document(image: UploadFile):
-        data = read_upload(image.file, MAX_DOCUMENT_BYTES)
-        lines = []
-        for frame in document_frames(data):
-            if leave_reader is not None:
-                text = leave_reader.read(frame)
-                lines.extend({"text": line, "score": None}
-                             for line in text.splitlines() if line.strip())
-            else:
-                lines.extend({"text": text, "score": score} for text, score in reader.read(frame))
-        return {"data": {"lines": lines}}
+        return {"data": {"faces": [detected_json(face, None) for face in faces]}}
 
     @app.post("/faces/match")
     def match_faces(body: MatchRequest):
@@ -234,18 +209,8 @@ def parse_embeddings(rows: list[list[float]], size: int) -> np.ndarray:
     return vectors
 
 
-def make_leave_reader(env) -> TyphoonTextReader | None:
-    """ไม่มี TYPHOON_OCR_API_KEY ก็เปิด service ได้ /leave/ocr จะใช้ตัวอ่านหลักแทน"""
-    key = env.get("TYPHOON_OCR_API_KEY", "").strip()
-    if not key:
-        logger.warning("ไม่ได้ตั้ง TYPHOON_OCR_API_KEY อ่านใบลาด้วย Typhoon ไม่ได้ ใช้ตัวอ่านหลักแทน")
-        return None
-    return TyphoonTextReader(key)
-
-
 def build_app() -> FastAPI:
     """ใช้ตอนรันจริง: uvicorn --factory app.main:build_app (โหลดโมเดลตอนเปิด service)"""
     settings = load_settings(os.environ)
     liveness = InsightFaceLiveness(settings) if settings.liveness_model else None
-    return create_app(settings, InsightFaceEngine(settings), PaddleTextReader(),
-                      leave_reader=make_leave_reader(os.environ), liveness=liveness)
+    return create_app(settings, InsightFaceEngine(settings), liveness=liveness)
