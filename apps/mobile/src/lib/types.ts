@@ -4,6 +4,7 @@ export interface Me {
   id: string;
   email: string;
   fullName: string | null;
+  avatarUrl?: string | null;
   role: "student" | "teacher" | "admin";
   studentId: string | null;
   pdpaConsentAt: string | null;

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./academic.css";
+@import "./signin.css";
 
 
 @font-face { font-family: Geist; src: url('/fonts/Geist-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from '../common/app-error.js';
 import { looksLike } from '../common/image-type.js';
 import { LeaveOcrClient } from './leave-ocr.client.js';
+import { writeOcrTextLog } from '../common/ocr-text-log.js';
 import type { AppUser } from '../users/users.service.js';
 import {
   LEAVE_REPO,
@@ -101,6 +102,7 @@ export class LeaveService {
       .map((line) => line.text)
       .join('\n')
       .trim();
+    await writeOcrTextLog(user, 'ใบลา', ocr.lines.map((line) => line.text).join('\n'));
     return { text, ...extractLeaveDraft(text) };
   }
 
@@ -183,13 +185,14 @@ export class LeaveService {
     }
 
     // OCR อ่านทั้งใบใช้เวลานาน ไม่ให้นักศึกษารอ อ่านต่อเบื้องหลังแล้วเก็บไว้ให้อาจารย์ดู
-    void this.readOcrLater(request.id, evidence);
+    void this.readOcrLater(request.id, evidence, user);
     return { id: request.id, status: 'pending', ocrStatus: 'pending' };
   }
 
-  private async readOcrLater(requestId: string, evidence: LeaveEvidence) {
+  private async readOcrLater(requestId: string, evidence: LeaveEvidence, user: AppUser) {
     try {
       const ocr = await this.ocr.readLeaveDocument(evidence.buffer, evidence.mimetype);
+      await writeOcrTextLog(user, 'ใบลา', ocr.lines.map((line) => line.text).join('\n'));
       await this.repo.saveOcrResult(requestId, ocr.lines.map((line) => line.text).join('\n'), 'completed');
     } catch {
       // OCR เป็นข้อมูลช่วยตรวจ อาจารย์ยังดูรูปหลักฐานเองได้เมื่อบริการล่ม

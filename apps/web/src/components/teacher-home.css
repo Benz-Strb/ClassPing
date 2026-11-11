@@ -1,0 +1,40 @@
+.teacher-home-home { display: grid; gap: 28px; }
+.teacher-home-courses { display: grid; gap: 24px; min-width: 0; }
+.teacher-home-panel { min-width: 0; padding: 28px 32px; border-radius: 20px; background: var(--cp-surface); }
+.teacher-home-courseHeading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 38%); gap: 24px; align-items: start; }
+.teacher-home-home .teacher-home-courseHeading h2 { font-size: 22px; font-weight: 400; }
+.teacher-home-courseName { margin-top: 8px; font-size: 18px; overflow-wrap: anywhere; }
+.teacher-home-button { display: inline-flex; justify-content: center; align-items: center; min-height: 54px; padding: 12px 24px; border: 1px solid var(--cp-muted); border-radius: 11px; color: var(--cp-action-hover); font-weight: 500; text-align: center; text-decoration: none; background: var(--cp-surface); }
+.teacher-home-button:hover { background: var(--cp-selected); }
+.teacher-home-detail { width: 202px; max-width: 100%; background: var(--cp-selected); }
+.teacher-home-courseActions { display: grid; grid-template-columns: repeat(3, minmax(0, 202px)); gap: 14px; margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--cp-border); }
+.teacher-home-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.teacher-home-home .teacher-home-sectionTitle { margin-bottom: 20px; font-size: 23px; font-weight: 600; }
+.teacher-home-date { margin-bottom: 18px; font-size: 18px; }
+.teacher-home-muted { color: var(--cp-muted); font-size: 14px; }
+.teacher-home-sessionList, .teacher-home-leaveList { display: grid; gap: 16px; list-style: none; margin: 0; padding: 0; }
+.teacher-home-session { display: flex; align-items: flex-start; gap: 18px; padding: 18px; background: var(--cp-selected); border-radius: 14px; text-decoration: none; }
+.teacher-home-session:hover { background: #e5dcf3; }
+.teacher-home-session svg { flex-shrink: 0; margin-top: 3px; color: var(--cp-action-hover); }
+.teacher-home-session strong { display: block; font-size: 24px; font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.teacher-home-session p { margin-top: 4px; font-size: 18px; overflow-wrap: anywhere; }
+.teacher-home-leave + .teacher-home-leave { border-top: 1px solid var(--cp-border); padding-top: 20px; }
+.teacher-home-leaveHeading { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 16px; }
+.teacher-home-leaveHeading > div { min-width: 0; overflow-wrap: anywhere; font-size: 18px; }
+.teacher-home-leaveHeading .teacher-home-muted { margin-top: 4px; }
+.teacher-home-badge { flex-shrink: 0; background: var(--cp-bg); color: var(--cp-muted); padding: 5px 8px; border-radius: 6px; font-size: 13px; }
+.teacher-home-primary { width: 224px; max-width: 100%; background: var(--cp-action); border-color: transparent; color: white; }
+.teacher-home-primary:hover { background: var(--cp-action-hover); }
+@media (max-width: 960px) {
+  .teacher-home-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .teacher-home-home { gap: 20px; }
+  .teacher-home-panel { padding: 24px 20px; border-radius: 16px; }
+  .teacher-home-courseHeading { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .teacher-home-detail { width: 100%; }
+  .teacher-home-courseActions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .teacher-home-courseActions .teacher-home-button { padding-inline: 8px; font-size: 14px; }
+  .teacher-home-session { gap: 12px; padding: 16px; }
+  .teacher-home-session strong { font-size: 21px; }
+}

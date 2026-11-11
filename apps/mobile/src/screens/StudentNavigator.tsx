@@ -1,4 +1,5 @@
 import { layout, colors } from '../ui/theme';
+import { ProfileAvatar } from '../ui/ProfileAvatar';
 import { useEffect, useState } from 'react';
 import { AppState, BackHandler, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable, ScrollView, Text } from '../ui/primitives';
@@ -68,7 +69,7 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
     <View style={[styles.main, wide && { paddingBottom: bottom }]}>
       <View style={styles.header}>
         <View style={styles.brandGroup}><View style={styles.brandMark}><Text allowFontScaling={false} style={styles.brandInitial}>C</Text></View><Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={styles.brand}>ClassPing</Text></View>
-        <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatar}><Text allowFontScaling={false} style={styles.avatarText}>{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</Text></Pressable>
+        <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatar}><ProfileAvatar user={me} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
       </View>
       {TABS.map(({ key }) => visited.has(key) && <View key={key} style={[styles.scene, tab !== key && styles.hidden]} accessibilityElementsHidden={tab !== key} importantForAccessibility={tab === key ? 'auto' : 'no-hide-descendants'}>
         {key === 'home' && <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={pulling} tintColor={colors.action} onRefresh={() => { setPulling(true); setPullTick((value) => value + 1); }} />}>

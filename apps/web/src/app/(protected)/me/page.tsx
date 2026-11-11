@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { useRouter } from "next/navigation";
-import { ApiError, apiFetch } from "@/lib/api";
+import { useWebUser } from "@/components/web-access";
 import { supabase } from "@/lib/supabase";
 
 interface Me {
   id: string;
   email: string;
   fullName: string | null;
+  avatarUrl?: string | null;
   role: "student" | "teacher" | "admin";
   studentId: string | null;
 }
@@ -22,39 +23,20 @@ const ROLE_LABEL: Record<Me["role"], string> = {
 
 export default function MePage() {
   const router = useRouter();
-  const [me, setMe] = useState<Me | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch<Me>("/me")
-      .then(setMe)
-      .catch(async (e: unknown) => {
-        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
-          await supabase.auth.signOut();
-          const message =
-            e.code === "DOMAIN_NOT_ALLOWED"
-              ? "ใช้ได้เฉพาะเมล @dpu.ac.th"
-              : e.message;
-          router.replace(`/login?error=${encodeURIComponent(message)}`);
-          return;
-        }
-        setError(e instanceof Error ? e.message : "เรียกระบบไม่สำเร็จ");
-      });
-  }, [router]);
+  const me = useWebUser();
 
   async function signOut() {
     await supabase.auth.signOut();
     router.replace("/login");
   }
 
-  if (error) return <p className="p-6 text-red-600">{error}</p>;
   if (!me) return <p className="p-6">กำลังโหลด...</p>;
 
   return (
     <main className="account-page mx-auto space-y-6 p-6">
       <header><h1 className="text-2xl sm:text-3xl font-semibold">บัญชีของฉัน</h1><p className="text-gray-600">ข้อมูลบัญชีมหาวิทยาลัยของคุณ</p></header>
       <section className="account-profile" aria-label="ข้อมูลบัญชี">
-        <span className="account-avatar" aria-hidden="true">{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</span>
+        <ProfileAvatar user={me} className="account-avatar" />
         <div><h2>{me.fullName ?? me.email}</h2><p className="text-gray-600 break-all">{me.email}</p></div>
       </section>
       <dl className="account-details"><div><dt>บทบาท</dt><dd>{ROLE_LABEL[me.role]}</dd></div>{me.studentId && <div><dt>รหัสอาจารย์</dt><dd>{me.studentId}</dd></div>}</dl>
