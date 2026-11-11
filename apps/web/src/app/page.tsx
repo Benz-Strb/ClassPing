@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useWebUser } from "@/components/web-access";
 import { TodayAgenda } from "@/components/today-agenda";
+import { TeacherHome } from "@/components/teacher-home";
 
 export default function Home() {
   const me = useWebUser();
+
+  if (me?.role === "teacher") return <TeacherHome key={me.id} />;
 
   if (me) return (
     <main className="space-y-8">
