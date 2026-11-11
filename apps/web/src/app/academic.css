@@ -135,7 +135,6 @@
 .roster-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
 .roster-create { max-width: 720px; }
 .rules-view { max-width: 800px; }
-.live-viewer video, .recording-view video { border-radius: 12px; background: #17131e; }
 @media (max-width: 39.99rem) {
   .session-link { gap: 12px; padding: 16px; }
   .session-link > .ml-auto { flex-basis: 100%; margin-left: 0; }
