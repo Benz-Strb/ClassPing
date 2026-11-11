@@ -22,7 +22,14 @@ import {
 import { TimetablesRepo, type MatchCourse } from './timetables.repo.js';
 import { saveTimetableSchema, timetableExpiry } from './saved-timetable.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
-import { checkTimetableIdentity, signTimetableIdentity, verifyTimetableIdentity } from './timetable-identity.js';
+import {
+  checkTimetableIdentity,
+  documentCourses,
+  inDocument,
+  readTimetableProof,
+  signTimetableIdentity,
+  verifyTimetableIdentity,
+} from './timetable-identity.js';
 
 export interface TimetableFile {
   buffer: Buffer;
@@ -124,11 +131,12 @@ export class TimetablesService {
   async save(user: AppUser, body: unknown) {
     this.student(user);
     const { rows, ownershipProof } = parseBody(saveTimetableSchema, body);
-    const identity = verifyTimetableIdentity(user, ownershipProof, this.config.supabaseServiceRoleKey);
+    const { identity, courses } = readTimetableProof(user, ownershipProof, this.config.supabaseServiceRoleKey);
     const savedAt = new Date();
+    // เซ็นใหม่ให้หมดอายุตามตารางที่บันทึก รายวิชาคงตามเอกสารเดิม ไม่ใช่ตามแถวที่แก้
     return this.repo.save(user.id, {
       rows, savedAt: savedAt.toISOString(), expiresAt: timetableExpiry(savedAt), identity,
-      ownershipProof: signTimetableIdentity(user.id, identity, timetableExpiry(savedAt), this.config.supabaseServiceRoleKey),
+      ownershipProof: signTimetableIdentity(user.id, identity, timetableExpiry(savedAt), this.config.supabaseServiceRoleKey, courses),
     });
   }
   async verifyOwner(user: AppUser, body: unknown) {
@@ -166,7 +174,9 @@ export class TimetablesService {
     if (!courseId) checkTimetableIdentity(user, draft.identity);
     return {
       ...draft,
-      ownershipProof: !courseId && draft.identity ? signTimetableIdentity(user.id, draft.identity, timetableExpiry(new Date()), this.config.supabaseServiceRoleKey) : null,
+      ownershipProof: !courseId && draft.identity
+        ? signTimetableIdentity(user.id, draft.identity, timetableExpiry(new Date()), this.config.supabaseServiceRoleKey, documentCourses(draft.rows))
+        : null,
       matches: courseId
         ? []
         : await this.matches(user, { rows: draft.rows }, true),
@@ -185,7 +195,7 @@ export class TimetablesService {
   async enroll(user: AppUser, body: unknown) {
     const studentCode = this.student(user);
     const { ownershipProof } = parseBody(saveTimetableSchema.pick({ ownershipProof: true }), body);
-    verifyTimetableIdentity(user, ownershipProof, this.config.supabaseServiceRoleKey);
+    const { courses } = readTimetableProof(user, ownershipProof, this.config.supabaseServiceRoleKey);
     const { rows } = parseBody(importSchema, body);
     const matches = await this.matches(user, { rows });
     const completed = new Set<string>();
@@ -198,6 +208,14 @@ export class TimetablesService {
     for (const [index, match] of matches.entries()) {
       if (!match.course) {
         results.push({ index, status: match.status, message: match.message });
+        continue;
+      }
+      if (!inDocument(courses, match.course.code, match.course.section)) {
+        results.push({
+          index,
+          status: 'failed',
+          message: 'วิชานี้ไม่อยู่ในตารางเรียนที่อัปโหลด กรุณาอัปโหลดตารางเรียนใหม่',
+        });
         continue;
       }
       const courseId = match.course.id;

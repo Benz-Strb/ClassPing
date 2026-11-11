@@ -43,7 +43,8 @@ const student = {
   role: 'student',
 } as AppUser;
 const identity = { studentId: student.studentId!, fullName: student.fullName! };
-const ownershipProof = signTimetableIdentity(student.id, identity, '2099-01-01T00:00:00Z', 'test-secret');
+// หลักฐานจากเอกสารที่มีวิชา CE360 กลุ่ม 001
+const ownershipProof = signTimetableIdentity(student.id, identity, '2099-01-01T00:00:00Z', 'test-secret', [{ code: 'CE360', section: '001' }]);
 const teacher = { id: 'teacher-1', role: 'teacher' } as AppUser;
 
 describe('timetable extraction', () => {
@@ -242,6 +243,31 @@ describe('timetable import and enrollment', () => {
     expect(roster.addCodes).toHaveBeenCalledWith(course.id, [
       student.studentId,
     ]);
+  });
+  it('does not enroll courses that were not in the uploaded document', async () => {
+    const other = { ...course, id: 'course-2', code: 'CE452' };
+    repo.candidates.mockResolvedValue([course, other]);
+    const result = await service.enroll(student, { ownershipProof,
+      rows: [{ ...row, courseCode: 'CE452' }],
+    });
+    expect(result.results[0]).toMatchObject({ status: 'failed' });
+    expect(roster.addCodes).not.toHaveBeenCalled();
+  });
+  it('rejects older proofs without document courses until the timetable is uploaded again', async () => {
+    const old = signTimetableIdentity(student.id, identity, '2099-01-01T00:00:00Z', 'test-secret');
+    const result = await service.enroll(student, { ownershipProof: old, rows: [row] });
+    expect(result.results[0]).toMatchObject({ status: 'failed' });
+    expect(roster.addCodes).not.toHaveBeenCalled();
+  });
+  it('keeps the document courses when saving edited rows', async () => {
+    repo.save.mockImplementation(async (_id, value) => value);
+    const saved = await service.save(student, { ownershipProof, rows: [{ ...row, courseCode: 'CE452' }] });
+    repo.candidates.mockResolvedValue([course, { ...course, id: 'course-2', code: 'CE452' }]);
+    const result = await service.enroll(student, { ownershipProof: saved.ownershipProof,
+      rows: [{ ...row, courseCode: 'CE452' }, row],
+    });
+    expect(result.results.map((r) => r.status)).toEqual(['failed', 'enrolled']);
+    expect(roster.addCodes).toHaveBeenCalledTimes(1);
   });
   it('does not enroll unmatched or ambiguous rows', async () => {
     await service.enroll(student, { ownershipProof,
