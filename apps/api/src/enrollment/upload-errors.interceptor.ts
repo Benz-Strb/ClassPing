@@ -48,7 +48,7 @@ export class EvidenceUploadErrorsInterceptor extends UploadErrorsInterceptor {
   protected override tooLargeCode = 'EVIDENCE_TOO_LARGE';
 }
 
-// เอกสารเทียบโอน: PDF
+// เอกสารอัปโหลด: PDF
 @Injectable()
 export class DocumentUploadErrorsInterceptor extends UploadErrorsInterceptor {
   protected override maxBytes = 10 * 1024 * 1024;
