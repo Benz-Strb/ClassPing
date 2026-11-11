@@ -10,7 +10,14 @@ import type { AppUser } from '../users/users.service.js';
 import { LIVE_REPO, type LiveRepo } from './live.repo.js';
 import { cameraPath } from './media-path.js';
 import { signMediaToken } from './media-token.js';
-import { canDownload, canWatch, type WatchableSession } from './video-access.js';
+import {
+  anyCamera,
+  cameraOf,
+  canDownload,
+  canWatch,
+  type CameraKind,
+  type WatchableSession,
+} from './video-access.js';
 
 export interface LiveSessionView {
   id: string;
@@ -25,6 +32,7 @@ export interface LiveSessionView {
   // กล้องกำลังเปิดอยู่ (รวมช่วงเปิดก่อนเวลา) ดูสดได้
   cameraOpen: boolean;
   hasCamera: boolean;
+  hasDoorCamera: boolean;
   canDownload: boolean;
 }
 
@@ -77,17 +85,18 @@ export class LiveService {
     const sessions = (await this.repo.sessionsOnDate(date)).filter((s) => canWatch(user, s));
     const current = new Map<string, string | null>();
     for (const s of sessions) {
-      if (s.cameraId && !current.has(s.roomId)) current.set(s.roomId, await this.currentIn(s));
+      if (anyCamera(s) && !current.has(s.roomId)) current.set(s.roomId, await this.currentIn(s));
     }
     return sessions.map((s) => this.view(user, s, current.get(s.roomId) === s.id));
   }
 
-  async startLive(user: AppUser, sessionId: string): Promise<LiveTicket> {
+  async startLive(user: AppUser, sessionId: string, kind: CameraKind = 'front'): Promise<LiveTicket> {
     const session = await this.watchable(user, sessionId);
     if (!this.cameraOpen(session)) {
       throw new AppError(409, 'NOT_LIVE', 'ตอนนี้กล้องของคาบนี้ไม่ได้เปิด');
     }
-    if (!session.cameraId) throw new AppError(409, 'NO_CAMERA', 'ห้องนี้ยังไม่มีกล้อง');
+    const cameraId = cameraOf(session, kind);
+    if (!cameraId) throw new AppError(409, 'NO_CAMERA', 'ห้องนี้ยังไม่มีกล้องนี้');
     // กล้องเปิดก่อนเวลา คาบก่อนหน้าในห้องเดียวกันอาจยังไม่จบ ห้ามเห็นคาบของคนอื่น
     if ((await this.currentIn(session)) !== session.id) {
       throw new AppError(409, 'NOT_LIVE', 'ห้องนี้ยังมีคาบก่อนหน้าอยู่ ดูได้เมื่อคาบนั้นจบ');
@@ -95,7 +104,7 @@ export class LiveService {
     const secret = this.config.mediaTokenSecret;
     if (!secret) throw new AppError(503, 'MEDIA_NOT_CONFIGURED', 'ระบบกล้องสดยังไม่พร้อม');
 
-    const path = cameraPath(session.cameraId);
+    const path = cameraPath(cameraId);
     const exp = this.now().getTime() + READ_TOKEN_MS;
     const token = signMediaToken(secret, { sub: user.id, path, act: 'read', sid: session.id, exp });
     await this.repo.logView(session.id, user.id, 'live');
@@ -149,8 +158,9 @@ export class LiveService {
   }
 
   private async currentIn(session: WatchableSession): Promise<string | null> {
-    if (!session.cameraId) return null;
-    const camera = { id: session.cameraId, roomId: session.roomId, kind: 'front' as const };
+    const id = anyCamera(session);
+    if (!id) return null;
+    const camera = { id, roomId: session.roomId, kind: 'front' as const };
     return (await this.cameras.liveSessionFor(camera, this.now()))?.id ?? null;
   }
 
@@ -174,8 +184,9 @@ export class LiveService {
       startsAt: session.startsAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
       status: session.endsAt <= now ? 'ended' : session.startsAt <= now ? 'live' : 'upcoming',
-      cameraOpen: session.cameraId !== null && roomIsOurs && this.cameraOpen(session),
+      cameraOpen: anyCamera(session) !== null && roomIsOurs && this.cameraOpen(session),
       hasCamera: session.cameraId !== null,
+      hasDoorCamera: (session.doorCameraId ?? null) !== null,
       canDownload: canDownload(user, session),
     };
   }

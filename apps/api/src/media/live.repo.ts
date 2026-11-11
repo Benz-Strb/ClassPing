@@ -87,14 +87,16 @@ export class SupabaseLiveRepo implements LiveRepo {
   private async withCameras(rows: Row[]): Promise<WatchableSession[]> {
     const roomIds = [...new Set(rows.map((r) => r.room_id))];
     const cameras = new Map<string, string>();
+    const doors = new Map<string, string>();
     if (roomIds.length) {
       const { data, error } = await this.db
         .from('cameras')
-        .select('id, room_id')
-        .eq('kind', 'front')
+        .select('id, room_id, kind')
         .in('room_id', roomIds);
       if (error) throw dbError();
-      for (const c of data as { id: string; room_id: string }[]) cameras.set(c.room_id, c.id);
+      for (const c of data as { id: string; room_id: string; kind: string }[]) {
+        (c.kind === 'door' ? doors : cameras).set(c.room_id, c.id);
+      }
     }
     return rows.map((r) => ({
       id: r.id,
@@ -110,6 +112,7 @@ export class SupabaseLiveRepo implements LiveRepo {
       endsAt: new Date(r.ends_at),
       proctorIds: r.session_proctors.map((p) => p.user_id),
       cameraId: cameras.get(r.room_id) ?? null,
+      doorCameraId: doors.get(r.room_id) ?? null,
       cancelledAt: r.cancelled_at ? new Date(r.cancelled_at) : null,
     }));
   }
