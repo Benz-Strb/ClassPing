@@ -29,7 +29,7 @@ describe('checkCard', () => {
     });
   });
 
-  // PaddleOCR ตัดบรรทัดตรงช่องว่างก่อน ID ในบางขนาดภาพ (ภาพหน้าจอย่อเหลือสูง 1600)
+  // OCR อาจตัดบรรทัดตรงช่องว่างก่อน ID
   it('OCR ตัด OFFICIAL STUDENT VIRTUAL ID เป็นหลายบรรทัดติดกัน ยังผ่าน', () => {
     const card = CARD.flatMap((l) =>
       l.text === 'OFFICIAL STUDENT VIRTUAL ID'
@@ -134,6 +134,42 @@ describe('checkCard', () => {
         : [l],
     );
     expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+});
+
+describe('checkCard กับ Typhoon', () => {
+  // Typhoon ไม่ส่งความมั่นใจ และอาจคืนส่วนของบัตรเป็นตาราง HTML หรือ markdown
+  const TYPHOON: CardLine[] = [
+    { text: 'DHURAKIJ PUNDIT UNIVERSITY', score: null },
+    { text: '<table><tr><td>รหัสนักศึกษา</td><td>66112106</td></tr></table>', score: null },
+    { text: '| System Generate Date : | 23-10-2569 |', score: null },
+    { text: 'OFFICIAL STUDENT VIRTUAL ID', score: null },
+  ];
+
+  it('บรรทัดไม่มีคะแนนใช้ได้ทุกบรรทัด และเอาแท็กตารางออกก่อนอ่าน', () => {
+    expect(checkCard(TYPHOON, expect106)).toEqual({ ok: true });
+  });
+
+  it('รหัสคนอื่นในตารางยังจับได้', () => {
+    const card = TYPHOON.map((l) => ({ ...l, text: l.text.replace('66112106', '66112126') }));
+    expect(checkCard(card, expect106)).toMatchObject({ ok: false, code: 'CARD_NOT_YOURS' });
+  });
+
+  it('วันที่ที่ใช้ขีดยาวยังอ่านได้', () => {
+    const card = TYPHOON.map((l) => ({ ...l, text: l.text.replace('23-10-2569', '23–10–2569') }));
+    expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+
+  it('อ่านคณะและสาขาในเซลล์ตารางได้', () => {
+    expect(
+      readStudyInfo([
+        { text: '<td>วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี</td>', score: null },
+        { text: '| สาขาวิชาวิศวกรรมคอมพิวเตอร์ |', score: null },
+      ]),
+    ).toEqual({
+      faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
+      major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+    });
   });
 });
 

@@ -2,6 +2,11 @@
 
     cd ClassPing/services/face && uv run python scripts/try_camera.py
 
+ถ้าต่อกล้องหลายตัว (กล้องในเครื่อง, กล้อง USB, iPhone) ดูก่อนว่า index ไหนเปิดได้แล้วค่อยเลือก
+
+    uv run python scripts/try_camera.py --list
+    uv run python scripts/try_camera.py --camera 1
+
 ปุ่ม:  e = ลงทะเบียนหน้าที่อยู่ในกล้องเป็น "me" (กดซ้ำได้หลายมุม สูงสุด 5)
        c = ล้างหน้าที่ลงทะเบียนไว้
        q = ออก
@@ -10,6 +15,7 @@
 ครั้งแรก macOS จะถามสิทธิ์ใช้กล้องให้ Terminal
 """
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -26,6 +32,7 @@ from app.matching import match
 from app.quality import face_size, pick_enrollment_face, real_faces
 
 MAX_POSES = 5
+MAX_CAMERAS = 6  # จำนวน index ที่ลองไล่ตอน --list
 GREEN, YELLOW, RED, WHITE = (0, 200, 0), (0, 200, 255), (0, 0, 255), (255, 255, 255)
 
 # จุดตั้งต้นที่จะเอาไปตั้งใน API (แผน 5) ปรับตามตัวเลขที่เห็นจริง
@@ -46,15 +53,48 @@ def put(frame, text: str, org, color=WHITE, scale: float = 0.6) -> None:
     cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale, color, 1, cv2.LINE_AA)
 
 
+def list_cameras() -> None:
+    """ไล่เปิดกล้องทีละ index แล้วบอกว่าตัวไหนอ่านภาพได้ ขนาดภาพช่วยเดาว่าเป็นกล้องตัวไหน"""
+    found = 0
+    for index in range(MAX_CAMERAS):
+        camera = cv2.VideoCapture(index)
+        if camera.isOpened():
+            ok, frame = camera.read()
+            if ok:
+                height, width = frame.shape[:2]
+                print(f"  {index}: เปิดได้ {width}x{height}")
+                found += 1
+            else:
+                print(f"  {index}: เปิดได้แต่อ่านภาพไม่ได้")
+        camera.release()
+    if not found:
+        print("ไม่เจอกล้องที่อ่านภาพได้ ตรวจสิทธิ์กล้องของ Terminal ใน System Settings > Privacy")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="ลองจับหน้าจากกล้องแล้วดูคะแนนความเหมือนแบบสด ๆ")
+    parser.add_argument("--camera", type=int, default=0, help="index ของกล้องที่จะเปิด (ค่าเริ่มต้น 0)")
+    parser.add_argument("--list", action="store_true", help="แสดงกล้องที่เปิดได้แล้วออก")
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
+    if args.list:
+        list_cameras()
+        return
+
     # สคริปต์นี้ไม่ได้เปิดเป็น service จึงใช้ token หลอก
     settings = Settings(token="local-only" * 4)
     print("กำลังโหลดโมเดล...")
     engine = InsightFaceEngine(settings)
 
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(args.camera)
     if not camera.isOpened():
-        sys.exit("เปิดกล้องไม่ได้ ตรวจสิทธิ์กล้องของ Terminal ใน System Settings > Privacy")
+        sys.exit(
+            f"เปิดกล้อง index {args.camera} ไม่ได้ ลอง --list ดู index ที่ใช้ได้"
+            " หรือตรวจสิทธิ์กล้องของ Terminal ใน System Settings > Privacy"
+        )
 
     enrolled: list[np.ndarray] = []
     message = "press e to enroll"

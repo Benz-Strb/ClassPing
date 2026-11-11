@@ -88,23 +88,13 @@ describe('FaceClient', () => {
     expect(calls[0].url).toBe('http://face.test/faces/detect?crops=1');
   });
 
-  it('readCard ส่งรูปไปที่ /cards/read แล้วคืนบรรทัดกับหน้า', async () => {
-    const data = { lines: [{ text: '66112106', score: 1 }], faces: [] };
+  it('readCard ส่งรูปไปที่ /cards/read แล้วคืนหน้าในบัตร', async () => {
+    const data = { faces: [] };
     const calls = stubFetch(() => json(200, { data }));
     expect(await new FaceClient(config).readCard(image, 'image/png')).toEqual(
       data,
     );
     expect(calls[0].url).toBe('http://face.test/cards/read');
-    expect(calls[0].init.body).toBeInstanceOf(FormData);
-  });
-
-  it('readLeaveDocument ส่งรูปไปที่ /leave/ocr แล้วคืนบรรทัด OCR', async () => {
-    const data = { lines: [{ text: 'ลาป่วย', score: 0.98 }] };
-    const calls = stubFetch(() => json(200, { data }));
-    expect(
-      await new FaceClient(config).readLeaveDocument(image, 'application/pdf'),
-    ).toEqual(data);
-    expect(calls[0].url).toBe('http://face.test/leave/ocr');
     expect(calls[0].init.body).toBeInstanceOf(FormData);
   });
 
@@ -190,15 +180,6 @@ describe('FaceClient', () => {
     ).toBe('FACE_SERVICE_UNAVAILABLE');
   });
 
-  it('อ่านใบลาไม่ได้ข้อความพูดถึงการอ่านเอกสาร ไม่ใช่ระบบใบหน้า', async () => {
-    stubFetch(() => Promise.reject(new TypeError('fetch failed')));
-    const error = await rejection(
-      new FaceClient(config).readLeaveDocument(image, 'application/pdf'),
-    );
-    expect(error).toMatchObject({ status: 503, code: 'FACE_SERVICE_UNAVAILABLE' });
-    expect(error.message).toBe('อ่านข้อความจากหลักฐานไม่ได้ตอนนี้ ลองใหม่อีกครั้ง');
-  });
-
   it('timeout ได้ 503 และตั้ง signal ไว้ทุกครั้ง', async () => {
     const calls = stubFetch(() =>
       Promise.reject(new DOMException('timed out', 'TimeoutError')),
@@ -242,15 +223,4 @@ describe('FaceClient', () => {
       code: 'FACE_SERVICE_UNAVAILABLE',
     });
   });
-});
-
-it('ให้เวลา OCR เอกสารมากกว่าการตรวจใบหน้า', async () => {
-  stubFetch(() => json(200, { data: { lines: [] } }));
-  const timeout = vi.spyOn(AbortSignal, 'timeout');
-  try {
-    await new FaceClient(config).readLeaveDocument(image, 'application/pdf');
-    expect(timeout).toHaveBeenLastCalledWith(120_000);
-  } finally {
-    timeout.mockRestore();
-  }
 });

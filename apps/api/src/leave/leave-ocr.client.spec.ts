@@ -55,3 +55,16 @@ it('returns a timetable-specific error when OCR is unavailable', async () => {
   vi.stubGlobal('fetch', async () => { throw new Error('private provider detail'); });
   await expect(client().readTimetableDocument(Buffer.from('image'), 'image/png')).rejects.toMatchObject({ code: 'TIMETABLE_OCR_UNAVAILABLE' });
 });
+
+it('reads student cards with the same local OCR reader', async () => {
+  const fetch = vi.fn(async () => Response.json({ data: { lines: [{ text: '66112106', score: null }] } }));
+  vi.stubGlobal('fetch', fetch);
+  await expect(client().readCard(Buffer.from('image'), 'image/png')).resolves.toEqual({ lines: [{ text: '66112106', score: null }] });
+  const [url] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe('http://ocr.test/leave/ocr');
+});
+
+it('returns a card-specific error when OCR is unavailable', async () => {
+  vi.stubGlobal('fetch', async () => { throw new Error('private provider detail'); });
+  await expect(client().readCard(Buffer.from('image'), 'image/png')).rejects.toMatchObject({ code: 'CARD_OCR_UNAVAILABLE' });
+});

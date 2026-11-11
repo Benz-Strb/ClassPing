@@ -80,7 +80,7 @@ export class MediaService {
     const payload = verifyMediaToken(secret, token, this.now());
     if (!payload || payload.act !== 'publish' || payload.path !== req.path) return false;
     const camera = await this.cameras.findById(payload.sub);
-    if (!camera || camera.kind !== 'front' || req.path !== cameraPath(camera.id)) return false;
+    if (!camera || req.path !== cameraPath(camera.id)) return false;
     return (await this.sessions.liveSessionFor(camera, this.now())) !== null;
   }
 
