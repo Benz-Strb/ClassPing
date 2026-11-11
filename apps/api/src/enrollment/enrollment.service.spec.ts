@@ -325,7 +325,7 @@ describe('EnrollmentService.verifyIdentity', () => {
   it('ยืนยันผ่านแล้วเก็บคณะและสาขาจากบัตร อ่านไม่เจอก็ยังผ่าน', async () => {
     const { service, face, studyInfos } = setup();
     await service.verifyIdentity(unverified(), png(), jpeg());
-    expect(studyInfos).toEqual([{ faculty: null, major: null }]);
+    expect(studyInfos).toEqual([{ fullNameTh: null, faculty: null, major: null }]);
 
     const other = setup();
     other.face.card = {
@@ -339,6 +339,7 @@ describe('EnrollmentService.verifyIdentity', () => {
     await other.service.verifyIdentity(unverified(), png(), jpeg());
     expect(other.studyInfos).toEqual([
       {
+        fullNameTh: null,
         faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
         major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
       },
