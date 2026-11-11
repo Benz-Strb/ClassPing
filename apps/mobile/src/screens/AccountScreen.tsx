@@ -1,4 +1,5 @@
 import type {ReactNode} from 'react';
+import {ProfileAvatar} from '../ui/ProfileAvatar';
 import {StyleSheet, View} from 'react-native';
 import {Pressable, ScrollView, Text} from '../ui/primitives';
 import {colors} from '../ui/theme';
@@ -10,7 +11,7 @@ export function AccountScreen({me, face, banner, onSignOut}: {me: Me; face: Face
   return <ScrollView contentContainerStyle={styles.content}>
     <Text accessibilityRole="header" style={styles.title}>บัญชีของฉัน</Text>
     <View style={styles.profile}>
-      <View style={styles.avatar}><Text style={styles.initial}>{(me.fullName ?? me.email).trim().slice(0, 1).toUpperCase()}</Text></View>
+      <ProfileAvatar user={me} style={styles.avatar} textStyle={styles.initial} />
       <View style={styles.identity}><Text style={styles.name}>{me.fullName ?? me.email}</Text><Text selectable style={styles.muted}>{me.email}</Text></View>
     </View>
     <View style={styles.details}>
