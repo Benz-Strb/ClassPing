@@ -154,7 +154,11 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
           setCard(null);
           setCardError(message);
         }}
-        onComplete={setFace}
+        onComplete={(status) => {
+          setFace(status);
+          // ยืนยันบัตรแล้วชื่อไทย คณะ สาขาเปลี่ยน ดึงข้อมูลบัญชีใหม่
+          void refresh();
+        }}
         onUnauthorized={async (message) => {
           await supabase.auth.signOut();
           onRejected(message);
