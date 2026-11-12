@@ -9,7 +9,6 @@ import { Pressable, Text, TextInput } from '../ui/primitives';
 import { SelectField } from '../ui/SelectField';
 import { colors } from '../ui/theme';
 import { apiFetch } from '../lib/api';
-import { TimetableGrid } from './TimetableGrid';
 
 interface Row {
   courseCode: string; courseName: string; section: string; teacherName: string;
@@ -141,7 +140,6 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
     {hasRead && <>
 
       {persisted && <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.label}>บันทึกตารางเรียนไว้กับบัญชีแล้ว</Text><Text style={styles.note}>{expiresAt ? `เก็บถึง ${new Date(expiresAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })} · ไม่ต้องอัปโหลดซ้ำระหว่างเทอม` : 'เก็บไว้ 5 เดือน · ไม่ต้องอัปโหลดซ้ำระหว่างเทอม'}</Text></View>}
-      {rows.length > 0 && <TimetableGrid rows={rows} identity={identity ?? undefined} disabled={!!busy} />}
       <View style={styles.summary}>
         <Text accessibilityRole="header" style={styles.heading}>รายวิชาที่อ่านได้</Text>
         <Text style={styles.count}>{new Set(rows.map(row => `${row.courseCode}:${row.section}`)).size} วิชา · {rows.length} ช่วงเรียน</Text>
