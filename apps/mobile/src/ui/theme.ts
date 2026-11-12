@@ -24,6 +24,10 @@ export const workspace = {
   tint: '#F0EAF9',
   divider: '#EEEAF3',
   title: '#332B42',
+  camera: '#181222',
+  cameraActive: '#C4ADF4',
+  cameraComplete: '#82D9BC',
+  cameraScrim: 'rgba(24,18,34,0.82)',
 } as const;
 
 export const typography = {

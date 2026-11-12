@@ -1,3 +1,5 @@
+import { EnrollmentProgress } from '../ui/EnrollmentProgress';
+import { AppIcon } from '../ui/AppIcon';
 import { colors, typography, workspace } from '../ui/theme';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -45,7 +47,9 @@ export function ConsentScreen({ onAccepted, onContinueWithout, onSignOut }: Prop
 
   if (declined) {
     return (
-      <View style={styles.center}>
+      <ScrollView contentContainerStyle={styles.center}>
+        <View style={styles.heroIcon}><AppIcon name="shield" size={32} /></View>
+        <Text accessibilityRole="header" style={styles.title}>เลือกใช้งานได้ตามสะดวก</Text>
         <Text style={styles.body}>
           กล้องจะยังเช็คชื่อให้คุณไม่ได้ อาจารย์จะเช็คชื่อให้แทน ถ้าเปลี่ยนใจ กดลงทะเบียนใบหน้าในแอปได้ทุกเมื่อ ระบบจะถามยินยอมอีกครั้งตอนเปิดแอปใหม่
         </Text>
@@ -58,31 +62,38 @@ export function ConsentScreen({ onAccepted, onContinueWithout, onSignOut }: Prop
         <Pressable style={styles.link} onPress={onSignOut}>
           <Text style={styles.linkText}>ออกจากระบบ</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     );
   }
 
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>ยินยอมให้ใช้ข้อมูลใบหน้า</Text>
+        <EnrollmentProgress current={0} />
+        <View style={styles.heroIcon}><AppIcon name="shield" size={32} /></View>
+        <Text accessibilityRole="header" style={styles.title}>ยินยอมให้ใช้ข้อมูลใบหน้า</Text>
+        <View style={styles.reading}>
         {PARAGRAPHS.map((text) => (
           <Text key={text} style={styles.body}>
             {text}
           </Text>
         ))}
-        <Text style={styles.subtitle}>กล้องในห้องเรียนและห้องสอบ</Text>
+        </View>
+        <View style={styles.notice}>
+        <View style={styles.noticeHeading}><AppIcon name="camera" size={20} /><Text style={styles.subtitle}>กล้องในห้องเรียนและห้องสอบ</Text></View>
         {CCTV_PARAGRAPHS.map((text) => (
           <Text key={text} style={styles.note}>
             {text}
           </Text>
         ))}
+        </View>
       </ScrollView>
       <View style={styles.footer}>
-        {error && <Text style={styles.error}>{error}</Text>}
+        {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         <Pressable
           style={[styles.primary, saving && styles.disabled]}
           onPress={accept}
+          accessibilityState={{ busy: saving, disabled: saving }}
           disabled={saving}
         >
           {saving ? (
@@ -101,17 +112,21 @@ export function ConsentScreen({ onAccepted, onContinueWithout, onSignOut }: Prop
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: workspace.background },
-  content: { padding: 24, paddingTop: 32, gap: 16 },
-  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: workspace.background },
+  content: { padding: 24, gap: 20, maxWidth: 640 },
+  center: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: workspace.background },
+  heroIcon: { width: 64, height: 64, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.selected },
+  reading: { gap: 20, padding: 20, backgroundColor: colors.surface, borderRadius: 16 },
+  notice: { gap: 16, padding: 20, backgroundColor: workspace.tint, borderRadius: 16 },
+  noticeHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   title: { ...typography.pageTitle },
-  body: { fontSize: 15, lineHeight: 24, color: colors.muted },
-  subtitle: { fontSize: 16, fontWeight: '600', marginTop: 8 },
-  note: { fontSize: 13, lineHeight: 21, color: colors.muted },
-  footer: { width: "100%", maxWidth: 800, alignSelf: "center", padding: 24, paddingBottom: 16, gap: 10, borderTopWidth: 1, borderColor: colors.border },
+  body: { fontSize: 16, lineHeight: 27, color: colors.ink },
+  subtitle: { fontSize: 16, lineHeight: 26, fontWeight: '500', flex: 1 },
+  note: { fontSize: 14, lineHeight: 24, color: colors.muted },
+  footer: { width: "100%", maxWidth: 640, alignSelf: "center", padding: 24, paddingBottom: 16, gap: 10, backgroundColor: colors.surface },
   error: { color: colors.danger },
-  primary: { minHeight: 48, justifyContent: "center", backgroundColor: colors.action, borderRadius: 12, padding: 14, alignItems: 'center' },
+  primary: { minHeight: 52, justifyContent: "center", backgroundColor: colors.action, borderRadius: 12, padding: 14, alignItems: 'center' },
   primaryText: { color: colors.surface, fontSize: 16 },
-  secondary: { minHeight: 48, justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, alignItems: 'center' },
+  secondary: { minHeight: 52, justifyContent: "center", borderWidth: 1, borderColor: colors.outline, borderRadius: 12, padding: 14, alignItems: 'center' },
   disabled: { opacity: 0.5 },
   link: { alignItems: 'center', padding: 8 },
   linkText: { color: colors.muted },
