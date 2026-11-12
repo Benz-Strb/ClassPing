@@ -1,6 +1,6 @@
-import { colors } from '../ui/theme';
+import { colors, typography, workspace } from '../ui/theme';
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import { Pressable, Text, TextInput } from '../ui/primitives';
 import { apiFetch } from "../lib/api";
 import { formatBuddhistDate, formatOutOfRoom, formatRate, parseFilterDate } from "../lib/attendance";
@@ -44,6 +44,8 @@ const time = (value: string) =>
   });
 
 export function AttendanceCourseSection({ courseId }: { courseId: string }) {
+  const [statusFilter, setStatusFilter] = useState<keyof typeof STATUS | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [kind, setKind] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -74,8 +76,31 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
     };
   }, [courseId, query, reload]);
 
+  const sessions = data?.student.sessions.filter(session => !statusFilter || session.status === statusFilter) ?? [];
+  const summaries = [
+    { key: 'present', label: 'มาเรียน', color: colors.action },
+    { key: 'late', label: 'มาสาย', color: colors.warning },
+    { key: 'absent', label: 'ขาด', color: colors.danger },
+    { key: 'leave', label: 'ลา', color: colors.ink },
+  ] as const;
+
   return (
     <View style={{ gap: 16, marginTop: 16 }}>
+      <Text accessibilityRole="header" style={styles.heading}>ผลเข้าเรียนของฉัน</Text>
+      {data && <View style={styles.summary}>
+        <Text style={styles.rate}>อัตราเข้าเรียน {formatRate(data.student.counts, data.student.attendanceRate)}</Text>
+        <View style={styles.stats}>
+          {summaries.map(item => <Pressable key={item.key} accessibilityLabel={`${item.label} ${data.student.counts[item.key]} คาบ`} accessibilityState={{ selected: statusFilter === item.key }} onPress={() => setStatusFilter(current => current === item.key ? null : item.key)} style={[styles.stat, statusFilter === item.key && styles.selectedStat]}>
+            <Text style={[styles.count, { color: item.color }]}>{data.student.counts[item.key]}</Text><Text style={styles.statLabel}>{item.label}</Text>
+          </Pressable>)}
+        </View>
+        <Text style={styles.note}>รอตรวจ {data.student.counts.pending} คาบ · ยังไม่ใช่ผลยืนยัน</Text>
+      </View>}
+      <View style={styles.toolbar}>
+        <Pressable accessibilityState={{ selected: statusFilter === null }} onPress={() => setStatusFilter(null)} style={styles.filterButton}><Text style={styles.link}>ทั้งหมด</Text></Pressable>
+        <Pressable accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(value => !value)} style={styles.filterButton}><Text style={styles.link}>{filtersOpen ? 'ซ่อนตัวกรอง' : 'กรองวัน / ประเภทคาบ'}</Text></Pressable>
+      </View>
+      {filtersOpen && <View style={styles.filters}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {[
           ["all", "ทั้งหมด"],
@@ -140,28 +165,28 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
       >
         <Text style={{ color: colors.action, padding: 8 }}>แสดงผล / โหลดใหม่</Text>
       </Pressable>
-      {filterError && <Text style={{ color: "#dc2626" }}>{filterError}</Text>}
+      {filterError && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{filterError}</Text>}
+      </View>}
       {error ? (
-        <Text style={{ color: colors.danger }}>{error}</Text>
+        <View style={styles.filters}><Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text><Pressable style={styles.filterButton} onPress={() => setReload(value => value + 1)}><Text style={styles.link}>ลองใหม่</Text></Pressable></View>
       ) : !data ? (
         <ActivityIndicator accessibilityLabel="กำลังโหลดรายละเอียด" />
       ) : (
         <>
-          <Text>อัตราการเข้าเรียน: {formatRate(data.student.counts, data.student.attendanceRate)}</Text>
           {formatOutOfRoom(data.student.outOfRoomSeconds ?? 0) && (
             <Text>รวมทุกคาบ {formatOutOfRoom(data.student.outOfRoomSeconds ?? 0)}</Text>
           )}
-          {data.student.sessions.length === 0 && (
-            <Text>ไม่มีคาบตามตัวกรองนี้</Text>
+          {sessions.length === 0 && (
+            <Text>ไม่มีคาบตามสถานะหรือตัวกรองที่เลือก</Text>
           )}
-          {data.student.sessions.map((session) => (
+          {sessions.map((session) => (
             <View
               key={session.sessionId}
               style={{
-                borderTopWidth: 1,
-                borderColor: colors.border,
-                paddingTop: 8,
-                gap: 4,
+                backgroundColor: colors.surface,
+                borderRadius: 16,
+                padding: 16,
+                gap: 8,
               }}
             >
               <Text>
@@ -173,7 +198,7 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
                 {time(session.startsAt)}–{time(session.endsAt)} · ห้อง{" "}
                 {session.roomName ?? "-"}
               </Text>
-              <Text>{STATUS[session.status]}</Text>
+              <Text style={[styles.status, { color: session.status === 'absent' ? colors.danger : session.status === 'late' ? colors.warning : session.status === 'present' ? colors.action : colors.ink }]}>{STATUS[session.status]}</Text>
               {formatOutOfRoom(session.outOfRoomSeconds ?? 0) && (
                 <Text>{formatOutOfRoom(session.outOfRoomSeconds ?? 0)}</Text>
               )}
@@ -199,3 +224,20 @@ export function AttendanceCourseSection({ courseId }: { courseId: string }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  heading: { ...typography.sectionTitle },
+  summary: { padding: 16, borderRadius: 16, backgroundColor: colors.surface, gap: 16 },
+  rate: { color: colors.ink, fontSize: 16, fontWeight: '500' },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  stat: { flex: 1, minWidth: 64, minHeight: 80, padding: 8, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: workspace.background, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+  selectedStat: { borderColor: colors.action, backgroundColor: colors.selected },
+  count: { fontSize: 24, lineHeight: 34, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  statLabel: { fontSize: 13, lineHeight: 22, color: colors.ink },
+  note: { fontSize: 13, lineHeight: 22, color: colors.muted },
+  toolbar: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 },
+  filterButton: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 12 },
+  link: { color: colors.action, fontSize: 14, fontWeight: '500' },
+  filters: { gap: 12 },
+  status: { fontSize: 16, fontWeight: '600' },
+});

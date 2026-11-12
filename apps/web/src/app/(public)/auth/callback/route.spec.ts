@@ -26,3 +26,15 @@ it('code หมดอายุหรือแลกซ้ำกลับ login',
   const response = await GET(new NextRequest('http://localhost:3000/auth/callback?code=expired'));
   expect(response.headers.get('location')).toContain('/login?error=');
 });
+
+it.each([false, true])('popup กลับไปแจ้งหน้าต่างหลักและล้าง cookie: error=%s', async (failed) => {
+  const attempt = '11111111-1111-4111-8111-111111111111';
+  exchange.mockResolvedValue({ error: null });
+  const request = new NextRequest(`http://localhost:3000/auth/callback?${failed ? 'error=denied' : 'code=ok'}`, {
+    headers: { Cookie: `classping-oauth-popup=${attempt}` },
+  });
+  const response = await GET(request);
+  expect(response.headers.get('location')).toBe(`http://localhost:3000/auth/popup?attempt=${attempt}${failed ? '&error=oauth' : ''}`);
+  expect(response.cookies.get('classping-oauth-popup')?.maxAge).toBe(0);
+  expect(response.headers.get('cache-control')).toContain('no-store');
+});

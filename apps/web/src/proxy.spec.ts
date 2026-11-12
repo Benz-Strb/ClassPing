@@ -7,9 +7,9 @@ import { proxy } from './proxy';
 
 it('refresh ส่ง cookie ใหม่ให้ทั้ง Server Components และเบราว์เซอร์ โดยไม่ให้ cache session', async () => {
   createServerClient.mockImplementation((_url, _key, options) => ({ auth: {
-    getClaims: async () => options.cookies.setAll([
+    getClaims: async () => { options.cookies.setAll([
       { name: 'sb-test-auth-token', value: 'refreshed-session', options: { path: '/', sameSite: 'lax' } },
-    ], { Pragma: 'no-cache', Expires: '0' }),
+    ], { Pragma: 'no-cache', Expires: '0' }); return { data: { claims: { sub: 'user-1' } } }; },
   } }));
   const request = new NextRequest('http://localhost:3000/me');
   const response = await proxy(request);

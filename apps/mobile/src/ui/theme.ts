@@ -18,3 +18,15 @@ export const fontAssets = {
   'Geist-SemiBold': require('../../assets/fonts/Geist-600.ttf'),
   'Geist-Bold': require('../../assets/fonts/Geist-700.ttf'),
 };
+
+export const workspace = {
+  background: '#F7F5FA',
+  tint: '#F0EAF9',
+  divider: '#EEEAF3',
+  title: '#332B42',
+} as const;
+
+export const typography = {
+  pageTitle: { fontSize: 24, lineHeight: 34, fontWeight: '600', color: workspace.title },
+  sectionTitle: { fontSize: 18, lineHeight: 28, fontWeight: '500', color: workspace.title },
+} as const;

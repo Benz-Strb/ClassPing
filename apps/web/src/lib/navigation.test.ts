@@ -8,5 +8,5 @@ test('guest and student menus exclude staff routes', () => {
 });
 test('teacher and admin menus expose their own tasks', () => {
   assert.deepEqual(navigationFor('teacher').map((link) => link.href), ['/', '/courses', '/live', '/leave/review', '/teacher/curricula', '/me']);
-  assert.deepEqual(navigationFor('admin').map((link) => link.href), ['/admin', '/admin/users', '/admin/rooms', '/admin/cameras', '/admin/video-views', '/admin/courses', '/admin/reference', '/admin/knowledge']);
+  assert.deepEqual(navigationFor('admin').map((link) => link.href), ['/admin', '/admin/users', '/admin/rooms', '/admin/cameras', '/admin/video-views', '/admin/courses', '/admin/knowledge']);
 });

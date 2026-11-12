@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Pressable, ScrollView, Text } from "../ui/primitives";
-import { colors } from "../ui/theme";
+import { colors, typography } from "../ui/theme";
 import { LeaveScreen } from "./LeaveScreen";
 import { TimetableUpload } from "./TimetableUpload";
 
@@ -79,15 +79,17 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   timetable: { padding: 24, flexGrow: 1, width: "100%", maxWidth: 800, alignSelf: "center" },
   hidden: { display: "none" },
-  heading: { paddingHorizontal: 24, paddingTop: 16, gap: 12 },
-  title: { fontSize: 24, fontWeight: "600", color: colors.identity },
-  tabs: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  heading: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 4, gap: 20, width: "100%", maxWidth: 800, alignSelf: "center" },
+  title: { ...typography.pageTitle },
+  tabs: { flexDirection: "row", gap: 4, backgroundColor: colors.selected, borderRadius: 14, padding: 4 },
   tab: {
     minHeight: 48,
     padding: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
   },
-  selected: { borderBottomColor: colors.action },
+  selected: { backgroundColor: colors.surface },
   selectedText: { color: colors.action, fontWeight: "600" },
 });

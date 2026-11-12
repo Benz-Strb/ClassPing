@@ -139,3 +139,13 @@ Evidence boundary: `.impeccable/review/verdict-web-ios.md` ships only the four s
 - **Don't** equate pending or unavailable attendance with absence.
 - **Don't** use color alone to communicate status.
 - **Don't** introduce a dark palette without a separate implementation and review.
+
+## Mobile interior refinement — 2026-11-12
+
+The five student tabs use a lavender workspace ground (`#F7F5FA`) and quiet ink titles (`#332B42`). Login retains its approved background and motion. Primary actions keep `#7652C5`; the header uses the same checkmark logo without a wordmark. Page titles share 24/34 semibold and section titles 18/28 medium through native theme roles. White 16pt-radius surfaces separate records without heavy outlines; today's schedule uses `#F0EAF9`. Tabs use a selected lavender icon background instead of a top rule. Account details, course records, chat exchanges, document tabs and supporting forms follow the same spacing and control treatment. Preserve the simplified assistant screen and existing backend rules. Safe-area ownership remains with App for authenticated top/left/right and StudentNavigator for the bottom navigation; login owns its own foreground safe area over a full-screen background.
+
+UI UX Pro Max was installed from `nextlevelbuilder/ui-ux-pro-max-skill` and applied to the mobile pass. Its automatic system search returned landing-page patterns, so those patterns, alternate palettes and fonts were not adopted. Verified React Native guidance and the native professional checklist informed touch feedback, safe-area ownership, semantic labels and readable compact text; navigation and attendance labels use at least 12pt. Device visual QA remains pending; TypeScript and an iOS Metro export passed.
+
+### Mobile component hierarchy follow-up
+
+Use shared `AppIcon` stroke geometry and `SectionHeading` across schedule and attendance surfaces. Course rows show course identity and a chevron; account detail rows use quiet icons and stack at narrow width or larger Dynamic Type. The assistant keeps its requested minimal empty screen and uses an accessible send icon control. Form boundaries use the outline role rather than faint card dividers. Measured text pairs: action/white 5.55:1, muted/workspace 5.19:1, title/workspace 12.39:1 and action/selected 4.63:1. These measurements cover selected text pairs, not a complete accessibility conformance claim. Device, screen-reader and large-type visual verification remain required.
