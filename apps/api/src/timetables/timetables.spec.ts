@@ -1,3 +1,4 @@
+import { timetableExpiry } from './saved-timetable.js';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
@@ -8,7 +9,6 @@ import {
 import { matchTimetableRow, TimetablesService } from './timetables.service.js';
 import { signTimetableIdentity } from './timetable-identity.js';
 import type { AppConfig } from '../config/config.js';
-import { timetableExpiry } from './saved-timetable.js';
 import type { MatchCourse, TimetablesRepo } from './timetables.repo.js';
 import type { LeaveOcrClient } from '../leave/leave-ocr.client.js';
 import type { CoursesService } from '../courses/courses.service.js';
@@ -213,6 +213,40 @@ describe('timetable import and enrollment', () => {
     expect(saved.rows).toEqual([row]);
     expect(saved.expiresAt).toBe(timetableExpiry(new Date(saved.savedAt)));
     expect(repo.candidates).not.toHaveBeenCalled();
+    expect(roster.addCodes).not.toHaveBeenCalled();
+  });
+  it('does not return an expired saved timetable', async () => {
+    repo.saved.mockResolvedValue({ identity, ownershipProof, rows: [row], savedAt: '2019-01-01', expiresAt: '2020-01-01' });
+    expect(await service.saved(student)).toBeNull();
+  });
+  it('keeps the original expiry when reviewed rows are saved', async () => {
+    repo.save.mockImplementation(async (_id, value) => value);
+    const expiresAt = new Date(Date.now() + 86400000).toISOString();
+    const proof = signTimetableIdentity(student.id, identity, expiresAt, 'test-secret', [{ code: 'CE360', section: '001' }]);
+    const saved = await service.save(student, { rows: [row], ownershipProof: proof });
+    expect(saved.expiresAt).toBe(expiresAt);
+  });
+  it('does not restore another owner or tampered saved proof', async () => {
+    repo.saved.mockResolvedValue({ identity, rows: [row], ownershipProof: 'forged', savedAt: new Date().toISOString(), expiresAt: '2099-01-01' });
+    await expect(service.saved(student)).rejects.toMatchObject({ code: 'TIMETABLE_VERIFICATION_REQUIRED' });
+  });
+  it('automatically persists uploaded rows, including incomplete OCR fields', async () => {
+    ocr.readTimetableDocument.mockResolvedValue({ lines: [
+      { text: 'เลขทะเบียน : 65000001 นายสมชาย ใจดี' },
+      { text: '<table><tr><th>รหัสวิชา</th><th>ชื่อวิชา</th><th>กลุ่มเรียน</th><th>ห้องเรียน/วันเวลาเรียน</th><th>อาจารย์ผู้สอน</th></tr><tr><td>CE360</td><td>Software</td><td>001</td><td>จ. 09:00-12:00 ห้อง 101</td><td></td></tr></table>' },
+    ] });
+    repo.save.mockImplementation(async (_id, value) => value);
+    const buffer = Buffer.from('%PDF-test');
+    const draft = await service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' });
+    expect(draft.rows.length).toBeGreaterThan(0);
+    expect(repo.save).toHaveBeenCalledWith(student.id, expect.objectContaining({ rows: draft.rows, expiresAt: timetableExpiry(new Date(draft.savedTimetable!.savedAt)) }));
+    expect(draft.savedTimetable?.rows).toEqual(draft.rows);
+    expect(draft.saveError).toBeNull();
+    repo.save.mockRejectedValue(new Error('database unavailable'));
+    const failed = await service.preview(student, { buffer, size: buffer.length, mimetype: 'application/pdf' });
+    expect(failed.rows).toEqual(draft.rows);
+    expect(failed.savedTimetable).toBeNull();
+    expect(failed.saveError).toBeTruthy();
     expect(roster.addCodes).not.toHaveBeenCalled();
   });
   it('loads only the authenticated user timetable', async () => {

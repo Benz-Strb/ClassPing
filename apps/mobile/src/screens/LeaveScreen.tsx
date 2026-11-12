@@ -1,5 +1,5 @@
 import { SelectField } from '../ui/SelectField';
-import { colors } from '../ui/theme';
+import { colors, typography, workspace } from '../ui/theme';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, RefreshControl, StyleSheet, View } from 'react-native';
 import { Pressable, ScrollView, Text, TextInput } from '../ui/primitives';
@@ -401,7 +401,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, width: "100%", maxWidth: 800, alignSelf: "center", padding: 24, gap: 16, backgroundColor: colors.background },
+  container: { flexGrow: 1, width: "100%", maxWidth: 800, alignSelf: "center", padding: 24, gap: 16, backgroundColor: workspace.background },
   center: {
     flex: 1,
     justifyContent: "center",
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  title: { fontSize: 27, lineHeight: 38, fontWeight: "500", color: colors.identity },
+  title: { ...typography.pageTitle },
   heading: { fontSize: 17, fontWeight: "500", marginTop: 12, color: colors.identity },
   help: { color: colors.muted, lineHeight: 20 },
   error: {
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   secondary: {
     minHeight: 48, justifyContent: "center",
     borderWidth: 1,
-    borderColor: colors.outline,
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   requestTitle: { fontSize: 16, fontWeight: "600" },
   status: {
     borderWidth: 1,
-    borderColor: colors.outline,
+    borderColor: colors.border,
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 4,

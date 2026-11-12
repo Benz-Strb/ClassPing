@@ -1,4 +1,4 @@
-import { colors } from '../ui/theme';
+import { colors, typography, workspace } from '../ui/theme';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Pressable, ScrollView, Text } from '../ui/primitives';
@@ -100,10 +100,10 @@ export function ConsentScreen({ onAccepted, onContinueWithout, onSignOut }: Prop
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: workspace.background },
   content: { padding: 24, paddingTop: 32, gap: 16 },
-  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.background },
-  title: { fontSize: 27, lineHeight: 38, fontWeight: '500', color: colors.identity },
+  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: workspace.background },
+  title: { ...typography.pageTitle },
   body: { fontSize: 15, lineHeight: 24, color: colors.muted },
   subtitle: { fontSize: 16, fontWeight: '600', marginTop: 8 },
   note: { fontSize: 13, lineHeight: 21, color: colors.muted },
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   error: { color: colors.danger },
   primary: { minHeight: 48, justifyContent: "center", backgroundColor: colors.action, borderRadius: 12, padding: 14, alignItems: 'center' },
   primaryText: { color: colors.surface, fontSize: 16 },
-  secondary: { minHeight: 48, justifyContent: "center", borderWidth: 1, borderColor: colors.outline, borderRadius: 12, padding: 14, alignItems: 'center' },
+  secondary: { minHeight: 48, justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, alignItems: 'center' },
   disabled: { opacity: 0.5 },
   link: { alignItems: 'center', padding: 8 },
   linkText: { color: colors.muted },

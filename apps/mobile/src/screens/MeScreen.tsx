@@ -19,10 +19,11 @@ interface Props {
   onRejected: (message: string) => void;
   // ออกจากระบบตามปกติ ให้ล้างข้อความเก่าที่หน้า login
   onSignedOut?: () => void;
+  onReady?: (success: boolean) => void;
 }
 
 // นักศึกษาต้องยินยอมก่อน ยืนยันบัตร แล้วถ่ายรูปให้ครบ ถึงจะเห็นข้อมูลบัญชี
-export function MeScreen({ onRejected, onSignedOut }: Props) {
+export function MeScreen({ onRejected, onSignedOut, onReady }: Props) {
   const [me, setMe] = useState<Me | null>(null);
   const [face, setFace] = useState<FaceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,10 @@ export function MeScreen({ onRejected, onSignedOut }: Props) {
   const [consentDeclined, setConsentDeclined] = useState(false);
   const [enrolling, setEnrolling] = useState(true);
   const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (me || error) onReady?.(!error);
+  }, [me, error, onReady]);
+
   const cardRef = useRef<string | null>(null);
   cardRef.current = card;
 

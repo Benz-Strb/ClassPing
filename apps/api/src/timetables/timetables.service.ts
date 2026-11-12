@@ -126,18 +126,25 @@ export class TimetablesService {
     this.student(user);
     const saved = await this.repo.saved(user.id);
     if (!saved?.identity || !saved.ownershipProof) return null;
-    verifyTimetableIdentity(user, saved.ownershipProof, this.config.supabaseServiceRoleKey);
-    return saved;
+    const expiresAt = saved.expiresAt ?? timetableExpiry(new Date(saved.savedAt));
+    if (Date.parse(expiresAt) <= Date.now()) return null;
+    const { identity, courses } = readTimetableProof(user, saved.ownershipProof, this.config.supabaseServiceRoleKey, true);
+    return {
+      ...saved, expiresAt, identity,
+      ownershipProof: signTimetableIdentity(user.id, identity, expiresAt, this.config.supabaseServiceRoleKey, courses),
+    };
   }
   async save(user: AppUser, body: unknown) {
     this.student(user);
     const { rows, ownershipProof } = parseBody(saveTimetableSchema, body);
-    const { identity, courses } = readTimetableProof(user, ownershipProof, this.config.supabaseServiceRoleKey);
+    const { identity, courses, expiresAt: proofExpiry } = readTimetableProof(user, ownershipProof, this.config.supabaseServiceRoleKey);
     const savedAt = new Date();
-    // เซ็นใหม่ให้หมดอายุตามตารางที่บันทึก รายวิชาคงตามเอกสารเดิม ไม่ใช่ตามแถวที่แก้
+    const maximumExpiry = timetableExpiry(savedAt);
+    const expiresAt = proofExpiry && Date.parse(proofExpiry) < Date.parse(maximumExpiry) ? proofExpiry : maximumExpiry;
+    // Preserve signed document courses when saving reviewed rows.
     return this.repo.save(user.id, {
-      rows, savedAt: savedAt.toISOString(), expiresAt: timetableExpiry(savedAt), identity,
-      ownershipProof: signTimetableIdentity(user.id, identity, timetableExpiry(savedAt), this.config.supabaseServiceRoleKey, courses),
+      rows, savedAt: savedAt.toISOString(), expiresAt, identity,
+      ownershipProof: signTimetableIdentity(user.id, identity, expiresAt, this.config.supabaseServiceRoleKey, courses),
     });
   }
   async verifyOwner(user: AppUser, body: unknown) {
@@ -177,16 +184,28 @@ export class TimetablesService {
       ocr.lines.map((line) => line.text).join('\n'),
     );
     if (!courseId) checkTimetableIdentity(user, draft.identity);
-    return {
-      ...draft,
-      ownershipProof: !courseId && draft.identity
-        ? signTimetableIdentity(user.id, draft.identity, timetableExpiry(new Date()), this.config.supabaseServiceRoleKey, documentCourses(draft.rows))
-        : null,
-      matches: courseId
-        ? []
-        : await this.matches(user, { rows: draft.rows }, true),
-    };
+    const matches = courseId ? [] : await this.matches(user, { rows: draft.rows }, true);
+    const savedAt = new Date();
+    const expiresAt = timetableExpiry(savedAt);
+    const ownershipProof = !courseId && draft.identity
+      ? signTimetableIdentity(user.id, draft.identity, expiresAt, this.config.supabaseServiceRoleKey, documentCourses(draft.rows))
+      : null;
+    let savedTimetable = null;
+    let saveError: string | null = null;
+    if (!courseId && draft.identity && ownershipProof && draft.rows.length) {
+      try {
+        const { rows } = parseBody(importSchema, { rows: draft.rows });
+        savedTimetable = await this.repo.save(user.id, {
+          rows, identity: draft.identity, ownershipProof,
+          savedAt: savedAt.toISOString(), expiresAt,
+        });
+      } catch {
+        saveError = 'อ่านตารางแล้ว แต่บันทึกอัตโนมัติไม่สำเร็จ กรุณากดบันทึกอีกครั้ง';
+      }
+    }
+    return { ...draft, ownershipProof, matches, savedTimetable, saveError };
   }
+
   async matches(user: AppUser, body: unknown, allowEmpty = false) {
     this.student(user);
     if (allowEmpty && (body as { rows: unknown[] }).rows.length === 0)

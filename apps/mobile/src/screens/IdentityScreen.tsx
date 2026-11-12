@@ -1,4 +1,4 @@
-import { colors } from '../ui/theme';
+import { colors, typography, workspace } from '../ui/theme';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet } from 'react-native';
 import { Pressable, Text, ScrollView } from '../ui/primitives';
@@ -67,8 +67,8 @@ export function IdentityScreen({ error, onPicked, onSkip, onSignOut }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.background },
-  title: { fontSize: 27, lineHeight: 38, fontWeight: '500', color: colors.identity },
+  root: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: workspace.background },
+  title: { ...typography.pageTitle },
   body: { fontSize: 15, lineHeight: 24, color: colors.muted },
   error: { color: colors.danger, fontSize: 15 },
   primary: { backgroundColor: colors.action, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },

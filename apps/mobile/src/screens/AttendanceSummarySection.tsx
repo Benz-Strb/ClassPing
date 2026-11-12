@@ -1,4 +1,5 @@
-import { colors } from '../ui/theme';
+import { SectionHeading } from '../ui/SectionHeading';
+import { colors, workspace } from '../ui/theme';
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Pressable, Text } from '../ui/primitives';
@@ -84,7 +85,7 @@ export function AttendanceSummarySection({
 
   return (
     <View style={styles.section} accessibilityRole="summary">
-      <Text style={styles.heading}>{mode === "courses" ? "รายวิชาของฉัน" : "สถิติการเข้าเรียน"}</Text>
+      <SectionHeading icon={mode === "courses" ? "book" : "chart"}>{mode === "courses" ? "รายวิชาของฉัน" : "สถิติการเข้าเรียน"}</SectionHeading>
 
       {error ? (
         <View style={[styles.messageCard, onOpenAccount && styles.homeMessage]}>
@@ -151,8 +152,7 @@ export function AttendanceSummarySection({
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 12 },
-  heading: { fontSize: 20, fontWeight: "500", color: colors.identity },
+  section: { gap: 16 },
   messageCard: {
     minHeight: 64,
     borderWidth: 1,
@@ -175,19 +175,19 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 4,
   },
-  cardLabel: { color: colors.identity, fontSize: 14 },
+  cardLabel: { color: colors.muted, fontSize: 13 },
   overallHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  rate: { color: colors.action, fontSize: 24, lineHeight: 36, fontWeight: "500" },
-  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  statItem: { flex: 1, minWidth: 44, alignItems: "center", gap: 2 },
+  rate: { color: colors.action, fontSize: 26, lineHeight: 36, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 },
+  statItem: { flex: 1, minWidth: 44, alignItems: "center", gap: 4, paddingVertical: 12, backgroundColor: workspace.background, borderRadius: 12 },
   largeStatItem: { minWidth: 96 },
-  statNumber: { fontSize: 18, fontWeight: "700" },
+  statNumber: { fontSize: 20, lineHeight: 28, fontWeight: "600", fontVariant: ["tabular-nums"] },
   present: { color: colors.action },
   late: { color: colors.warning },
   absent: { color: colors.danger },
   leave: { color: colors.ink },
   pending: { color: colors.muted },
-  statLabel: { color: colors.muted, fontSize: 12 },
+  statLabel: { color: colors.muted, fontSize: 12, lineHeight: 20 },
   courseCode: { color: colors.ink, fontSize: 16, fontWeight: "600" },
   courseName: { color: colors.muted },
   muted: { color: colors.muted, fontSize: 14, lineHeight: 22 },

@@ -40,7 +40,7 @@ export function SelectField({ label, placeholder, value, options, onChange, disa
 
 const styles = StyleSheet.create({
   group: { gap: 8 },
-  label: { fontSize: 16, fontWeight: '500', color: colors.identity },
+  label: { fontSize: 14, fontWeight: '500', color: colors.ink },
   trigger: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: 1, borderColor: colors.outline, borderRadius: 12, backgroundColor: colors.surface },
   active: { borderColor: colors.action },
   value: { flex: 1 },

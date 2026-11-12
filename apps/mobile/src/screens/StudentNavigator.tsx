@@ -1,4 +1,5 @@
-import { layout, colors } from '../ui/theme';
+import { SavedTimetableSection } from './SavedTimetableSection';
+import { layout, colors, typography, workspace } from '../ui/theme';
 import { ProfileAvatar } from '../ui/ProfileAvatar';
 import { useEffect, useState } from 'react';
 import { AppState, BackHandler, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -68,16 +69,17 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
   return <View style={[styles.root, wide && styles.wide]}>
     <View style={[styles.main, wide && { paddingBottom: bottom }]}>
       <View style={styles.header}>
-        <View style={styles.brandGroup}><View style={styles.brandMark}><Text allowFontScaling={false} style={styles.brandInitial}>C</Text></View><Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={styles.brand}>ClassPing</Text></View>
-        <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatar}><ProfileAvatar user={me} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
+        <View style={styles.brandGroup} accessible accessibilityLabel="ClassPing"><View style={styles.brandMark}><Svg width={25} height={25} viewBox="0 0 64 64" fill="none" accessible={false}><Path d="M43 16a22 22 0 1 0 5 31m-24-16 8 8 19-22" stroke={colors.onAction} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" /></Svg></View></View>
+        <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatarButton}><ProfileAvatar user={me} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
       </View>
       {TABS.map(({ key }) => visited.has(key) && <View key={key} style={[styles.scene, tab !== key && styles.hidden]} accessibilityElementsHidden={tab !== key} importantForAccessibility={tab === key ? 'auto' : 'no-hide-descendants'}>
         {key === 'home' && <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={pulling} tintColor={colors.action} onRefresh={() => { setPulling(true); setPullTick((value) => value + 1); }} />}>
           <View style={styles.greeting}>
-            <Text accessibilityRole="header" maxFontSizeMultiplier={1.8} style={styles.homeName}>ตารางและงานของวันนี้</Text>
+            <Text accessibilityRole="header" maxFontSizeMultiplier={1.8} style={styles.homeName}>วันนี้ของคุณ</Text>
             <Text style={styles.secondary}>{me.fullName ?? me.studentId}</Text>
           </View>
           {enrollBanner}
+          <SavedTimetableSection active={tab === 'home'} refreshTick={focusTick + pullTick} />
           <View style={[styles.dashboard, wide && styles.dashboardWide]}>
             <View style={[styles.panel, styles.schedulePanel, wide && styles.widePanel]}><HomeStudies refreshTick={focusTick + pullTick} onOpenCourses={() => navigate('courses')} onOpenAccount={() => navigate('account')} /></View>
             <View style={[styles.panel, wide && styles.widePanel]}><AttendanceSummarySection active={tab === 'home'} refreshTick={focusTick + pullTick} onSettled={() => setPulling(false)} onOpenAccount={() => navigate('account')} /></View>
@@ -85,12 +87,11 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
           <View style={styles.shortcuts}>
             {(['courses', 'leave'] as const).map((key) => <Pressable key={key} onPress={() => navigate(key)} style={[styles.shortcut, key === 'courses' && styles.primaryShortcut]}>
               <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={key === 'courses' ? colors.onAction : colors.action} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><Path d={TABS.find(item => item.key === key)!.path} /></Svg>
-              <Text style={[styles.shortcutText, key === 'courses' && styles.primaryShortcutText]}>{key === 'courses' ? 'ดูรายวิชาของฉัน' : 'เอกสารของฉัน'}</Text>
+              <Text style={[styles.shortcutText, key === 'courses' && styles.primaryShortcutText]}>{key === 'courses' ? 'รายวิชาของฉัน' : 'เอกสารของฉัน'}</Text>
             </Pressable>)}
           </View>
-          <View style={styles.tip}><Text style={styles.tipTitle}>เข้าเรียนได้โดยไม่ต้องกดเช็กชื่อ</Text><Text style={styles.tipText}>กล้องในห้องเรียนบันทึกการเข้าเรียนให้คุณ ตรวจสอบผลย้อนหลังได้ที่รายวิชา</Text></View>
         </ScrollView>}
-        {key === 'courses' && <CoursesScreen active={tab === 'courses'} />}
+        {key === 'courses' && <CoursesScreen active={tab === 'courses'} refreshTick={focusTick + pullTick} onEnrollmentChanged={() => setFocusTick(value => value + 1)} />}
         {key === 'leave' && <DocumentsScreen active={tab === 'leave'} focusTick={focusTick} onTimetableImported={() => setFocusTick(value => value + 1)} />}
         {key === 'chat' && <ChatScreen authenticated />}
         {key === 'account' && <AccountScreen me={me} face={face} banner={enrollBanner} onSignOut={onSignOut} />}
@@ -101,36 +102,32 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: workspace.background },
   wide: { flexDirection: 'row-reverse' },
   main: { flex: 1, minWidth: 0 },
-  header: { backgroundColor: colors.surface, paddingHorizontal: 24, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.border, gap: 4 },
+  header: { backgroundColor: colors.surface, paddingHorizontal: 24, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
   brandGroup: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandMark: { width: 28, height: 28, borderRadius: 8, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
-  brandInitial: { fontSize: 20, lineHeight: 26, fontWeight: '600', color: colors.onAction },
-  brand: { fontSize: 20, fontWeight: '700', color: colors.identity },
+  brandMark: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
   scene: { flex: 1 },
   hidden: { display: 'none' },
-  content: { padding: 24, gap: 24, flexGrow: 1, width: '100%', maxWidth: 1040, alignSelf: 'center', paddingBottom: 32 },
-  avatar: { width: 44, minHeight: 44, flexShrink: 0, borderRadius: 22, backgroundColor: colors.selected, alignItems: 'center', justifyContent: 'center' },
+  content: { paddingTop: 24, paddingHorizontal: 24, gap: 20, flexGrow: 1, width: '100%', maxWidth: 1040, alignSelf: 'center', paddingBottom: 32 },
+  avatarButton: { width: 48, height: 48, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 44, height: 44, flexShrink: 0, borderRadius: 22, backgroundColor: colors.selected, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: colors.action, fontWeight: '600', fontSize: 18 },
-  greeting: { gap: 6, paddingVertical: 4 },
-  homeName: { fontSize: 27, lineHeight: 38, fontWeight: '500', color: colors.identity },
-  shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginVertical: 4 },
-  shortcut: { flex: 1, minWidth: 130, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 14, backgroundColor: colors.selected },
+  greeting: { gap: 6, paddingBottom: 4 },
+  homeName: { ...typography.pageTitle },
+  shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  shortcut: { flex: 1, minWidth: 130, minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 14, backgroundColor: colors.surface },
   primaryShortcut: { backgroundColor: colors.action },
   shortcutText: { fontSize: 14, color: colors.action, fontWeight: '500' },
   primaryShortcutText: { color: colors.onAction },
   dashboard: { gap: 16 },
   dashboardWide: { flexDirection: 'row', alignItems: 'flex-start' },
-  panel: { flexGrow: 1, minWidth: 0, backgroundColor: colors.surface, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
-  schedulePanel: { flexGrow: 2 },
+  panel: { flexGrow: 1, minWidth: 0, backgroundColor: colors.surface, padding: 20, borderRadius: 16 },
+  schedulePanel: { flexGrow: 2, backgroundColor: workspace.tint },
   widePanel: { flex: 1 },
-  tip: { paddingVertical: 8, gap: 4 },
-  tipTitle: { fontSize: 14, fontWeight: '500' },
-  tipText: { fontSize: 13, lineHeight: 21, color: colors.muted },
   secondary: { fontSize: 16, color: colors.muted, lineHeight: 24 },
-  banner: { gap: 8, padding: 16, borderRadius: 16, backgroundColor: colors.subtle, borderWidth: 1, borderColor: colors.border },
+  banner: { gap: 10, padding: 16, borderRadius: 16, backgroundColor: workspace.tint },
   action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
   actionText: { fontSize: 16, color: colors.onAction, fontWeight: '500' },
 });

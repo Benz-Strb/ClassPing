@@ -21,7 +21,7 @@ interface Match {
 }
 interface Result { index: number; status: string; message: string }
 interface TimetableIdentity { studentId: string; fullName: string }
-interface SavedTimetable { identity: TimetableIdentity; ownershipProof: string; rows: Row[]; savedAt: string; expiresAt: string }
+interface SavedTimetable { identity: TimetableIdentity; ownershipProof: string; rows: Row[]; savedAt: string; expiresAt: string | null }
 const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 const fields = [['courseCode', 'รหัสวิชา', 'CE360'], ['courseName', 'ชื่อวิชา', 'ชื่อรายวิชา'], ['section', 'กลุ่มเรียน', '001'], ['teacherName', 'อาจารย์ผู้สอน', 'ชื่อและนามสกุล'], ['startTime', 'เวลาเริ่มเรียน', '09:00'], ['endTime', 'เวลาสิ้นสุดเรียน', '12:00'], ['roomName', 'ห้องเรียน / ออนไลน์', '51106 หรือ ออนไลน์']] as const;
 
@@ -38,8 +38,8 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
   const [showText, setShowText] = useState(false);
   const [busy, setBusy] = useState<string | null>('กำลังโหลดตารางที่บันทึก…');
   const [error, setError] = useState<string | null>(null);
-  const [persisted, setPersisted] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [persisted, setPersisted] = useState(false);
   useEffect(() => {
     let active = true;
     apiFetch<SavedTimetable | null>('/me/timetable').then(value => {
@@ -64,7 +64,7 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
     setBusy('กำลังบันทึกตารางเรียน…'); setError(null);
     try {
       const value = await apiFetch<SavedTimetable>('/me/timetable', { method: 'PUT', body: JSON.stringify({ rows, ownershipProof }) });
-      setIdentity(value.identity); setOwnershipProof(value.ownershipProof); setRows(value.rows); setExpiresAt(value.expiresAt); setPersisted(true); setEditing(null);
+      setIdentity(value.identity); setOwnershipProof(value.ownershipProof); setRows(value.rows); setExpiresAt(value.expiresAt); setPersisted(true); setEditing(null); onImported();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'บันทึกไม่สำเร็จ กรุณาลองใหม่'); }
     finally { setBusy(null); }
   }
@@ -98,8 +98,9 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
       setEditing(null); setShowText(false);
       setBusy('กำลังอ่านตารางเรียน…');
       const body = new FormData(); body.append('document', file);
-      const draft = await apiFetch<{ identity: TimetableIdentity | null; ownershipProof: string | null; rows: Row[]; matches: Match[]; warnings: string[]; ocrText: string }>('/me/timetable/preview', { method: 'POST', body }, 120_000);
-      setIdentity(draft.identity); setOwnershipProof(draft.ownershipProof); setRows(draft.rows); setMatches(draft.matches); setWarnings(draft.warnings); setOcrText(draft.ocrText); setResults([]); setHasRead(true); setPersisted(false); setExpiresAt(null);
+      const draft = await apiFetch<{ identity: TimetableIdentity | null; ownershipProof: string | null; rows: Row[]; matches: Match[]; warnings: string[]; ocrText: string; savedTimetable?: SavedTimetable | null; saveError?: string | null }>('/me/timetable/preview', { method: 'POST', body }, 120_000);
+      setIdentity(draft.identity); setOwnershipProof(draft.ownershipProof); setRows(draft.rows); setMatches(draft.matches); setWarnings(draft.warnings); setOcrText(draft.ocrText); setResults([]); setHasRead(true); setPersisted(!!draft.savedTimetable); setExpiresAt(draft.savedTimetable?.expiresAt ?? null); setError(draft.saveError ?? null);
+      if (draft.savedTimetable) onImported();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'อ่านตารางเรียนไม่สำเร็จ'); }
     finally {
       for (const cached of [file, pickedImage]) {
@@ -139,7 +140,7 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
     {error && <View style={styles.errorBox}><Text accessibilityRole="alert" style={styles.error}>{error}</Text></View>}
     {hasRead && <>
 
-      {persisted && expiresAt && <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.label}>บันทึกตารางเรียนไว้กับบัญชีแล้ว</Text><Text style={styles.note}>เปิดดูได้ถึง {new Date(expiresAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })}</Text></View>}
+      {persisted && <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.label}>บันทึกตารางเรียนไว้กับบัญชีแล้ว</Text><Text style={styles.note}>{expiresAt ? `เก็บถึง ${new Date(expiresAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'long', year: 'numeric' })} · ไม่ต้องอัปโหลดซ้ำระหว่างเทอม` : 'เก็บไว้ 5 เดือน · ไม่ต้องอัปโหลดซ้ำระหว่างเทอม'}</Text></View>}
       {rows.length > 0 && <TimetableGrid rows={rows} identity={identity ?? undefined} disabled={!!busy} />}
       <View style={styles.summary}>
         <Text accessibilityRole="header" style={styles.heading}>รายวิชาที่อ่านได้</Text>
@@ -179,10 +180,10 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
       })}
       {rows.length > 0 && <View style={styles.footer}>
         <View style={styles.saveActions}>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!busy || persisted || !ownershipProof }} disabled={!!busy || persisted || !ownershipProof} style={[styles.primary, styles.saveButton, (!!busy || persisted) && styles.disabled]} onPress={() => void saveTimetable()}><Text style={styles.primaryText}>{persisted ? 'บันทึกแล้ว' : 'Save ตารางเรียน'}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!busy || persisted || !ownershipProof }} disabled={!!busy || persisted || !ownershipProof} style={[styles.primary, styles.saveButton, (!!busy || persisted) && styles.disabled]} onPress={() => void saveTimetable()}><Text style={styles.primaryText}>{persisted ? 'บันทึกแล้ว' : 'บันทึกการแก้ไข'}</Text></Pressable>
           {persisted && <Pressable disabled={!!busy} style={styles.editButton} onPress={() => { setPersisted(false); setEditing(null); }}><Text style={styles.link}>แก้ไข</Text></Pressable>}
         </View>
-        <Text style={styles.note}>ตรวจทานข้อมูลแล้วกด Save เพื่อเก็บตารางไว้กับบัญชี 5 เดือน การแก้ไขหรืออัปโหลดใหม่ต้องกด Save อีกครั้ง</Text>
+        <Text style={styles.note}>บันทึกอัตโนมัติ 5 เดือนหลังอัปโหลด หากแก้ไขข้อมูลให้กดบันทึกการแก้ไข</Text>
         {matches === null && <Pressable accessibilityRole="button" disabled={!!busy} style={[styles.primary, !!busy && styles.disabled]} onPress={() => void match()}><Text style={styles.primaryText}>ตรวจสอบข้อมูลที่แก้ไข</Text></Pressable>}
         {matchedCount > 0 && !!ownershipProof && <Pressable accessibilityRole="button" disabled={!!busy || saved} style={[styles.primary, (!!busy || saved) && styles.disabled]} onPress={() => void confirm()}><Text style={styles.primaryText}>{saved ? 'ยืนยันรายวิชาแล้ว' : `ยืนยันเพิ่ม ${matchedCount} วิชาที่จับคู่ได้`}</Text></Pressable>}
         <Text style={styles.note}>ระบบเพิ่มเฉพาะวิชาที่ตรงกับตารางของอาจารย์ในระบบ</Text>
@@ -200,11 +201,11 @@ const styles = StyleSheet.create({
   summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginTop: 12 },
   saveActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   saveButton: { flex: 1 },
-  editButton: { minHeight: 48, paddingHorizontal: 20, justifyContent: 'center', borderWidth: 1, borderColor: colors.action, borderRadius: 8 },
+  editButton: { minHeight: 48, paddingHorizontal: 20, justifyContent: 'center', borderWidth: 1, borderColor: colors.action, borderRadius: 12 },
   count: { color: colors.identity, fontSize: 14, fontWeight: '600' },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   code: { color: colors.action, fontSize: 16, fontWeight: '600' },
-  badge: { color: colors.identity, backgroundColor: colors.selected, fontSize: 12, lineHeight: 20, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  badge: { color: colors.identity, backgroundColor: colors.selected, fontSize: 12, lineHeight: 20, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   warningBadge: { color: colors.warning, backgroundColor: colors.warningBg },
   warningText: { color: colors.warning, fontSize: 14, lineHeight: 24 },
   courseTitle: { color: colors.ink, fontSize: 20, lineHeight: 30, fontWeight: '600' },
@@ -219,9 +220,9 @@ const styles = StyleSheet.create({
   errorBox: { padding: 16, backgroundColor: colors.dangerBg, borderRadius: 12 },
   heading: { color: colors.identity, fontSize: 18, lineHeight: 28, fontWeight: '600' },
   label: { color: colors.ink, fontSize: 16, lineHeight: 26 }, note: { color: colors.muted, fontSize: 14, lineHeight: 24 },
-  field: { gap: 6 }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.outline, borderRadius: 8, padding: 12, fontSize: 16, color: colors.ink },
-  link: { color: colors.action, fontSize: 16, lineHeight: 24 }, primary: { minHeight: 48, padding: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action, borderRadius: 8 },
+  field: { gap: 6 }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.outline, borderRadius: 12, padding: 12, fontSize: 16, color: colors.ink },
+  link: { color: colors.action, fontSize: 16, lineHeight: 24 }, primary: { minHeight: 48, padding: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action, borderRadius: 12 },
   primaryText: { color: colors.surface, fontSize: 16, fontWeight: '600' }, disabled: { opacity: 0.5 },
   error: { color: colors.danger, fontSize: 16, lineHeight: 24 }, busy: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  feedback: { padding: 12, gap: 8, borderRadius: 8, backgroundColor: colors.selected },
+  feedback: { padding: 12, gap: 8, borderRadius: 12, backgroundColor: colors.selected },
 });

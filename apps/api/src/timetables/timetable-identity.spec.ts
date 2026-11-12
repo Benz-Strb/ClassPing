@@ -32,6 +32,12 @@ describe('timetable owner verification', () => {
     expect(() => verifyTimetableIdentity({ ...user, id: 'other' }, proof, 'secret')).toThrow();
     expect(() => verifyTimetableIdentity(user, signTimetableIdentity(user.id, identity, '2020-01-01', 'secret'), 'secret')).toThrow();
   });
+  it('accepts permanent server proofs while still rejecting forged permanent proofs', () => {
+    const proof = signTimetableIdentity(user.id, identity, null, 'secret');
+    expect(verifyTimetableIdentity(user, proof, 'secret')).toEqual(identity);
+    expect(() => verifyTimetableIdentity({ ...user, id: 'other' }, proof, 'secret')).toThrow();
+    expect(() => verifyTimetableIdentity(user, proof + 'x', 'secret')).toThrow();
+  });
   it('signs the courses read from the document and accepts only those courses', () => {
     const courses = documentCourses([
       { courseCode: 'ce 360', section: '001' },

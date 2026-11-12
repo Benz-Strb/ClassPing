@@ -6,15 +6,16 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Pressable, Text } from '../ui/primitives';
-import { colors } from '../ui/theme';
+import { colors, workspace } from '../ui/theme';
 import { buildTimetableGrid, type TimetableEntry } from '../lib/timetable-grid';
 
-export function TimetableGrid({ rows, identity, disabled }: { rows: TimetableEntry[]; identity?: { fullName: string; studentId: string }; disabled?: boolean }) {
+export function TimetableGrid({ rows, identity, disabled, inlinePreview = false }: { rows: TimetableEntry[]; identity?: { fullName: string; studentId: string }; disabled?: boolean; inlinePreview?: boolean }) {
   const grid = useMemo(() => buildTimetableGrid(rows, identity), [rows, identity]);
   const svg = useRef<Svg | null>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [inlineWidth, setInlineWidth] = useState(0);
   const [previewBounds, setPreviewBounds] = useState({ width: 1, height: 1 });
   const insets = useSafeAreaInsets();
   const previewScale = Math.min(previewBounds.width / grid.width, previewBounds.height / grid.height);
@@ -66,6 +67,9 @@ export function TimetableGrid({ rows, identity, disabled }: { rows: TimetableEnt
         <Text style={styles.link}>ดูตารางเรียน</Text>
       </Pressable>
     </View>
+    {inlinePreview && <Pressable accessibilityLabel="ขยายภาพตารางเรียนรายสัปดาห์" disabled={disabled || !grid.placements.length} onPress={() => { setError(null); setOpen(true); }} style={styles.inlinePreview} onLayout={event => setInlineWidth(event.nativeEvent.layout.width)}>
+      {inlineWidth > 0 && <SvgXml xml={grid.xml} width={inlineWidth} height={inlineWidth * grid.height / grid.width} accessible={false} />}
+    </Pressable>}
     {grid.omitted > 0 && <Text style={styles.warning}>อีก {grid.omitted} วิชายังวางในตารางไม่ได้ กรุณาตรวจวันและเวลาในการ์ดด้านล่าง</Text>}
     <Modal visible={open} animationType="fade" presentationStyle="fullScreen" onRequestClose={() => { if (!exporting) setOpen(false); }}>
       <View style={[styles.viewer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
@@ -89,11 +93,12 @@ export function TimetableGrid({ rows, identity, disabled }: { rows: TimetableEnt
 
 const styles = StyleSheet.create({
   section: { gap: 12 },
+  inlinePreview: { width: '100%', minHeight: 120, backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', justifyContent: 'center' },
   heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   title: { fontSize: 18, lineHeight: 28, fontWeight: '600', color: colors.identity },
   download: { minHeight: 48, paddingHorizontal: 14, justifyContent: 'center', borderWidth: 1, borderColor: colors.action, borderRadius: 10 },
   link: { color: colors.action, fontSize: 14, lineHeight: 24, fontWeight: '500' },
-  viewer: { flex: 1, paddingHorizontal: 16, gap: 16, backgroundColor: colors.background },
+  viewer: { flex: 1, paddingHorizontal: 16, gap: 16, backgroundColor: workspace.background },
   preview: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   primary: { minHeight: 52, padding: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action, borderRadius: 12 },
   primaryText: { color: colors.onAction, fontSize: 16, fontWeight: '600' },
