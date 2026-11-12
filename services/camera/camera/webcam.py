@@ -7,7 +7,7 @@ import cv2
 
 log = logging.getLogger("camera")
 
-JPEG_QUALITY = 85
+JPEG_QUALITY = 92
 # อ่านภาพไม่ได้ติดกันเท่านี้ (ราว 3 วิ) ถือว่ากล้องมีปัญหา
 FAILS_BEFORE_WARNING = 30
 
