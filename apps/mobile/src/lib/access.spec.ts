@@ -28,8 +28,10 @@ it('ยินยอมแล้วแต่ใบหน้ายังไม่�
   expect(decideScreen(base({ face: { complete: false, verified: true } }))).toBe('enroll');
 });
 
-it('ข้ามการลงทะเบียนแล้วเข้าแอปได้ และครบแล้วเข้าแอป', () => {
-  expect(decideScreen(base({ enrolling: false }))).toBe('student');
+it('นักศึกษาที่ยินยอมแล้วต้องยืนยันบัตรและสแกนหน้าครบก่อนเข้าแอป', () => {
+  expect(decideScreen(base({ enrolling: false }))).toBe('identity');
+  expect(decideScreen(base({ enrolling: false, hasCard: true }))).toBe('enroll');
+  expect(decideScreen(base({ enrolling: false, face: { complete: false, verified: true } }))).toBe('enroll');
   expect(decideScreen(base({ face: { complete: true, verified: true } }))).toBe('student');
 });
 

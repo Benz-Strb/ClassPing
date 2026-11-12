@@ -20,7 +20,7 @@ export interface AccessState {
   face: Pick<FaceStatus, 'complete' | 'verified'> | null;
   // ไม่ยินยอมในรอบนี้ (ไม่ได้เก็บฝั่งเซิร์ฟเวอร์ เปิดแอปใหม่จะถามอีก)
   consentDeclined: boolean;
-  // กำลังอยู่ในขั้นลงทะเบียนใบหน้า (ข้ามไปก่อนได้)
+  // นักศึกษาที่ยินยอมแล้วต้องลงทะเบียนใบหน้าให้ครบ
   enrolling: boolean;
   hasCard: boolean;
 }
@@ -35,7 +35,7 @@ export function decideScreen(s: AccessState): Screen {
   if (!canEnrollFace(me)) return 'webOnly';
   const rest: Screen = me.role === 'student' ? 'student' : 'webOnly';
   if (!me.pdpaConsentAt) return s.consentDeclined ? rest : 'consent';
-  if (s.face && !s.face.complete && s.enrolling) {
+  if (s.face && !s.face.complete && (me.role === 'student' || s.enrolling)) {
     return !s.face.verified && !s.hasCard ? 'identity' : 'enroll';
   }
   return rest;

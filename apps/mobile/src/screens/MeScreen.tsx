@@ -29,9 +29,8 @@ export function MeScreen({ onRejected, onSignedOut, onReady }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [card, setCard] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
-  // ไม่ยินยอมและข้ามการลงทะเบียน เก็บเฉพาะรอบนี้ ไม่ได้บันทึกฝั่งเซิร์ฟเวอร์
+  // เก็บการปฏิเสธความยินยอมเฉพาะรอบนี้
   const [consentDeclined, setConsentDeclined] = useState(false);
-  const [enrolling, setEnrolling] = useState(true);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (me || error) onReady?.(!error);
@@ -63,7 +62,6 @@ export function MeScreen({ onRejected, onSignedOut, onReady }: Props) {
 
   const startEnroll = () => {
     setConsentDeclined(false);
-    setEnrolling(true);
   };
 
   useEffect(() => {
@@ -121,7 +119,7 @@ export function MeScreen({ onRejected, onSignedOut, onReady }: Props) {
     me,
     face,
     consentDeclined,
-    enrolling,
+    enrolling: true,
     hasCard: !!card,
   });
 
@@ -141,7 +139,6 @@ export function MeScreen({ onRejected, onSignedOut, onReady }: Props) {
           setCard(uri);
           setCardError(null);
         }}
-        onSkip={() => setEnrolling(false)}
         onSignOut={signOut}
       /></SafeAreaView>
     );
@@ -167,13 +164,6 @@ export function MeScreen({ onRejected, onSignedOut, onReady }: Props) {
         onUnauthorized={async (message) => {
           await supabase.auth.signOut();
           onRejected(message);
-        }}
-        onSkip={() => {
-          discardCard(card);
-          setCard(null);
-          setEnrolling(false);
-          // ยืนยันบัตรไปแล้วแต่ยังไม่ครบท่า ดึงสถานะจริงมาก่อนกลับหน้าหลัก
-          void refresh();
         }}
         onSignOut={signOut}
       /></SafeAreaView>

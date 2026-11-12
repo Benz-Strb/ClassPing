@@ -59,7 +59,6 @@ interface Props {
   onCardRejected: (message: string) => void;
   onComplete: (status: FaceStatus) => void;
   onUnauthorized: (message: string) => void;
-  onSkip: () => void;
   onSignOut: () => void;
 }
 
@@ -69,7 +68,6 @@ export function EnrollScreen({
   onCardRejected,
   onComplete,
   onUnauthorized,
-  onSkip,
   onSignOut,
 }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -193,9 +191,6 @@ export function EnrollScreen({
             <Text style={styles.primaryText}>เปิดการตั้งค่า</Text>
           </Pressable>
         )}
-        <Pressable style={styles.link} onPress={onSkip}>
-          <Text style={styles.linkGrey}>ไว้ทีหลัง</Text>
-        </Pressable>
         <Pressable style={styles.link} onPress={onSignOut}>
           <Text style={styles.linkGrey}>ออกจากระบบ</Text>
         </Pressable>
@@ -291,9 +286,6 @@ export function EnrollScreen({
             <Text style={styles.linkLight}>เปลี่ยนภาพบัตร</Text>
           </Pressable>
         )}
-        <Pressable style={styles.link} onPress={onSkip}>
-          <Text style={styles.linkLight}>ไว้ทีหลัง</Text>
-        </Pressable>
         <Pressable style={styles.link} onPress={onSignOut}>
           <Text style={styles.linkLight}>ออกจากระบบ</Text>
         </Pressable>
