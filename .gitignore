@@ -12,5 +12,5 @@ recordings/
 /File-text-OCR-Log/
 *.[mM][dD]
 !/DESIGN.md
-!/.impeccable/review/*.md
-!/apps/web/.impeccable/surfaces/*.md
+# ไฟล์ทำงานของเครื่องมือออกแบบ (ภาพรีวิว mock) เก็บในเครื่อง ไม่ขึ้น git
+.impeccable/
