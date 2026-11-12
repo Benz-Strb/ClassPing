@@ -11,6 +11,8 @@ export interface MediaTokenPayload {
   start?: string;
   dur?: number;
   dl?: boolean;
+  // เฉพาะ clip: กล้องไหน ใช้ตั้งชื่อไฟล์ตอนดาวน์โหลด
+  cam?: 'front' | 'door';
 }
 
 const sign = (secret: string, body: string) =>

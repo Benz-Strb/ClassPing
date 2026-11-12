@@ -144,6 +144,7 @@ export class RecordingService {
       start: start.toISOString(),
       dur: input.duration,
       dl: input.download,
+      cam: input.camera,
     });
     await this.repo.logView(session.id, user.id, input.download ? 'download' : 'playback');
     return { url: `/clips/${token}` };
@@ -159,12 +160,14 @@ export class RecordingService {
     const session = await this.repo.session(payload.sid);
     if (!session || !this.covers(await this.range(session), start, payload.dur)) throw expired();
     const stamp = `${bangkokDate(start).replaceAll('-', '')}-${bangkokTime(start).replace(':', '')}`;
+    // ชื่อไฟล์บอกกล้อง ดาวน์โหลดทั้งสองกล้องแล้วแยกออก (ลิงก์ก่อนมีช่องนี้ไม่มีชื่อกล้อง)
+    const camera = payload.cam ? `-${payload.cam}` : '';
     return {
       path: payload.path,
       start,
       duration: payload.dur,
       download: payload.dl === true,
-      filename: `classping-${stamp}.mp4`,
+      filename: `classping-${stamp}${camera}.mp4`,
     };
   }
 
