@@ -199,3 +199,59 @@ def test_stop_kills_ffmpeg_that_stopped_reading(monkeypatch):
     assert time.monotonic() - began < 2
     assert procs[0].killed
     assert not streamer.running
+
+
+class KeepStdin(FakeStdin):
+    def __init__(self):
+        super().__init__()
+        self.data: list[bytes] = []
+
+    def write(self, data: bytes):
+        super().write(data)
+        self.data.append(data)
+
+
+def _pushed(streamer, procs, image):
+    procs[0].stdin = KeepStdin()
+    streamer.push(image)
+    width, height = streamer._size
+    return np.frombuffer(procs[0].stdin.data[0], np.uint8).reshape(height, width, 3)
+
+
+def test_push_stamps_time_without_touching_the_shared_frame():
+    from datetime import datetime
+
+    at = datetime(2026, 11, 11, 16, 2, 53)
+    streamer, procs = make(source=lambda: frame(1280, 720), clock=lambda: at)
+    streamer.start(URL, fps=15, bitrate_kbps=1500)
+    image = frame(1280, 720)
+    out = _pushed(streamer, procs, image)
+    assert not image.any()
+    # ตัวหนังสือสีขาวอยู่มุมขวาบน ส่วนอื่นยังดำ
+    assert out[:60, -560:].max() == 255
+    assert not out[:, :600].any()
+    assert not out[100:].any()
+
+
+def test_stamp_text_uses_gregorian_year_and_english_weekday():
+    from datetime import datetime
+
+    from camera.stream import stamp_text
+
+    assert stamp_text(datetime(2026, 11, 11, 16, 2, 53)) == "11-11-2026 Wed 16:02:53"
+    assert stamp_text(datetime(2026, 11, 15, 9, 5, 0)) == "15-11-2026 Sun 09:05:00"
+
+
+def test_mirror_flips_picture_but_not_the_time():
+    image = frame(1280, 720)
+    image[300:400, :100] = 200  # แถบทางซ้าย
+    plain, plain_procs = make(source=lambda: image)
+    plain.start(URL, fps=15, bitrate_kbps=1500)
+    flipped, flipped_procs = make(source=lambda: image, mirror=True)
+    flipped.start(URL, fps=15, bitrate_kbps=1500)
+    a = _pushed(plain, plain_procs, image)
+    b = _pushed(flipped, flipped_procs, image)
+    assert b[350, -50].tolist() == [200, 200, 200] and not b[350, 50].any()
+    assert a[350, 50].tolist() == [200, 200, 200]
+    # เวลาเขียนหลังกลับภาพ อยู่ขวาบนเหมือนกัน ตัวหนังสือไม่กลับด้าน
+    assert b[:60, -560:].max() == 255 and not b[:60, :600].any()

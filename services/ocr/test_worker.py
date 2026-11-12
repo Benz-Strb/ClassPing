@@ -51,21 +51,21 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertNotIn('private provider detail', response.text)
 
-    def test_transfers_images_and_scanned_pdf(self):
+    def test_schedules_images_and_scanned_pdf(self):
         for extension, mime in [('PNG', 'image/png'), ('PDF', 'application/pdf')]:
             data = io.BytesIO()
             Image.new('RGB', (100, 100), 'white').save(data, format=extension)
-            response = self.client.post('/transfers/ocr', headers=self.headers,
+            response = self.client.post('/schedules/ocr', headers=self.headers,
                 files={'image': (f'curriculum.{extension.lower()}', data.getvalue(), mime)})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(response.json()['data']['lines']), 2)
 
-    def test_transfers_require_auth_and_reject_invalid_images(self):
-        self.assertEqual(self.client.post('/transfers/ocr', content=b'bad').status_code, 401)
-        response = self.client.post('/transfers/ocr', headers=self.headers, files={'image': ('bad.png', b'bad', 'image/png')})
+    def test_schedules_require_auth_and_reject_invalid_images(self):
+        self.assertEqual(self.client.post('/schedules/ocr', content=b'bad').status_code, 401)
+        response = self.client.post('/schedules/ocr', headers=self.headers, files={'image': ('bad.png', b'bad', 'image/png')})
         self.assertEqual(response.status_code, 400)
 
-    def test_transfer_pdf_page_limit(self):
+    def test_schedule_pdf_page_limit(self):
         import pypdfium2 as pdfium
         data = io.BytesIO()
         document = pdfium.PdfDocument.new()
@@ -74,7 +74,7 @@ class WorkerTests(unittest.TestCase):
             page.close()
         document.save(data)
         document.close()
-        response = self.client.post('/transfers/ocr', headers=self.headers, files={'image': ('large.pdf', data.getvalue(), 'application/pdf')})
+        response = self.client.post('/schedules/ocr', headers=self.headers, files={'image': ('large.pdf', data.getvalue(), 'application/pdf')})
         self.assertEqual(response.status_code, 400)
         self.assertIn('100', response.json()['error']['message'])
 
@@ -82,6 +82,34 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(self.client.get('/health').json()['service'], 'leave-ocr')
         self.assertNotIn('app.engine', sys.modules)
         self.assertNotIn('insightface', sys.modules)
+
+    def test_local_mlx_reader_wins_over_typhoon_api_key(self):
+        import types
+        from unittest import mock
+
+        made = []
+        fake = types.SimpleNamespace(MlxTyphoonReader=lambda path: made.append(path) or Reader())
+        env = {'TYPHOON_OCR_MLX_MODEL': ' /models/typhoon ', 'TYPHOON_OCR_API_KEY': 'k', 'LEAVE_OCR_SERVICE_TOKEN': 'x' * 32}
+        with mock.patch.dict(sys.modules, {'app.typhoon_mlx': fake}), mock.patch.dict('os.environ', env):
+            worker.build_app()
+        self.assertEqual(made, ['/models/typhoon'])
+
+    def test_requires_typhoon_settings(self):
+        from unittest import mock
+
+        env = {'TYPHOON_OCR_MLX_MODEL': '', 'TYPHOON_OCR_API_KEY': ' ', 'LEAVE_OCR_SERVICE_TOKEN': 'x' * 32}
+        with mock.patch.dict('os.environ', env), self.assertRaisesRegex(ValueError, 'TYPHOON_OCR'):
+            worker.build_app()
+
+    def test_timetable_upload_auth_images_and_pdf(self):
+        self.assertEqual(self.client.post('/schedules/ocr', content=b'bad').status_code, 401)
+        for extension, mime in [('PNG', 'image/png'), ('PDF', 'application/pdf')]:
+            data = io.BytesIO()
+            Image.new('RGB', (100, 100), 'white').save(data, format=extension)
+            response = self.client.post('/schedules/ocr', headers=self.headers,
+                files={'image': (f'timetable.{extension.lower()}', data.getvalue(), mime)})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()['data']['lines']), 2)
 
 
 if __name__ == '__main__':

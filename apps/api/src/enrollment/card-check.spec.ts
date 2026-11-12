@@ -29,7 +29,7 @@ describe('checkCard', () => {
     });
   });
 
-  // PaddleOCR ตัดบรรทัดตรงช่องว่างก่อน ID ในบางขนาดภาพ (ภาพหน้าจอย่อเหลือสูง 1600)
+  // OCR อาจตัดบรรทัดตรงช่องว่างก่อน ID
   it('OCR ตัด OFFICIAL STUDENT VIRTUAL ID เป็นหลายบรรทัดติดกัน ยังผ่าน', () => {
     const card = CARD.flatMap((l) =>
       l.text === 'OFFICIAL STUDENT VIRTUAL ID'
@@ -137,6 +137,42 @@ describe('checkCard', () => {
   });
 });
 
+describe('checkCard กับ Typhoon', () => {
+  // Typhoon ไม่ส่งความมั่นใจ และอาจคืนส่วนของบัตรเป็นตาราง HTML หรือ markdown
+  const TYPHOON: CardLine[] = [
+    { text: 'DHURAKIJ PUNDIT UNIVERSITY', score: null },
+    { text: '<table><tr><td>รหัสนักศึกษา</td><td>66112106</td></tr></table>', score: null },
+    { text: '| System Generate Date : | 23-10-2569 |', score: null },
+    { text: 'OFFICIAL STUDENT VIRTUAL ID', score: null },
+  ];
+
+  it('บรรทัดไม่มีคะแนนใช้ได้ทุกบรรทัด และเอาแท็กตารางออกก่อนอ่าน', () => {
+    expect(checkCard(TYPHOON, expect106)).toEqual({ ok: true });
+  });
+
+  it('รหัสคนอื่นในตารางยังจับได้', () => {
+    const card = TYPHOON.map((l) => ({ ...l, text: l.text.replace('66112106', '66112126') }));
+    expect(checkCard(card, expect106)).toMatchObject({ ok: false, code: 'CARD_NOT_YOURS' });
+  });
+
+  it('วันที่ที่ใช้ขีดยาวยังอ่านได้', () => {
+    const card = TYPHOON.map((l) => ({ ...l, text: l.text.replace('23-10-2569', '23–10–2569') }));
+    expect(checkCard(card, expect106)).toEqual({ ok: true });
+  });
+
+  it('อ่านคณะและสาขาในเซลล์ตารางได้', () => {
+    expect(
+      readStudyInfo([
+        { text: '<td>วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี</td>', score: null },
+        { text: '| สาขาวิชาวิศวกรรมคอมพิวเตอร์ |', score: null },
+      ]),
+    ).toMatchObject({
+      faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
+      major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+    });
+  });
+});
+
 describe('readStudyInfo', () => {
   it('อ่านคณะและสาขาจากบรรทัดบนบัตร', () => {
     expect(
@@ -145,7 +181,7 @@ describe('readStudyInfo', () => {
         { text: ' วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี ', score: 0.99 },
         { text: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์', score: 1 },
       ]),
-    ).toEqual({
+    ).toMatchObject({
       faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
       major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
     });
@@ -164,7 +200,87 @@ describe('readStudyInfo', () => {
         { text: 'วิทยาลัยวิศวกรรมศาสตร์', score: 0.6 },
         { text: 'สาขาวิชาคอมพิวเตอร์', score: 0.89 },
       ]),
-    ).toEqual({ faculty: null, major: null });
-    expect(readStudyInfo(CARD)).toEqual({ faculty: null, major: null });
+    ).toMatchObject({ faculty: null, major: null });
+    expect(readStudyInfo(CARD)).toEqual({ fullNameTh: null, faculty: null, major: null });
+  });
+});
+
+// ข้อความที่ Typhoon (MLX ในเครื่อง) อ่านจากภาพหน้าจอบัตรจริงเมื่อ 2026-11-11
+// ไม่มีคะแนนความมั่นใจ ชื่อกับนามสกุลแยกบรรทัด คณะกับสาขารวมบรรทัดเดียว
+const TYPHOON_CARD: CardLine[] = [
+  '<page_number>X</page_number>',
+  '66112106',
+  'ณัฐวุฒิ',
+  'นาดอน',
+  'ปริญญาตรี กำลังศึกษาอยู่ 1/2569',
+  'System Generate Date : 11-11-2569',
+  'OFFICIAL STUDENT VIRTUAL ID',
+  'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+  'วันออกบัตร : 27-05-2566',
+  'แสดง QR Code',
+].map((text) => ({ text, score: null }));
+
+describe('บัตรจริงที่ Typhoon อ่าน', () => {
+  it('ผ่านการตรวจบัตรของวันนั้น', () => {
+    const today = new Date('2026-11-11T03:00:00Z');
+    expect(checkCard(TYPHOON_CARD, { studentCode: '66112106', today })).toEqual({ ok: true });
+  });
+
+  it('อ่านชื่อไทย และแยกคณะกับสาขาที่อยู่บรรทัดเดียวกัน', () => {
+    expect(readStudyInfo(TYPHOON_CARD, '66112106')).toEqual({
+      fullNameTh: 'ณัฐวุฒิ นาดอน',
+      faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
+      major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+    });
+  });
+
+  it('ชื่อกับนามสกุลอยู่บรรทัดเดียวก็อ่านได้', () => {
+    const card = TYPHOON_CARD.filter((l) => l.text !== 'นาดอน').map((l) =>
+      l.text === 'ณัฐวุฒิ' ? { ...l, text: 'ณัฐวุฒิ นาดอน' } : l,
+    );
+    expect(readStudyInfo(card, '66112106').fullNameTh).toBe('ณัฐวุฒิ นาดอน');
+  });
+
+  it('OCR อ่านภาคเรียนหาย บรรทัดปริญญาไม่ถูกนับเป็นชื่อ', () => {
+    const card = TYPHOON_CARD.filter((l) => l.text !== 'นาดอน').map((l) =>
+      l.text.startsWith('ปริญญาตรี') ? { ...l, text: 'ปริญญาตรี กำลังศึกษาอยู่' } : l,
+    );
+    expect(readStudyInfo(card, '66112106').fullNameTh).toBeNull();
+  });
+
+  // อ่านจากภาพเดียวกันที่ตัดเหลือแค่บัตร Typhoon อ่านโลโก้แทรกระหว่างรหัสกับชื่อ และแยกคณะกับสาขาคนละบรรทัด
+  it('โลโก้ที่อ่านแทรกก่อนชื่อไม่ทำให้อ่านชื่อไม่ได้', () => {
+    const card = TYPHOON_CARD.flatMap((l) =>
+      l.text === '66112106'
+        ? [l, { text: 'DPU DHURAKHLI PUNDIT UNIVERSITY', score: null }]
+        : l.text.startsWith('วิทยาลัย')
+          ? [
+              { text: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี', score: null },
+              { text: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์', score: null },
+            ]
+          : [l],
+    );
+    expect(readStudyInfo(card, '66112106')).toEqual({
+      fullNameTh: 'ณัฐวุฒิ นาดอน',
+      faculty: 'วิทยาลัยวิศวกรรมศาสตร์และเทคโนโลยี',
+      major: 'สาขาวิชาวิศวกรรมคอมพิวเตอร์',
+    });
+  });
+
+  it('ชื่อยาวผิดปกติหรือหลายคำเกินไป ไม่รับ คงชื่อเดิมไว้', () => {
+    const named = (lines: string[]) =>
+      readStudyInfo(
+        [{ text: '66112106', score: null }, ...lines.map((text) => ({ text, score: null }))],
+        '66112106',
+      ).fullNameTh;
+    expect(named(['ก'.repeat(60), 'ข'.repeat(41)])).toBeNull();
+    expect(named(['ก'.repeat(50), 'ข'.repeat(49)])).toBe(`${'ก'.repeat(50)} ${'ข'.repeat(49)}`);
+    expect(named(['หนึ่ง สอง', 'สาม สี่ ห้า'])).toBeNull();
+    expect(named(['หนึ่ง สอง', 'สาม สี่'])).toBe('หนึ่ง สอง สาม สี่');
+  });
+
+  it('ไม่รู้รหัส หรือไม่เจอรหัสบนบัตร ไม่เดาชื่อ', () => {
+    expect(readStudyInfo(TYPHOON_CARD).fullNameTh).toBeNull();
+    expect(readStudyInfo(TYPHOON_CARD, '66112126').fullNameTh).toBeNull();
   });
 });

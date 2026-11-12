@@ -2,7 +2,8 @@ import { bangkokDate } from '../sessions/plan-day.js';
 
 export interface CardLine {
   text: string;
-  score: number;
+  // Typhoon ไม่ส่งความมั่นใจมา (null) ใช้ทุกบรรทัด
+  score: number | null;
 }
 
 export type CardCheck =
@@ -17,8 +18,10 @@ export type CardCheck =
 // (ArcFace จับคนผิด 1 ใน 10,000 ที่ 0.356, arXiv 2503.20108) บัตรจริงของเบนซ์ได้ 0.523
 export const CARD_MATCH_MIN = 0.36;
 
-// บรรทัดที่ใช้ตอนวัดจริงได้ ≥ 0.978 ตัวหนังสือไทยที่อ่านเพี้ยนได้ 0.59-0.90
+// เผื่อตัวอ่านที่ส่งคะแนนมา บรรทัดที่ไม่มั่นใจไม่เอามาใช้
 const MIN_LINE_SCORE = 0.9;
+// ขีดยาวแบบต่าง ๆ ให้เป็น - ก่อนอ่านวันที่
+const DASHES = /[\u2010-\u2015\u2212]/g;
 const MARKER = 'OFFICIAL STUDENT VIRTUAL ID';
 const CODE = /\b\d{8}\b/g;
 const DATE = /(\d{2})-(\d{2})-(\d{4})/;
@@ -26,6 +29,14 @@ const DATE = /(\d{2})-(\d{2})-(\d{4})/;
 const DASHLESS_DATE = /^(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])25\d\d$/;
 // ปีบนบัตรเป็น พ.ศ.
 const BE_OFFSET = 543;
+
+// Typhoon อาจคืนตารางเป็น HTML หรือ markdown เอาแท็กกับขีดตารางออกก่อน
+function sureLines(lines: CardLine[]): string[] {
+  return lines
+    .filter((l) => l.score === null || l.score >= MIN_LINE_SCORE)
+    .map((l) => l.text.replace(DASHES, '-').replace(/<[^>]*>/g, ' ').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
 
 const unreadable: CardCheck = {
   ok: false,
@@ -38,7 +49,7 @@ export function checkCard(
   lines: CardLine[],
   expected: { studentCode: string; today: Date },
 ): CardCheck {
-  const sure = lines.filter((l) => l.score >= MIN_LINE_SCORE).map((l) => l.text.trim());
+  const sure = sureLines(lines);
   // OCR อาจตัดบรรทัดนี้ตรงช่องว่าง (เช่น "... VIRTUAL" กับ "ID") ต่อบรรทัดที่ติดกันก่อนค้น
   if (!sure.join(' ').toUpperCase().replace(/\s+/g, ' ').includes(MARKER)) return unreadable;
 
@@ -71,15 +82,47 @@ export function checkCard(
 }
 
 export interface StudyInfo {
+  // ชื่อ-สกุลภาษาไทยบนบัตร (ไม่มีคำนำหน้า)
+  fullNameTh: string | null;
   faculty: string | null;
   major: string | null;
 }
 
+const FACULTY = /^(คณะ|วิทยาลัย|สถาบัน)/;
+const THAI_WORDS = /^[\u0E00-\u0E7F]+( [\u0E00-\u0E7F]+)*$/;
+// บรรทัดไทยล้วนที่ไม่ใช่ชื่อ เช่น "ปริญญาตรี กำลังศึกษาอยู่" ตอน OCR อ่านภาคเรียนหาย
+const NOT_NAME = /ปริญญา|ศึกษา|คณะ|วิทยาลัย|สถาบัน|สาขา/;
+// ภาพบัตรเป็นของที่ผู้ใช้ส่งมาเอง แต่งชื่อได้ จำกัดรูปแบบไว้: ชื่อ + นามสกุล (มีชื่อกลางได้) ไม่ยาวผิดปกติ
+const MAX_NAME_LENGTH = 100;
+const MAX_NAME_WORDS = 4;
+
+// บัตรเขียนชื่อกับนามสกุลแยกบรรทัดใต้รหัส Typhoon อาจคืนรวมเป็นบรรทัดเดียวก็ได้
+// โลโก้ DPU อยู่ข้างรหัส บางภาพ Typhoon อ่านโลโก้แทรกก่อนชื่อ จึงข้ามบรรทัดที่ไม่มีตัวไทยไปได้
+function readThaiName(sure: string[], studentCode: string): string | null {
+  const at = sure.findIndex((t) => t.includes(studentCode));
+  if (at < 0) return null;
+  const words: string[] = [];
+  for (const line of sure.slice(at + 1, at + 6)) {
+    if (!words.length && !/[\u0E00-\u0E7F]/.test(line)) continue;
+    if (!THAI_WORDS.test(line) || NOT_NAME.test(line)) break;
+    words.push(line);
+  }
+  const name = words.join(' ');
+  const count = name.split(' ').length;
+  return count >= 2 && count <= MAX_NAME_WORDS && name.length <= MAX_NAME_LENGTH ? name : null;
+}
+
 // อ่านไม่ได้ไม่ใช่เหตุให้ยืนยันบัตรไม่ผ่าน เก็บเป็นค่าว่างไว้
-export function readStudyInfo(lines: CardLine[]): StudyInfo {
-  const sure = lines.filter((l) => l.score >= MIN_LINE_SCORE).map((l) => l.text.trim());
-  return {
-    faculty: sure.find((t) => /^(คณะ|วิทยาลัย|สถาบัน)/.test(t)) ?? null,
-    major: sure.find((t) => t.startsWith('สาขา')) ?? null,
-  };
+export function readStudyInfo(lines: CardLine[], studentCode = ''): StudyInfo {
+  const sure = sureLines(lines);
+  let faculty: string | null = null;
+  let major: string | null = null;
+  for (const line of sure) {
+    // Typhoon อ่านคณะกับสาขาเป็นบรรทัดเดียว "วิทยาลัย... สาขาวิชา..."
+    const split = line.indexOf('สาขา');
+    const before = (split < 0 ? line : line.slice(0, split)).trim();
+    if (!faculty && FACULTY.test(before)) faculty = before;
+    if (!major && split >= 0 && (split === 0 || FACULTY.test(before))) major = line.slice(split).trim();
+  }
+  return { fullNameTh: studentCode ? readThaiName(sure, studentCode) : null, faculty, major };
 }

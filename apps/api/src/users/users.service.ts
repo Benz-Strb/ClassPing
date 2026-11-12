@@ -9,11 +9,15 @@ export interface AppUser {
   id: string;
   email: string;
   fullName: string | null;
+  avatarUrl?: string | null;
   role: Role;
   studentId: string | null;
   pdpaConsentAt: string | null;
   // ยืนยันด้วยบัตรนักศึกษาแล้ว null = ยังไม่ยืนยัน
   identityVerifiedAt: string | null;
+  // อ่านจากบัตรนักศึกษาตอนยืนยันตัวตน null = ยังไม่ยืนยันหรืออ่านไม่ได้
+  faculty?: string | null;
+  major?: string | null;
 }
 
 interface UserRow {
@@ -24,6 +28,8 @@ interface UserRow {
   student_id: string | null;
   pdpa_consent_at: string | null;
   identity_verified_at: string | null;
+  faculty?: string | null;
+  major?: string | null;
 }
 
 const toAppUser = (row: UserRow): AppUser => ({
@@ -34,6 +40,8 @@ const toAppUser = (row: UserRow): AppUser => ({
   studentId: row.student_id,
   pdpaConsentAt: row.pdpa_consent_at,
   identityVerifiedAt: row.identity_verified_at,
+  faculty: row.faculty ?? null,
+  major: row.major ?? null,
 });
 
 const dbError = () =>
@@ -119,10 +127,14 @@ export class UsersService {
   }
 
   // score = คะแนนหน้าในบัตรเทียบหน้าสด, null = ล้างการยืนยัน (รีเซ็ตใบหน้า) ล้างคณะ สาขาด้วย
+  // ชื่อไทยจากบัตรเขียนทับชื่อจาก Google ทุกหน้าจะได้แสดงชื่อไทย รีเซ็ตแล้วชื่อยังอยู่ อ่านไม่ได้คงชื่อเดิม
   async setIdentity(
     userId: string,
     score: number | null,
-    study: { faculty: string | null; major: string | null } = { faculty: null, major: null },
+    study: { fullNameTh?: string | null; faculty: string | null; major: string | null } = {
+      faculty: null,
+      major: null,
+    },
   ): Promise<void> {
     const { error } = await this.db
       .from('users')
@@ -131,6 +143,7 @@ export class UsersService {
         identity_score: score,
         faculty: study.faculty,
         major: study.major,
+        ...(study.fullNameTh ? { full_name: study.fullNameTh } : {}),
       })
       .eq('id', userId)
       .select('id')

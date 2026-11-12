@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./academic.css";
+@import "./signin.css";
 
 
 @font-face { font-family: Geist; src: url('/fonts/Geist-400.ttf') format('truetype'); font-weight: 400; font-display: swap; }
@@ -83,12 +84,12 @@
 }
 
 @layer components {
-  .app-shell { min-height: 100dvh; }
-  .app-content { min-width: 0; }
+  .app-shell { height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .app-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; }
   .app-content > main { width: 100%; max-width: 1440px; padding: clamp(1rem, 3vw, 2.5rem); }
   .app-content main > header { flex-wrap: wrap; gap: 1rem; }
   .app-content main > form, .app-content main > ul.border { background: var(--cp-surface); }
-  .app-navigation { position: sticky; top: 0; z-index: 30; background: var(--cp-surface); border-bottom: 1px solid var(--cp-border); padding: 1rem; }
+  .app-navigation { position: sticky; top: 0; z-index: 30; flex-shrink: 0; background: var(--cp-surface); border-bottom: 1px solid var(--cp-border); padding: 1rem; }
   .navigation-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
   .navigation-brand { font-size: 1.25rem; font-weight: 700; color: var(--cp-ink); text-decoration: none; }
   .navigation-role, .navigation-footer { color: var(--cp-muted); font-size: .75rem; }
@@ -139,7 +140,7 @@
   .app-shell:has(.app-navigation) { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
   .app-navigation { height: 100dvh; border-bottom: 0; border-right: 1px solid var(--cp-border); padding: 1.5rem; display: flex; flex-direction: column; }
   .navigation-toggle { display: none; }
-  .navigation-links, .navigation-links[data-open=false] { display: flex; flex: 1; max-height: none; padding-top: 1.5rem; }
+  .navigation-links, .navigation-links[data-open=false] { display: flex; flex: 1; min-height: 0; max-height: none; padding-top: 1.5rem; }
 }
 @media (max-width: 39.99rem) {
   .app-content .flex > input:not([type=checkbox]):not([type=radio]), .app-content .flex > select { flex: 1 1 100%; width: 100%; }

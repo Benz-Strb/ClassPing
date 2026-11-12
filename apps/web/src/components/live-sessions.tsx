@@ -44,12 +44,9 @@ export function LiveSessions() {
   }
 
   return (
-    <section className="space-y-4">
+    <section className="live-sessions flex h-full min-h-0 flex-col gap-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">กล้องหน้าห้อง</h1>
-        <Link href="/courses" className="text-sm text-blue-600 underline">
-          วิชาทั้งหมด
-        </Link>
+        <h1 className="text-xl font-semibold">กล้องวงจรปิด</h1>
       </header>
       <p className="text-sm text-gray-600">
         เห็นเฉพาะคาบของวิชาที่สอนและคาบสอบที่คุม กล้องเปิดเฉพาะช่วงที่มีคาบ
@@ -70,6 +67,7 @@ export function LiveSessions() {
         )}
       </div>
 
+      <div className="workspace-body">
       {error && <p className="text-red-600">{error}</p>}
 
       {sessions === null ? (
@@ -86,7 +84,7 @@ export function LiveSessions() {
                 {STATUS[s.status].label}
               </span>
               <span className="ml-auto text-sm">
-                {!s.hasCamera ? (
+                {!s.hasCamera && !s.hasDoorCamera ? (
                   <span className="text-gray-500">ห้องนี้ไม่มีกล้อง</span>
                 ) : (
                   <span className="space-x-3">
@@ -95,9 +93,10 @@ export function LiveSessions() {
                         ดูสด
                       </Link>
                     )}
-                    {(s.cameraOpen || s.status !== "upcoming") && (
+                    {/* ระหว่างคาบย้อนดูได้จากแถบเวลาในหน้าดูสด จบคาบแล้วเปิดหน้าเดียวกันที่ต้นคาบ */}
+                    {s.status === "ended" && (
                       <Link
-                        href={`/live/${s.id}/recording`}
+                        href={`/live/${s.id}`}
                         className="text-blue-600 hover:underline"
                       >
                         ดูย้อนหลัง
@@ -110,6 +109,7 @@ export function LiveSessions() {
           ))}
         </ul>
       )}
+      </div>
     </section>
   );
 }

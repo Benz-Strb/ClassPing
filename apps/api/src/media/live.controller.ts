@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { CurrentUser, Roles } from '../auth/auth.decorators.js';
 import type { AppUser } from '../users/users.service.js';
+import { cameraKind } from './video-access.js';
 import {
   LiveService,
   type LiveFacesView,
@@ -21,8 +22,12 @@ export class LiveController {
 
   @Post('sessions/:id/live')
   @HttpCode(200)
-  start(@CurrentUser() user: AppUser, @Param('id') id: string): Promise<LiveTicket> {
-    return this.live.startLive(user, id);
+  start(
+    @CurrentUser() user: AppUser,
+    @Param('id') id: string,
+    @Query('camera') camera?: string,
+  ): Promise<LiveTicket> {
+    return this.live.startLive(user, id, cameraKind(camera));
   }
 
   @Get('sessions/:id/live/faces')

@@ -4,10 +4,14 @@ export interface Me {
   id: string;
   email: string;
   fullName: string | null;
+  avatarUrl?: string | null;
   role: "student" | "teacher" | "admin";
   studentId: string | null;
   pdpaConsentAt: string | null;
   identityVerifiedAt: string | null;
+  // อ่านจากบัตรนักศึกษาตอนยืนยันตัวตน
+  faculty?: string | null;
+  major?: string | null;
 }
 
 export type Pose = "front" | "left" | "right" | "up" | "down";

@@ -10,7 +10,14 @@ import { LIVE_REPO, type LiveRepo } from './live.repo.js';
 import { cameraPath } from './media-path.js';
 import { signMediaToken, verifyMediaToken } from './media-token.js';
 import { PLAYBACK_CLIENT, type PlaybackClient } from './playback.client.js';
-import { canDownload, canWatch, type WatchableSession } from './video-access.js';
+import {
+  cameraKind,
+  cameraOf,
+  canDownload,
+  canWatch,
+  type CameraKind,
+  type WatchableSession,
+} from './video-access.js';
 
 export interface RecordingView {
   session: {
@@ -23,6 +30,8 @@ export interface RecordingView {
     endsAt: string;
   };
   segments: { start: string; duration: number }[];
+  // ห้องนี้มีกล้องไหนบ้าง หน้าเว็บใช้แสดงปุ่มสลับกล้อง
+  cameras: CameraKind[];
   // วันที่ไฟล์แรกของคาบจะถูกลบ (เก็บ 30 วัน)
   expiresOn: string | null;
   canDownload: boolean;
@@ -50,6 +59,7 @@ const linkSchema = z.object({
   start: z.iso.datetime({ offset: true, error: 'เวลาเริ่มไม่ถูกต้อง' }),
   duration: z.number({ error: 'ความยาวไม่ถูกต้อง' }).positive({ error: 'ความยาวไม่ถูกต้อง' }),
   download: z.boolean({ error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง' }).default(false),
+  camera: z.enum(['front', 'door'], { error: 'กล้องต้องเป็น front หรือ door' }).default('front'),
 });
 
 const notFound = () => new AppError(404, 'SESSION_NOT_FOUND', 'ไม่พบคาบนี้');
@@ -63,8 +73,13 @@ export class RecordingService {
     @Inject(CLOCK) private readonly now: Clock,
   ) {}
 
-  async list(user: AppUser, sessionId: string): Promise<RecordingView> {
+  async list(user: AppUser, sessionId: string, camera?: string): Promise<RecordingView> {
+    const kind = cameraKind(camera);
     const session = await this.watchable(user, sessionId);
+    const cameraId = cameraOf(session, kind);
+    const cameras: CameraKind[] = [];
+    if (session.cameraId) cameras.push('front');
+    if (session.doorCameraId) cameras.push('door');
     const allowed = canDownload(user, session);
     const info = {
       kind: session.kind,
@@ -75,12 +90,12 @@ export class RecordingService {
       startsAt: session.startsAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
     };
-    if (!session.cameraId) {
-      return { session: info, segments: [], expiresOn: null, canDownload: allowed };
+    if (!cameraId) {
+      return { session: info, segments: [], cameras, expiresOn: null, canDownload: allowed };
     }
 
     const { from, to } = await this.range(session);
-    const found = to > from ? await this.playback.list(cameraPath(session.cameraId), from, to) : [];
+    const found = to > from ? await this.playback.list(cameraPath(cameraId), from, to) : [];
     const segments = found.flatMap((seg) => {
       const start = Math.max(seg.start.getTime(), from.getTime());
       const end = Math.min(seg.start.getTime() + seg.duration * 1000, to.getTime());
@@ -93,6 +108,7 @@ export class RecordingService {
     return {
       session: info,
       segments,
+      cameras,
       expiresOn: first ? new Date(first.getTime() + KEEP_DAYS * DAY).toISOString() : null,
       canDownload: allowed,
     };
@@ -113,13 +129,14 @@ export class RecordingService {
     if (!this.covers(await this.range(session), start, input.duration)) {
       throw new AppError(400, 'BAD_REQUEST', 'ช่วงเวลาอยู่นอกคาบนี้');
     }
-    if (!session.cameraId) throw new AppError(404, 'NO_RECORDING', 'ไม่มีไฟล์อัดช่วงนี้');
+    const cameraId = cameraOf(session, input.camera);
+    if (!cameraId) throw new AppError(404, 'NO_RECORDING', 'ไม่มีไฟล์อัดช่วงนี้');
     const secret = this.config.mediaTokenSecret;
     if (!secret) throw new AppError(503, 'MEDIA_NOT_CONFIGURED', 'ระบบกล้องยังไม่พร้อม');
 
     const token = signMediaToken(secret, {
       sub: user.id,
-      path: cameraPath(session.cameraId),
+      path: cameraPath(cameraId),
       act: 'clip',
       sid: session.id,
       // ดูย้อนหลังใช้ลิงก์เดิมขอทีละช่วงตอนกรอ ต้องอยู่ได้ทั้งคลิป
@@ -127,6 +144,7 @@ export class RecordingService {
       start: start.toISOString(),
       dur: input.duration,
       dl: input.download,
+      cam: input.camera,
     });
     await this.repo.logView(session.id, user.id, input.download ? 'download' : 'playback');
     return { url: `/clips/${token}` };
@@ -142,12 +160,14 @@ export class RecordingService {
     const session = await this.repo.session(payload.sid);
     if (!session || !this.covers(await this.range(session), start, payload.dur)) throw expired();
     const stamp = `${bangkokDate(start).replaceAll('-', '')}-${bangkokTime(start).replace(':', '')}`;
+    // ชื่อไฟล์บอกกล้อง ดาวน์โหลดทั้งสองกล้องแล้วแยกออก (ลิงก์ก่อนมีช่องนี้ไม่มีชื่อกล้อง)
+    const camera = payload.cam ? `-${payload.cam}` : '';
     return {
       path: payload.path,
       start,
       duration: payload.dur,
       download: payload.dl === true,
-      filename: `classping-${stamp}.mp4`,
+      filename: `classping-${stamp}${camera}.mp4`,
     };
   }
 

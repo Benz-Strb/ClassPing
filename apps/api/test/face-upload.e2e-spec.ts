@@ -3,6 +3,8 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { EnrollmentController } from './../src/enrollment/enrollment.controller.js';
+import { IdentityLimitGuard } from './../src/enrollment/identity-limit.guard.js';
+import { CLOCK } from './../src/common/clock.js';
 import { EnrollmentService, type UploadedImage } from './../src/enrollment/enrollment.service.js';
 import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
 import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
@@ -19,6 +21,8 @@ describe('PUT /me/face/:pose (อัปโหลด)', () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [EnrollmentController],
       providers: [
+        IdentityLimitGuard,
+        { provide: CLOCK, useValue: () => new Date() },
         {
           provide: EnrollmentService,
           useValue: {

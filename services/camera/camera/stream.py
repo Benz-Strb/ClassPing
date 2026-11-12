@@ -5,6 +5,7 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable
+from datetime import datetime
 
 import cv2
 
@@ -24,10 +25,33 @@ def _path_of(url: str) -> str:
 _JOIN_S = 2
 
 
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def stamp_text(at: datetime) -> str:
+    """วัน-เดือน-ปี ค.ศ. ชื่อวัน และเวลา 24 ชม. ชื่อวันเป็นอังกฤษเพราะฟอนต์ของ OpenCV เขียนไทยไม่ได้"""
+    return f"{at:%d-%m-%Y} {_WEEKDAYS[at.weekday()]} {at:%H:%M:%S}"
+
+
+def stamp(frame, at: datetime) -> None:
+    """เขียนวันเวลามุมขวาบนแบบกล้องวงจรปิด ขอบดำให้อ่านได้ทั้งพื้นสว่างและมืด
+    มุมซ้ายบนเว็บใช้แสดงป้ายสด/ย้อนหลัง มุมขวาล่างเป็นชื่อกล้อง"""
+    text = stamp_text(at)
+    scale = frame.shape[0] / 720 * 0.8
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    outline = max(1, round(6 * scale))
+    (width, _), _ = cv2.getTextSize(text, font, scale, outline)
+    origin = (frame.shape[1] - width - round(16 * scale), round(40 * scale))
+    cv2.putText(frame, text, origin, font, scale, (0, 0, 0), outline, cv2.LINE_AA)
+    cv2.putText(frame, text, origin, font, scale, (255, 255, 255), max(1, round(2 * scale)), cv2.LINE_AA)
+
+
 class Streamer:
     """ส่งภาพจากกล้องเข้า ffmpeg เข้ารหัส H.264 แล้ว publish RTSP ให้ media server
 
     ไม่บันทึกอะไรลงดิสก์ในเครื่องนี้ (media server เป็นคนอัด) ไม่มีเสียง
+    ทุกภาพมีวันเวลาตอนส่งติดไว้ ภาพย้อนหลังจะได้บอกเวลาเองได้
+    mirror กลับซ้ายขวาสำหรับกล้องที่ให้ภาพกลับด้าน (ต้องกลับก่อนเขียนเวลา ไม่งั้นตัวหนังสือกลับด้าน)
     """
 
     def __init__(
@@ -36,9 +60,13 @@ class Streamer:
         max_width: int,
         popen: Callable[..., subprocess.Popen] = subprocess.Popen,
         feed: bool = True,
+        mirror: bool = False,
+        clock: Callable[[], datetime] = lambda: datetime.now().astimezone(),
     ):
         self.source = source
         self.max_width = max_width
+        self.mirror = mirror
+        self._clock = clock
         self._popen = popen
         self._feed = feed
         self._proc: subprocess.Popen | None = None
@@ -135,10 +163,17 @@ class Streamer:
     def push(self, frame) -> None:
         if not self.alive or self._size is None:
             return
-        if (frame.shape[1], frame.shape[0]) != self._size:
-            frame = cv2.resize(frame, self._size, interpolation=cv2.INTER_AREA)
+        out = frame
+        if (out.shape[1], out.shape[0]) != self._size:
+            out = cv2.resize(out, self._size, interpolation=cv2.INTER_AREA)
+        if self.mirror:
+            out = cv2.flip(out, 1)
+        # ภาพต้นฉบับใช้ร่วมกับการเช็คชื่อ/หาคน ห้ามเขียนทับ
+        if out is frame:
+            out = frame.copy()
+        stamp(out, self._clock())
         try:
-            self._proc.stdin.write(frame.tobytes())
+            self._proc.stdin.write(out.tobytes())
         except (BrokenPipeError, ValueError, OSError):
             self._broken = True
 

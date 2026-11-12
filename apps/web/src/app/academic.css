@@ -1,6 +1,12 @@
 .app-shell { background: var(--cp-bg); }
 .app-content > main { max-width: 1320px; margin-inline: auto; padding: clamp(24px, 3.4vw, 48px); }
 .app-content { font-size: 15px; }
+.app-content > main > header { position: sticky; top: 0; z-index: 20; background: var(--cp-bg); padding-block: 12px; }
+.app-content > main.fixed-workspace { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 24px; overflow: hidden; }
+.fixed-workspace > header { flex-shrink: 0; }
+.workspace-body { flex: 1; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; }
+.app-content > main.live-workspace:has(.live-sessions) { height: 100%; overflow: hidden; }
+.live-sessions > :not(.workspace-body) { flex-shrink: 0; }
 .app-content h1 { font-size: clamp(26px, 2.3vw, 32px); line-height: 1.45; font-weight: 600; color: #352647; }
 .app-content h2 { font-size: 20px; line-height: 1.5; font-weight: 500; }
 .app-content h3 { font-weight: 500; }
@@ -46,6 +52,12 @@
 .workspace-columns { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 28px; }
 .workspace-primary { display: grid; min-width: 0; gap: 28px; }
 .workspace-tools { display: grid; gap: 24px; min-width: 0; }
+@media (min-width: 75rem) {
+  .courses-workspace { height: 100%; overflow: hidden; }
+  .courses-workspace > .workspace-columns { flex: 1; min-height: 0; overflow: hidden; align-items: stretch; }
+  .courses-workspace .workspace-primary { min-height: 0; overflow-y: auto; align-content: start; overscroll-behavior-y: contain; }
+  .course-tools { min-height: 0; overflow-y: auto; align-content: start; overscroll-behavior-y: contain; }
+}
 .work-surface { padding: 24px; background: #fff; border: 1px solid var(--cp-border); border-radius: 16px; min-width: 0; }
 .surface-heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .surface-heading > a { display: flex; align-items: center; min-height: 44px; color: #5d3c9e; font-size: 13px; }
@@ -61,6 +73,7 @@
 .course-grid { display: block; }
 .course-card { border: 0; border-bottom: 1px solid var(--cp-border); border-radius: 0; padding: 0; gap: 0; background: transparent; }
 .course-card:last-child { border-bottom: 0; }
+.course-card.course-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .course-card > a { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 20px 0; text-decoration: none; }
 .course-card:hover { background: #fcfaff; }
 .course-card h2 { font-size: 16px; font-weight: 500; }
@@ -122,8 +135,45 @@
 .roster-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
 .roster-create { max-width: 720px; }
 .rules-view { max-width: 800px; }
-.live-viewer video, .recording-view video { border-radius: 12px; background: #17131e; }
 @media (max-width: 39.99rem) {
   .session-link { gap: 12px; padding: 16px; }
   .session-link > .ml-auto { flex-basis: 100%; margin-left: 0; }
+}
+
+.confirmation-dialog { width: min(440px, calc(100vw - 32px)); margin: auto; inset: 0; padding: 28px; border: 0; border-radius: 16px; background: var(--cp-surface); color: var(--cp-ink); box-shadow: 0 20px 64px #28233026; }
+.confirmation-dialog::backdrop { background: #28233070; }
+.confirmation-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 20px; border-radius: 12px; background: var(--cp-selected); color: var(--cp-action-hover); }
+.confirmation-icon[data-danger=true] { background: #fff0ee; color: #ae2929; }
+.confirmation-icon svg { width: 26px; height: 26px; }
+.confirmation-dialog h2 { font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+.confirmation-dialog p { white-space: pre-line; overflow-wrap: anywhere; color: var(--cp-muted); font-size: 15px; line-height: 1.75; }
+.confirmation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.confirmation-actions button { min-height: 48px; padding: 10px 20px; border-radius: 10px; font-weight: 500; }
+.confirmation-cancel { border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-ink); }
+.confirmation-cancel:hover { background: var(--cp-bg); }
+.confirmation-submit { background: var(--cp-action); color: white; }
+.confirmation-submit:hover { background: var(--cp-action-hover); }
+.confirmation-submit[data-danger=true] { background: #ae2929; }
+.confirmation-submit[data-danger=true]:hover { background: #8e2020; }
+.notification-stack { position: fixed; right: 24px; bottom: 24px; width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow-y: auto; z-index: 90; display: grid; gap: 12px; pointer-events: none; }
+.notification-toast { display: flex; align-items: flex-start; gap: 12px; padding: 18px; border: 0; border-radius: 14px; background: var(--cp-surface); color: var(--cp-ink); box-shadow: 0 8px 28px #2823301a; pointer-events: auto; }
+.notification-symbol { flex: 0 0 32px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--cp-selected); color: var(--cp-action-hover); }
+.notification-toast[data-kind=error] .notification-symbol { background: #fff0ee; color: #ae2929; }
+.notification-toast svg { width: 22px; height: 22px; }
+.notification-toast > div { flex: 1; min-width: 0; }
+.notification-toast strong { font-size: 15px; font-weight: 600; }
+.notification-toast p { margin-top: 4px; font-size: 14px; color: var(--cp-muted); overflow-wrap: anywhere; }
+.notification-toast > button { display: grid; place-items: center; min-width: 44px; min-height: 44px; margin: -6px -8px -6px 0; color: var(--cp-muted); border-radius: 8px; }
+.notification-toast > button:hover { background: var(--cp-bg); }
+.app-content [role=alert] { border: 1px solid #ecc5bf; line-height: 1.7; }
+@media (prefers-reduced-motion: no-preference) {
+  .confirmation-dialog[open] { animation: confirmation-enter 180ms ease-out; }
+  .notification-toast { animation: notification-enter 180ms ease-out; }
+  @keyframes confirmation-enter { from { opacity: .6; clip-path: inset(0 0 12px 0 round 16px); } to { opacity: 1; clip-path: inset(0 round 16px); } }
+  @keyframes notification-enter { from { opacity: .6; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+}
+@media (max-width: 39.99rem) {
+  .notification-stack { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); }
+  .confirmation-dialog { padding: 24px; }
+  .confirmation-actions button { flex: 1; }
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { confirmAction } from "@/components/notifications";
+
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -56,7 +58,7 @@ export function StudentsView() {
   }
 
   async function remove(code: string) {
-    if (!window.confirm(`เอา ${code} ออกจากวิชาใช่ไหม`)) return;
+    if (!(await confirmAction(`เอา ${code} ออกจากวิชาใช่ไหม`))) return;
     setError(null);
     try {
       await apiFetch(`/courses/${id}/students/${code}`, { method: "DELETE" });

@@ -76,6 +76,8 @@ describe('UsersService.ensureUser', () => {
       studentId: '66112106',
       pdpaConsentAt: null,
       identityVerifiedAt: null,
+      faculty: null,
+      major: null,
     });
     expect(rows.get('u1')?.role).toBe('student');
   });
@@ -217,6 +219,17 @@ describe('UsersService.setIdentity', () => {
     expect(rows.get('u1')).toMatchObject({ faculty: 'คณะ ก', major: 'สาขา ข' });
     await users.setIdentity('u1', null);
     expect(rows.get('u1')).toMatchObject({ faculty: null, major: null });
+  });
+
+  it('ชื่อไทยจากบัตรเขียนทับชื่อจาก Google รีเซ็ตแล้วชื่อยังอยู่ อ่านไม่ได้คงชื่อเดิม', async () => {
+    const { db, rows } = fakeDb([{ ...row, full_name: 'Natthawut Nadon' }]);
+    const users = new UsersService(db, config());
+    await users.setIdentity('u1', 0.52, { fullNameTh: null, faculty: null, major: null });
+    expect(rows.get('u1')!.full_name).toBe('Natthawut Nadon');
+    await users.setIdentity('u1', 0.52, { fullNameTh: 'ณัฐวุฒิ นาดอน', faculty: null, major: null });
+    expect(rows.get('u1')!.full_name).toBe('ณัฐวุฒิ นาดอน');
+    await users.setIdentity('u1', null);
+    expect(rows.get('u1')!.full_name).toBe('ณัฐวุฒิ นาดอน');
   });
 
   it('ส่ง null ล้างการยืนยัน', async () => {

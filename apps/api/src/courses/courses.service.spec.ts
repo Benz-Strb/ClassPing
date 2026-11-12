@@ -10,6 +10,11 @@ class InMemoryCoursesRepo implements CoursesRepo {
   rules = new Map<string, Rules>();
   findCalls = 0;
 
+  async remove(id: string) {
+    this.rules.delete(id);
+    return this.courses.delete(id);
+  }
+
   async listAll() {
     return [...this.courses.values()];
   }
@@ -89,6 +94,24 @@ function setup() {
 }
 
 describe('CoursesService', () => {
+  it('deletes an owned course and rejects deletion by another teacher', async () => {
+    const { service, repo } = setup();
+    const course = await service.create(teacherA, { code: 'CS101', name: 'Created by mistake' });
+    await expect(service.remove(teacherB, course.id)).rejects.toMatchObject({ code: 'COURSE_NOT_FOUND' });
+    expect(repo.courses.has(course.id)).toBe(true);
+    await service.remove(teacherA, course.id);
+    expect(repo.courses.has(course.id)).toBe(false);
+    expect(repo.rules.has(course.id)).toBe(false);
+    await expect(service.remove(teacherA, course.id)).rejects.toMatchObject({ code: 'COURSE_NOT_FOUND' });
+  });
+
+  it('allows administrators to delete a course and rejects malformed ids', async () => {
+    const { service } = setup();
+    const course = await service.create(teacherA, { code: 'CS101', name: 'Created by mistake' });
+    await service.remove(admin, course.id);
+    await expect(service.getOwned(admin, course.id)).rejects.toMatchObject({ code: 'COURSE_NOT_FOUND' });
+    await expect(service.remove(admin, 'invalid')).rejects.toMatchObject({ code: 'COURSE_NOT_FOUND' });
+  });
   it('อาจารย์เห็นแค่วิชาตัวเอง แอดมินเห็นทุกวิชา', async () => {
     const { service } = setup();
     await service.create(teacherA, { code: 'cs101', name: 'โปรแกรมมิ่ง' });

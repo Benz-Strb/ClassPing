@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { AuthEntrance } from './src/ui/AuthEntrance';
 import { MeScreen } from './src/screens/MeScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -32,7 +33,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.root}>
+    <SafeAreaView edges={session && fontsLoaded || session === null && !showChat ? [] : ['top', 'left', 'right']} style={styles.root}>
       {session === null && showChat && <Pressable accessibilityRole="button" style={styles.chatButton} onPress={() => setShowChat((value) => !value)}>
         <Text>กลับเข้าสู่ระบบ</Text>
       </Pressable>}
@@ -41,9 +42,9 @@ export default function App() {
       ) : !session && showChat ? (
         <SafeAreaView edges={['bottom']} style={styles.screen}><ChatScreen key="public" authenticated={false} /></SafeAreaView>
       ) : session ? (
-        <MeScreen key={session.user.id} onRejected={onRejected} onSignedOut={onSignedOut} />
+        <AuthEntrance key={session.user.id}>{onReady => <SafeAreaView edges={['top', 'left', 'right']} style={styles.authenticatedScreen}><MeScreen onReady={onReady} onRejected={onRejected} onSignedOut={onSignedOut} /></SafeAreaView>}</AuthEntrance>
       ) : (
-        <SafeAreaView edges={['bottom']} style={styles.screen}><LoginScreen key={loginError ?? ''} error={loginError} onDpuChat={() => setShowChat(true)} /></SafeAreaView>
+        <LoginScreen key={loginError ?? ''} error={loginError} onDpuChat={() => setShowChat(true)} />
       )}
       <StatusBar style="dark" />
     </SafeAreaView>
@@ -54,5 +55,6 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   screen: { flex: 1, backgroundColor: colors.background },
+  authenticatedScreen: { flex: 1, backgroundColor: colors.surface },
   chatButton: { padding: 16, backgroundColor: colors.selected },
 });

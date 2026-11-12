@@ -6,6 +6,7 @@ import { dbError } from '../common/db-error.js';
 import { looksLike } from '../common/image-type.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
 import { FaceClient, type EnrollResult } from '../face/face.client.js';
+import { LeaveOcrClient } from '../leave/leave-ocr.client.js';
 import { UsersService, type AppUser } from '../users/users.service.js';
 import { CARD_MATCH_MIN, checkCard, readStudyInfo } from './card-check.js';
 import { ENROLLMENT_REPO, type EnrollmentRepo, type FaceRow } from './enrollment.repo.js';
@@ -58,6 +59,7 @@ export class EnrollmentService {
     @Inject(ENROLLMENT_REPO) private readonly repo: EnrollmentRepo,
     private readonly users: UsersService,
     private readonly face: FaceClient,
+    private readonly ocr: LeaveOcrClient,
     @Inject(CLOCK) private readonly now: Clock,
     @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'matchAcceptMin'>,
   ) {}
@@ -92,12 +94,16 @@ export class EnrollmentService {
 
     // ตรวจหน้าสดก่อน ระหว่างที่ยังจัดท่าไม่ได้จะได้ไม่ต้องอ่านบัตรซ้ำทุกรูป
     const result = await this.analyze(file, 'front');
-    const read = await this.face.readCard(card.buffer, card.mimetype).catch((error: unknown) => {
-      // ไฟล์บัตรเสียหรือใหญ่ไป ให้แอปกลับไปเลือกบัตรใหม่ ไม่ใช่ถ่ายหน้าซ้ำ
+    // ไฟล์บัตรเสียหรือใหญ่ไป ให้แอปกลับไปเลือกบัตรใหม่ ไม่ใช่ถ่ายหน้าซ้ำ
+    const cardError = (error: unknown) => {
       if (error instanceof AppError && [400, 413].includes(error.getStatus())) throw badCard();
       throw error;
-    });
-    const verdict = checkCard(read.lines, { studentCode: user.studentId!, today: this.now() });
+    };
+    const [read, text] = await Promise.all([
+      this.face.readCard(card.buffer, card.mimetype).catch(cardError),
+      this.ocr.readCard(card.buffer, card.mimetype).catch(cardError),
+    ]);
+    const verdict = checkCard(text.lines, { studentCode: user.studentId!, today: this.now() });
     if (!verdict.ok) throw new AppError(422, verdict.code, verdict.message);
     const [cardFace, ...others] = read.faces;
     if (!cardFace) {
@@ -132,7 +138,7 @@ export class EnrollmentService {
       rows.find((r) => r.pose === 'front'),
     );
     await this.removeQuietly(await this.repo.deleteByUser(user.id, 'front'));
-    await this.users.setIdentity(user.id, score, readStudyInfo(read.lines));
+    await this.users.setIdentity(user.id, score, readStudyInfo(text.lines, user.studentId!));
     return { done: ['front'], complete: false, verified: true };
   }
 

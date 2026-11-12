@@ -15,8 +15,8 @@ def post(client, auth, size: int = 500):
     )
 
 
-def client_with(settings, engine, reader, liveness):
-    return TestClient(create_app(settings, engine, reader, liveness=liveness))
+def client_with(settings, engine, liveness):
+    return TestClient(create_app(settings, engine, liveness=liveness))
 
 
 def test_detect_liveness_off_is_null(client, auth, engine):
@@ -25,33 +25,33 @@ def test_detect_liveness_off_is_null(client, auth, engine):
     assert [f["liveness"] for f in faces] == [None]
 
 
-def test_detect_liveness_scores_big_faces(auth, engine, reader):
+def test_detect_liveness_scores_big_faces(auth, engine):
     settings = load_settings({"FACE_SERVICE_TOKEN": TOKEN, "LIVENESS_MIN_FACE_PX": "100"})
     big = fake_face(bbox=(100.0, 100.0, 300.0, 300.0), seed=1)  # 200 px
     small = fake_face(bbox=(10.0, 10.0, 50.0, 50.0), seed=2)  # 40 px < 100
     engine.faces = [small, big]
-    client = client_with(settings, engine, reader, FakeLiveness(0.8))
+    client = client_with(settings, engine, FakeLiveness(0.8))
     faces = post(client, auth).json()["data"]["faces"]
     assert [f["bbox"] for f in faces] == [list(big.bbox), list(small.bbox)]
     assert [f["liveness"] for f in faces] == [0.8, None]
 
 
-def test_liveness_gets_full_frame(settings, auth, engine, reader):
+def test_liveness_gets_full_frame(settings, auth, engine):
     engine.faces = [fake_face(bbox=(100.0, 100.0, 300.0, 300.0))]
     fake = FakeLiveness()
-    post(client_with(settings, engine, reader, fake), auth, size=500)
+    post(client_with(settings, engine, fake), auth, size=500)
     assert fake.shapes == [(500, 500, 3)]
 
 
-def test_liveness_none_score_is_null(settings, auth, engine, reader):
+def test_liveness_none_score_is_null(settings, auth, engine):
     engine.faces = [fake_face()]
-    client = client_with(settings, engine, reader, FakeLiveness(None))
+    client = client_with(settings, engine, FakeLiveness(None))
     assert post(client, auth).json()["data"]["faces"][0]["liveness"] is None
 
 
-def test_health_reports_liveness(settings, engine, reader, client):
+def test_health_reports_liveness(settings, engine, client):
     assert client.get("/health").json()["data"]["liveness"] is None
-    on = client_with(settings, engine, reader, FakeLiveness())
+    on = client_with(settings, engine, FakeLiveness())
     assert on.get("/health").json()["data"]["liveness"] == "fake-liveness"
 
 

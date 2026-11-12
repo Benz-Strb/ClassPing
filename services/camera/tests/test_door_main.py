@@ -343,3 +343,64 @@ def test_parse_quad():
 def test_parse_quad_rejects_bad_values(text):
     with pytest.raises(ValueError, match="DOOR_QUAD"):
         parse_quad(text)
+
+
+class FakeStreamer:
+    def __init__(self):
+        self.started: list[str] = []
+        self.stops = 0
+        self.ok = True
+        self._running = False
+
+    @property
+    def alive(self):
+        return self._running and self.ok
+
+    @property
+    def running(self):
+        return self._running
+
+    def start(self, url, fps, bitrate_kbps):
+        self.started.append(url)
+        self._running = True
+        return True
+
+    def stop(self):
+        self.stops += 1
+        self._running = False
+
+
+def test_streams_video_while_session_has_stream_and_stops_after():
+    from camera.api import Stream
+
+    streamer = FakeStreamer()
+    clock, camera, counter, sender = Clock(), FakeCamera(), FakeCounter(), FakeSender()
+    poller = FakePoller()
+    loop = DoorLoop(poller, camera, counter, sender, clock, streamer)
+    stream = Stream(url="rtsp://media/cam/d1?token=t", fps=15, bitrate_kbps=1500)
+    poller.current = Session(
+        id="s1", course="X", ends_at=START + timedelta(minutes=60), fps=1, stream=stream
+    )
+    loop.tick()
+    loop.tick()
+    assert streamer.started == [stream.url]
+    # ffmpeg ตาย ลองใหม่หลังรอ ไม่ใช่ทุกเฟรม
+    streamer.ok = False
+    loop.tick()
+    assert len(streamer.started) == 1
+    clock.advance(6)
+    loop.tick()
+    assert len(streamer.started) == 2
+    poller.current = None
+    loop.tick()
+    assert streamer.stops >= 2 and not streamer.running
+
+
+def test_no_stream_without_url_from_api():
+    streamer = FakeStreamer()
+    clock, camera, counter, sender = Clock(), FakeCamera(), FakeCounter(), FakeSender()
+    poller = FakePoller()
+    loop = DoorLoop(poller, camera, counter, sender, clock, streamer)
+    poller.current = session()
+    loop.tick()
+    assert streamer.started == []

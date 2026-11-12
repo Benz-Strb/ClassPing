@@ -1,0 +1,128 @@
+.signin-page { position: relative; isolation: isolate; min-height: 100svh; display: flex; flex-direction: column; padding: 32px clamp(24px, 6vw, 96px); background: var(--cp-bg); }
+.signin-body { position: relative; z-index: 1; flex: 1; width: min(100%, 456px); margin: 0 auto; display: grid; align-items: center; padding: 64px 0; }
+.signin-form { position: relative; width: 100%; padding: 48px 40px 32px; text-align: center; background: var(--cp-surface); border: 0; border-radius: 16px; box-shadow: 0 24px 70px rgb(69 43 113 / .12), 0 4px 16px rgb(69 43 113 / .04); }
+.signin-form::before { content: ''; position: absolute; top: 0; left: 25%; width: 50%; height: 2px; background: linear-gradient(90deg, transparent, #ad92db, transparent); }
+.signin-form-mark { display: grid; place-items: center; position: relative; overflow: hidden; width: 76px; height: 76px; margin: 0 auto 24px; border-radius: 16px; color: white; background: #7652c5; box-shadow: 0 10px 24px rgb(118 82 197 / .22); }
+.signin-card-motion { width: 100%; }
+.signin-form-mark svg { width: 42px; height: 42px; }
+.signin-form h1 { font-size: 32px; font-weight: 600; letter-spacing: -.035em; line-height: 1.4; margin: 0 0 36px; color: #392653; }
+.signin-google { position: relative; overflow: hidden; isolation: isolate; width: 100%; min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 16px; border: 0; border-radius: 10px; background: var(--cp-action); color: white; font-size: 15px; font-weight: 500; cursor: pointer; }
+.signin-google::before { content: ''; position: absolute; z-index: -1; inset: -60% auto -60% -50%; width: 35%; background: linear-gradient(110deg, transparent, rgb(255 255 255 / .24), transparent); transform: translateX(-150%) rotate(15deg); pointer-events: none; }
+.signin-google > svg { flex-shrink: 0; }
+.signin-google > svg:last-child { margin-left: auto; width: 28px; height: 28px; padding: 4px; border-radius: 50%; background: rgb(255 255 255 / .14); }
+.signin-google > span:not(.signin-spinner) { flex: 1; text-align: left; }
+.signin-google:hover:not(:disabled) { background: var(--cp-action-hover); }
+.signin-google:disabled { cursor: wait; background: var(--cp-selected); color: #5d3c9e; }
+.signin-domain { margin: 24px 0 0; padding-top: 22px; border-top: 1px solid #eee8f5; text-align: center; font-size: 12px; line-height: 1.8; color: var(--cp-muted); }
+.signin-domain strong { font-weight: 500; color: #4d3282; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: text-decoration-color 180ms ease; }
+.signin-domain:hover strong { text-decoration-color: #a68acc; }
+.signin-form:focus-within { outline: 2px solid #d9cbea; outline-offset: 5px; }
+.signin-error { margin-top: 16px; padding: 12px; border-radius: 8px; background: #fff0ee; color: #ae2929; font-size: 13px; overflow-wrap: anywhere; }
+ .signin-scan { position: absolute; left: 12px; right: 12px; top: 50%; height: 1px; background: currentColor; opacity: 0; }
+.signin-spinner { width: 18px; height: 18px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; flex: 0 0 18px; }
+.signin-backdrop { position: absolute; inset: 0; overflow: clip; pointer-events: none; background: #f6f3fb; }
+.signin-wash { position: absolute; width: min(85vw, 1000px); aspect-ratio: 1; border-radius: 50%; }
+.signin-wash-one { top: -35%; right: -16%; background: radial-gradient(circle, #dcd1f2 0%, #e8e0f6 35%, transparent 70%); }
+.signin-wash-two { bottom: -40%; left: -22%; background: radial-gradient(circle, #e2d9f4 0%, #eee7f8 35%, transparent 70%); }
+.signin-orbits { position: absolute; inset: 0; width: 100%; height: 100%; stroke: #7652c5; stroke-width: 1; stroke-opacity: .2; }
+.signin-orbit-dot { fill: #a68acc; stroke: none; }
+.signin-orbit-one { transform-origin: 60px 120px; }
+.signin-orbit-two { transform-origin: 1390px 920px; }
+.signin-wash-three { top: 12%; left: 18%; width: min(65vw, 750px); background: radial-gradient(circle, #eddff6 0%, transparent 68%); }
+.signin-particles { position: absolute; inset: 0; }
+.signin-particle { position: absolute; left: var(--x); top: var(--y); width: var(--size); height: var(--size); border-radius: 50%; background: #a58acb; opacity: .28; }
+.signin-particle:nth-child(3n) { background: transparent; border: 1px solid #9878bf; width: calc(var(--size) * 2); height: calc(var(--size) * 2); }
+.signin-particle:nth-child(4n) { border-radius: 3px; background: #c4afe4; }
+.signin-streams { stroke-opacity: .2; stroke-dasharray: 120 28 3 28; }
+.signin-ripples { position: absolute; left: 14%; top: 32%; width: 180px; height: 180px; }
+.signin-ripples span { position: absolute; inset: 0; border: 1px solid #b39ad4; border-radius: 50%; opacity: .2; }
+.signin-ripples span:nth-child(2) { transform: scale(1.3); }
+.signin-ripples span:nth-child(3) { transform: scale(1.6); }
+.signin-backdrop[data-paused="true"] * { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: no-preference) {
+  .signin-form-mark { transition: transform 280ms cubic-bezier(.16, 1, .3, 1), background-color 180ms ease; }
+  .signin-form-mark:hover, .signin-form:focus-within .signin-form-mark { transform: scale(1.08) rotate(-4deg); background: #5d3c9e; }
+  .signin-form-mark:hover .signin-scan, .signin-form:focus-within .signin-scan { animation: signin-hover-scan 1200ms ease-in-out infinite; }
+  .signin-google:is(:hover, :focus-visible):not(:disabled) { box-shadow: 0 8px 20px rgb(93 60 158 / .2); }
+  .signin-google:is(:hover, :focus-visible):not(:disabled)::before { animation: signin-shine 750ms cubic-bezier(.16, 1, .3, 1); }
+  .signin-google:focus-visible > svg:last-child { transform: translateX(5px); }
+  @keyframes signin-shine { from { transform: translateX(-150%) rotate(15deg); } to { transform: translateX(600%) rotate(15deg); } }
+  @keyframes signin-hover-scan { 0%, 100% { opacity: 0; transform: translateY(-18px); } 20%, 75% { opacity: .7; } 90% { transform: translateY(18px); } }
+
+  .signin-wash-three { animation: signin-drift 21s ease-in-out -6s infinite alternate; }
+  .signin-particle { animation: signin-float var(--duration) ease-in-out var(--delay) infinite alternate; }
+  .signin-streams { animation: signin-flow 28s linear infinite; }
+  .signin-ripples span { animation: signin-ripple 9s ease-out infinite; }
+  .signin-ripples span:nth-child(2) { animation-delay: -3s; }
+  .signin-ripples span:nth-child(3) { animation-delay: -6s; }
+  @keyframes signin-float { from { transform: translate3d(-14px, 22px, 0) rotate(-15deg); opacity: .15; } to { transform: translate3d(24px, -38px, 0) rotate(50deg); opacity: .45; } }
+  @keyframes signin-flow { to { stroke-dashoffset: -716; } }
+  @keyframes signin-ripple { from { transform: scale(.6); opacity: 0; } 20% { opacity: .25; } to { transform: scale(2.1); opacity: 0; } }
+
+  .signin-wash-one { animation: signin-drift 18s ease-in-out infinite alternate; }
+  .signin-wash-two { animation: signin-drift 23s ease-in-out -9s infinite alternate-reverse; }
+  .signin-orbit-one { animation: signin-orbit 65s linear infinite; }
+  .signin-orbit-two { animation: signin-orbit 85s linear infinite reverse; }
+  @keyframes signin-drift { from { transform: translate3d(-3%, 0, 0) scale(.95); } to { transform: translate3d(8%, 10%, 0) scale(1.12); } }
+  @keyframes signin-orbit { to { transform: rotate(360deg); } }
+
+  .signin-form { transition: box-shadow 280ms ease; animation: signin-open 650ms cubic-bezier(.16, 1, .3, 1) both; }
+  .signin-scan { animation: signin-scan 1100ms cubic-bezier(.4, 0, .2, 1) 350ms 2; }
+  .signin-google { transition: background-color 160ms ease, transform 160ms ease, box-shadow 180ms ease; }
+  .signin-google > svg:last-child { transition: transform 180ms ease; }
+  .signin-google:hover:not(:disabled) > svg:last-child { transform: translateX(5px); }
+  .signin-google:active:not(:disabled) { transform: scale(.985); }
+  .signin-spinner { animation: signin-spin 750ms linear infinite; }
+  .app-content { animation: signin-content 350ms ease-out; }
+  @keyframes signin-open { from { opacity: .45; transform: translateY(14px) scale(.98); clip-path: inset(0 0 12px round 16px); } to { opacity: 1; transform: none; clip-path: none; } }
+  @keyframes signin-scan { 0% { opacity: 0; transform: translateY(-20px); } 20%, 75% { opacity: .5; } 100% { opacity: 0; transform: translateY(20px); } }
+  @keyframes signin-spin { to { transform: rotate(360deg); } }
+  @keyframes signin-content { from { opacity: .6; } to { opacity: 1; } }
+}
+@media (max-width: 900px) {
+  .signin-page { padding: 24px; }
+}
+@media (max-width: 680px) {
+  .signin-particle:nth-child(n+10) { display: none; }
+  .signin-ripples { left: -60px; top: 12%; width: 140px; height: 140px; }
+  .signin-page { padding: 24px 20px; }
+  .signin-body { padding: 40px 0; }
+  .signin-form { padding: 36px 26px 26px; }
+  .signin-form-mark { margin-bottom: 24px; }
+  .signin-form h1 { font-size: 29px; margin-bottom: 30px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .signin-card-motion { transform: perspective(1000px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)); transition: transform 200ms ease-out; }
+  .signin-card-motion:hover .signin-form { box-shadow: 0 28px 80px rgb(69 43 113 / .16), 0 6px 18px rgb(69 43 113 / .05); }
+}
+
+.signin-pointer-light { display: none; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .signin-pointer-light { display: block; position: absolute; top: 0; left: 0; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(circle, rgb(175 143 226 / .3), rgb(203 181 236 / .12) 40%, transparent 70%); transform: translate3d(calc(var(--pointer-x, 50vw) - 50%), calc(var(--pointer-y, 50vh) - 50%), 0); opacity: 0; transition: opacity 350ms ease; }
+  .signin-page[data-pointer="active"] .signin-pointer-light { opacity: 1; }
+  .signin-particles { translate: var(--drift-x, 0px) var(--drift-y, 0px); transition: translate 500ms ease-out; }
+  .signin-orbits { translate: calc(var(--drift-x, 0px) * -.6) calc(var(--drift-y, 0px) * -.6); transition: translate 750ms ease-out; }
+  .signin-wash { translate: calc(var(--drift-x, 0px) * 1.4) calc(var(--drift-y, 0px) * 1.4); transition: translate 1000ms ease-out; }
+}
+
+.signin-cancel { display: block; margin: 14px auto 0; padding: 8px 16px; min-height: 44px; border: 0; background: transparent; color: var(--cp-muted); font-size: 13px; cursor: pointer; text-underline-offset: 4px; }
+.signin-cancel:hover { text-decoration: underline; color: var(--cp-action); }
+.auth-stage { display: contents; }
+.auth-transition-cover { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; background: #f6f3fb; pointer-events: all; }
+.auth-transition-mark { width: 76px; height: 76px; display: grid; place-items: center; border-radius: 16px; background: var(--cp-action); color: white; font-size: 40px; font-weight: 600; }
+.auth-transition-cover[data-phase="fold"] { visibility: hidden; }
+@media (prefers-reduced-motion: no-preference) {
+  .auth-stage[data-phase="fold"] .signin-card-motion { animation: auth-fold 420ms cubic-bezier(.4, 0, .6, 1) both; transform-origin: center bottom; pointer-events: none; }
+  .auth-stage[data-phase="cover"] .signin-card-motion { opacity: 0; pointer-events: none; }
+  .auth-transition-cover[data-phase="cover"] { animation: auth-expand 500ms cubic-bezier(.16, 1, .3, 1) both; }
+  .auth-transition-cover[data-phase="reveal"] { animation: auth-uncover 650ms ease-out both; pointer-events: none; }
+  .auth-stage[data-phase="reveal"] .app-shell { animation: auth-home 700ms cubic-bezier(.16, 1, .3, 1) both; }
+  @keyframes auth-fold { to { opacity: 0; transform: perspective(1000px) rotateX(80deg) scale(.75); filter: blur(3px); } }
+  @keyframes auth-expand { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
+  @keyframes auth-uncover { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes auth-home { from { opacity: .25; transform: scale(.94); clip-path: inset(8% 10% round 16px); } to { opacity: 1; transform: none; clip-path: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-transition-cover[data-phase="reveal"] { display: none; }
+}

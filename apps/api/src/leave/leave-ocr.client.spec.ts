@@ -42,3 +42,29 @@ it('requires OCR configuration without falling back to the face service', async 
   await expect(new LeaveOcrClient({} as AppConfig).readLeaveDocument(Buffer.from('x'), 'image/png')).rejects.toMatchObject({ code: 'LEAVE_OCR_UNAVAILABLE' });
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it('routes timetable documents to the timetable OCR endpoint', async () => {
+  const fetch = vi.fn(async () => Response.json({ data: { lines: [{ text: 'CE360 จันทร์ 09:00-12:00', score: null }] } }));
+  vi.stubGlobal('fetch', fetch);
+  await expect(client().readTimetableDocument(Buffer.from('image'), 'image/png')).resolves.toMatchObject({ lines: [{ text: 'CE360 จันทร์ 09:00-12:00' }] });
+  const [url] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe('http://ocr.test/schedules/ocr');
+});
+
+it('returns a timetable-specific error when OCR is unavailable', async () => {
+  vi.stubGlobal('fetch', async () => { throw new Error('private provider detail'); });
+  await expect(client().readTimetableDocument(Buffer.from('image'), 'image/png')).rejects.toMatchObject({ code: 'TIMETABLE_OCR_UNAVAILABLE' });
+});
+
+it('reads student cards with the same local OCR reader', async () => {
+  const fetch = vi.fn(async () => Response.json({ data: { lines: [{ text: '66112106', score: null }] } }));
+  vi.stubGlobal('fetch', fetch);
+  await expect(client().readCard(Buffer.from('image'), 'image/png')).resolves.toEqual({ lines: [{ text: '66112106', score: null }] });
+  const [url] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe('http://ocr.test/leave/ocr');
+});
+
+it('returns a card-specific error when OCR is unavailable', async () => {
+  vi.stubGlobal('fetch', async () => { throw new Error('private provider detail'); });
+  await expect(client().readCard(Buffer.from('image'), 'image/png')).rejects.toMatchObject({ code: 'CARD_OCR_UNAVAILABLE' });
+});

@@ -48,13 +48,16 @@ function setup(
     previousEnd?: Date | null;
     cancelledAt?: Date;
     gone?: boolean;
+    door?: string;
   } = {},
 ) {
   const views: string[] = [];
   const listed: { path: string; from: Date; to: Date }[] = [];
   const repo = {
     session: async (id: string) =>
-      id === S1 && !opts.gone ? { ...session, cancelledAt: opts.cancelledAt ?? null } : null,
+      id === S1 && !opts.gone
+        ? { ...session, cancelledAt: opts.cancelledAt ?? null, doorCameraId: opts.door ?? null }
+        : null,
     sessionsOnDate: async () => [],
     previousEndInRoom: async () => opts.previousEnd ?? null,
     logView: async (sid: string, uid: string, kind: string) => void views.push(`${kind} ${uid}`),
@@ -147,6 +150,7 @@ describe('RecordingService.list', () => {
         { start: '2026-10-24T09:58:00.000Z', duration: 720 },
         { start: '2026-10-24T10:30:00.000Z', duration: 1680 },
       ],
+      cameras: ['front'],
       expiresOn: '2026-11-23T09:50:00.000Z',
       canDownload: true,
     });
@@ -195,6 +199,7 @@ describe('RecordingService.link', () => {
       start: '2026-10-24T10:20:00.000Z',
       dur: 600,
       dl: false,
+      cam: 'front',
     });
     expect(views).toEqual([`playback ${owner.id}`]);
   });
@@ -236,7 +241,7 @@ describe('RecordingService.openClip', () => {
       start: new Date('2026-10-24T10:20:00.000Z'),
       duration: 600,
       download: true,
-      filename: 'classping-20261024-1720.mp4',
+      filename: 'classping-20261024-1720-front.mp4',
     });
   });
 
@@ -270,5 +275,31 @@ describe('RecordingService.openClip', () => {
     expect(await rejection(service.openClip(url.slice('/clips/'.length)))).toMatchObject({
       status: 401,
     });
+  });
+});
+
+describe('RecordingService กล้องประตู', () => {
+  const DOOR = '33333333-3333-3333-3333-333333333333';
+  const segments = [{ start: new Date('2026-10-24T10:20:00Z'), duration: 60 }];
+  const doorLink = { start: '2026-10-24T10:20:00.000Z', duration: 60, camera: 'door' };
+
+  it('ดูไฟล์ของกล้องประตูได้ และบอกว่าห้องมีกล้องอะไรบ้าง', async () => {
+    const { service, listed } = setup({ door: DOOR, segments });
+    const result = await service.list(owner, S1, 'door');
+    expect(listed[0].path).toBe(`cam/${DOOR}`);
+    expect(result.cameras).toEqual(['front', 'door']);
+    const { url } = await service.link(owner, S1, doorLink);
+    expect(verifyMediaToken(SECRET, url.replace('/clips/', ''), NOW)?.path).toBe(`cam/${DOOR}`);
+    const download = await service.link(owner, S1, { ...doorLink, download: true });
+    const clip = await service.openClip(download.url.slice('/clips/'.length));
+    expect(clip.filename).toBe('classping-20261024-1720-door.mp4');
+  });
+
+  it('ห้องไม่มีกล้องประตู ไม่มีไฟล์ ขอลิงก์ไม่ได้ และชื่อกล้องผิดได้ 400', async () => {
+    const { service } = setup({ segments });
+    const result = await service.list(owner, S1, 'door');
+    expect(result).toMatchObject({ segments: [], cameras: ['front'] });
+    expect((await rejection(service.link(owner, S1, doorLink))).code).toBe('NO_RECORDING');
+    expect((await rejection(service.list(owner, S1, 'side'))).code).toBe('BAD_REQUEST');
   });
 });

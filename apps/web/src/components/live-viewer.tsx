@@ -2,34 +2,20 @@
 
 import Link from "next/link";
 import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ApiError, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
-import { formatTime } from "@/lib/time";
-import type { LiveFaces, LiveSession, LiveTicket } from "@/lib/types";
+import { bangkokDate, formatDate, formatTime } from "@/lib/time";
+import type { LiveFaces, Recording } from "@/lib/types";
+import { CctvPlayer } from "./cctv-player";
 import { ExamBadge } from "./exam-badge";
 
-// มาจาก /mediamtx/reader.js ของ MediaMTX
-interface Reader {
-  close(): void;
-}
-declare global {
-  interface Window {
-    MediaMTXWebRTCReader?: new (conf: {
-      url: string;
-      token: string;
-      onError: (err: string) => void;
-      onTrack: (evt: RTCTrackEvent) => void;
-    }) => Reader;
-  }
-}
-
-const RETRY_MS = 3000;
 // กล้องตรวจหน้าวินาทีละครั้ง
 const FACES_MS = 1000;
-// ลองใหม่ก็ไม่หาย หยุดต่อแล้วบอกผู้ใช้
-const PERMANENT = ["NOT_LIVE", "NO_CAMERA", "SESSION_NOT_FOUND", "MEDIA_NOT_CONFIGURED"];
+
+// โปรแกรมกล้องกลับภาพหน้าห้องก่อนส่งแล้ว แต่กรอบหน้ามาจากภาพที่ยังไม่กลับ ต้องกลับกรอบเอง
+const MIRROR = true;
 
 const KIND = {
   match: { label: "", box: "border-green-400", tag: "bg-green-500" },
@@ -37,74 +23,35 @@ const KIND = {
   unknown: { label: "ไม่รู้จัก", box: "border-gray-300", tag: "bg-gray-500" },
 };
 
+// หน้ากล้องวงจรปิดของคาบ: ดูสดระหว่างคาบ ดูย้อนหลังได้ทั้งระหว่างและหลังจบคาบในตัวเล่นเดียวกัน
 export function LiveViewer() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const router = useRouter();
-  const video = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
-  const [session, setSession] = useState<LiveSession | null>(null);
-  const [state, setState] = useState<"connecting" | "playing" | "reconnecting" | "stopped">(
-    "connecting",
-  );
+  const [info, setInfo] = useState<Recording | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [frontLive, setFrontLive] = useState(false);
   const [faces, setFaces] = useState<LiveFaces["faces"]>([]);
   const [showBoxes, setShowBoxes] = useState(true);
+  const onFrontLive = useCallback((live: boolean) => setFrontLive(live), []);
 
+  // รู้ก่อนว่าคาบนี้เวลาไหน ห้องมีกล้องอะไร และดาวน์โหลดได้ไหม
   useEffect(() => {
-    if (!ready || !window.MediaMTXWebRTCReader) return;
-    const Reader = window.MediaMTXWebRTCReader;
-    let reader: Reader | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let closed = false;
-
-    // token ใช้ได้แค่ตอนเริ่มต่อ หลุดเมื่อไหร่ขอ token ใหม่แล้วต่อใหม่
-    async function connect() {
-      try {
-        const ticket = await apiFetch<LiveTicket>(`/sessions/${sessionId}/live`, {
-          method: "POST",
-        });
-        if (closed) return;
-        setSession(ticket.session);
-        reader = new Reader({
-          url: ticket.whepUrl,
-          token: ticket.token,
-          onError: () => {
-            reader?.close();
-            reader = null;
-            if (closed) return;
-            setState("reconnecting");
-            timer = setTimeout(() => void connect(), RETRY_MS);
-          },
-          onTrack: (evt) => {
-            if (video.current) video.current.srcObject = evt.streams[0];
-            setError(null);
-            setState("playing");
-          },
-        });
-      } catch (e) {
-        if (closed) return;
-        if (e instanceof ApiError && (PERMANENT.includes(e.code) || e.status === 403)) {
-          setState("stopped");
-          setError(e.message);
-          return;
-        }
-        setError(await handleApiError(e, router));
-        setState("reconnecting");
-        timer = setTimeout(() => void connect(), RETRY_MS);
-      }
-    }
-
-    void connect();
+    let cancelled = false;
+    apiFetch<Recording>(`/sessions/${sessionId}/recording`)
+      .then((rec) => !cancelled && setInfo(rec))
+      .catch(async (e: unknown) => {
+        const message = await handleApiError(e, router);
+        if (!cancelled) setError(message);
+      });
     return () => {
-      closed = true;
-      if (timer) clearTimeout(timer);
-      reader?.close();
+      cancelled = true;
     };
-  }, [ready, sessionId, router]);
+  }, [sessionId, router]);
 
   // กรอบหน้ามาจากการตรวจเช็คชื่อ อาจช้ากว่าภาพเล็กน้อย
   useEffect(() => {
-    if (state !== "playing") return;
+    if (!frontLive) return;
     let stop = false;
     // คำขอก่อนหน้ายังไม่เสร็จก็ไม่เริ่มคำขอใหม่ คำตอบเก่าจะได้ไม่ทับของใหม่
     let running = false;
@@ -125,109 +72,140 @@ export function LiveViewer() {
       clearInterval(timer);
       setFaces([]);
     };
-  }, [state, sessionId]);
+  }, [frontLive, sessionId]);
+
+  const boxes =
+    showBoxes &&
+    faces.map((face) => (
+      <div
+        key={face.n}
+        className={`absolute border-2 ${KIND[face.kind].box}`}
+        style={{
+          left: `${(MIRROR ? 1 - face.box[2] : face.box[0]) * 100}%`,
+          top: `${face.box[1] * 100}%`,
+          width: `${(face.box[2] - face.box[0]) * 100}%`,
+          height: `${(face.box[3] - face.box[1]) * 100}%`,
+        }}
+      >
+        <span
+          className={`absolute -top-6 left-0 rounded px-1.5 text-sm font-semibold text-white ${KIND[face.kind].tag}`}
+        >
+          {face.n}
+        </span>
+      </div>
+    ));
 
   return (
     <section className="live-viewer space-y-4">
-      <Script src="/mediamtx/reader.js" strategy="afterInteractive" onReady={() => setReady(true)} />
+      <Script
+        src="/mediamtx/reader.js"
+        strategy="afterInteractive"
+        onReady={() => setReady(true)}
+      />
       <Link href="/live" className="text-sm text-blue-600 underline">
         กล้องทั้งหมด
       </Link>
       <h1 className="text-xl font-semibold">
-        {session ? (
+        {info ? (
           <>
-            {session.courseCode} {session.courseName}{" "}
+            {info.session.courseCode} {info.session.courseName}{" "}
             <span className="font-normal text-gray-600">
-              {formatTime(session.startsAt)}-{formatTime(session.endsAt)} · {session.roomName}
+              {formatDate(bangkokDate(new Date(info.session.startsAt)))}{" "}
+              {formatTime(info.session.startsAt)}-
+              {formatTime(info.session.endsAt)} · {info.session.roomName}
             </span>{" "}
-            {session.kind === "exam" && <ExamBadge title={session.title} />}
+            {info.session.kind === "exam" && (
+              <ExamBadge title={info.session.title} />
+            )}
           </>
         ) : (
-          "กล้องหน้าห้อง"
+          "กล้องวงจรปิด"
         )}
       </h1>
 
-      <div className="grid gap-4 md:grid-cols-[1fr_15rem]">
-        <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-          <video ref={video} autoPlay muted playsInline className="h-full w-full" />
-          {state === "playing" &&
-            showBoxes &&
-            faces.map((face) => (
-              <div
-                key={face.n}
-                className={`absolute border-2 ${KIND[face.kind].box}`}
-                style={{
-                  left: `${face.box[0] * 100}%`,
-                  top: `${face.box[1] * 100}%`,
-                  width: `${(face.box[2] - face.box[0]) * 100}%`,
-                  height: `${(face.box[3] - face.box[1]) * 100}%`,
-                }}
-              >
-                <span
-                  className={`absolute -top-6 left-0 rounded px-1.5 text-sm font-semibold text-white ${KIND[face.kind].tag}`}
-                >
-                  {face.n}
-                </span>
-              </div>
-            ))}
-          {state !== "playing" && (
-            <p className="absolute inset-0 flex items-center justify-center text-white">
-              {state === "stopped"
-                ? "ไม่มีภาพจากกล้อง"
-                : state === "reconnecting"
-                  ? "ภาพหลุด กำลังต่อใหม่..."
-                  : "กำลังต่อกล้อง..."}
-            </p>
-          )}
-        </div>
-
-        <aside className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="font-medium">คนในภาพ</h2>
-            <label className="flex items-center gap-1 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={showBoxes}
-                onChange={(e) => setShowBoxes(e.target.checked)}
-              />
-              แสดงกรอบ
-            </label>
-          </div>
-          {state !== "playing" ? (
-            <p className="text-sm text-gray-500">ไม่มีภาพจากกล้อง</p>
-          ) : faces.length === 0 ? (
-            <p className="text-sm text-gray-500">ยังไม่เห็นใครในภาพ</p>
-          ) : (
-            <ol className="divide-y rounded-lg border text-sm">
-              {faces.map((face) => (
-                <li key={face.n} className="flex items-start gap-2 px-3 py-2">
-                  <span
-                    className={`mt-0.5 rounded px-1.5 font-semibold text-white ${KIND[face.kind].tag}`}
-                  >
-                    {face.n}
-                  </span>
-                  <span>
-                    {face.kind === "unknown" ? (
-                      <span className="text-gray-500">ไม่รู้จัก</span>
-                    ) : (
-                      <>
-                        {face.name ?? "ยังไม่มีชื่อ"}
-                        <span className="block text-gray-500">
-                          {face.studentCode}
-                          {KIND[face.kind].label && ` · ${KIND[face.kind].label}`}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-          <p className="text-xs text-gray-500">กรอบอัปเดตทุก 1 วินาที อาจช้ากว่าภาพเล็กน้อย</p>
-        </aside>
-      </div>
       {error && <p className="text-red-600">{error}</p>}
-      <p className="text-sm text-gray-500">ไม่มีเสียง · มีการบันทึกการเปิดดูทุกครั้ง</p>
+      {info === null ? (
+        !error && <p>กำลังโหลด...</p>
+      ) : info.cameras.length === 0 ? (
+        <p className="text-gray-600">ห้องนี้ไม่มีกล้อง</p>
+      ) : (
+        // จอกว้างวางรายชื่อไว้ข้างตัวเล่นแบบหน้าจอ NVR ทั้งหมดอยู่ในจอเดียว จอแคบเรียงลงมา
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_288px]">
+          <CctvPlayer
+            sessionId={sessionId}
+            cameras={info.cameras}
+            startsAt={Date.parse(info.session.startsAt)}
+            endsAt={Date.parse(info.session.endsAt)}
+            canDownload={info.canDownload}
+            ready={ready}
+            onFrontLive={onFrontLive}
+            frontOverlay={boxes}
+          />
+          {/* สูงเท่าตัวเล่น รายชื่อยาวเลื่อนในกล่องเอง */}
+          <aside className="relative min-h-0">
+            <div className="space-y-2 xl:absolute xl:inset-0 xl:overflow-y-auto xl:pr-1">
+              {info.cameras.includes("front") && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-medium">คนในภาพหน้าห้อง</h2>
+                    <label className="flex items-center gap-1 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={showBoxes}
+                        onChange={(e) => setShowBoxes(e.target.checked)}
+                      />
+                      แสดงกรอบ
+                    </label>
+                  </div>
+                  {!frontLive ? (
+                    <p className="text-sm text-gray-500">แสดงเฉพาะตอนดูสด</p>
+                  ) : faces.length === 0 ? (
+                    <p className="text-sm text-gray-500">ยังไม่เห็นใครในภาพ</p>
+                  ) : (
+                    <ol className="grid divide-y rounded-lg border text-sm sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-1 xl:divide-y">
+                      {faces.map((face) => (
+                        <li
+                          key={face.n}
+                          className="flex items-start gap-2 px-3 py-2"
+                        >
+                          <span
+                            className={`mt-0.5 rounded px-1.5 font-semibold text-white ${KIND[face.kind].tag}`}
+                          >
+                            {face.n}
+                          </span>
+                          <span>
+                            {face.kind === "unknown" ? (
+                              <span className="text-gray-500">ไม่รู้จัก</span>
+                            ) : (
+                              <>
+                                {face.name ?? "ยังไม่มีชื่อ"}
+                                <span className="block text-gray-500">
+                                  {face.studentCode}
+                                  {KIND[face.kind].label &&
+                                    ` · ${KIND[face.kind].label}`}
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    กรอบอัปเดตทุก 1 วินาที อาจช้ากว่าภาพเล็กน้อย
+                  </p>
+                </>
+              )}
+              <p className="border-t pt-2 text-xs text-gray-500">
+                ไม่มีเสียง · มีการบันทึกการเปิดดูสด ดูย้อนหลัง
+                และดาวน์โหลดทุกครั้ง
+                {info.expiresOn &&
+                  ` · ระบบจะลบไฟล์ของคาบนี้ตั้งแต่ ${formatDate(bangkokDate(new Date(info.expiresOn)))}`}
+              </p>
+            </div>
+          </aside>
+        </div>
+      )}
     </section>
   );
 }
