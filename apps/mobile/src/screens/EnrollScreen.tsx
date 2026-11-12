@@ -1,4 +1,6 @@
-import { colors } from '../ui/theme';
+import { EnrollmentProgress } from '../ui/EnrollmentProgress';
+import { AppIcon } from '../ui/AppIcon';
+import { colors, typography, workspace } from '../ui/theme';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, ScrollView as NativeScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Pressable, Text } from '../ui/primitives';
@@ -37,8 +39,8 @@ const ARC_AT: Partial<Record<Pose, number>> = { up: -90, right: 0, down: 90, lef
 const PICTURE_SIZE = '1280x720';
 
 const GREY = 'rgba(255,255,255,0.35)';
-const BLUE = '#3b82f6';
-const GREEN = '#22c55e';
+const BLUE = workspace.cameraActive;
+const GREEN = workspace.cameraComplete;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -72,7 +74,9 @@ export function EnrollScreen({
 }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
-  const { width, height } = useWindowDimensions();
+  const window = useWindowDimensions();
+  const [bounds, setBounds] = useState<{ width: number; height: number } | null>(null);
+  const { width, height } = bounds ?? window;
   const [ready, setReady] = useState(false);
   const [pictureSize, setPictureSize] = useState<string>();
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
@@ -175,7 +179,10 @@ export function EnrollScreen({
 
   if (!permission.granted) {
     return (
-      <View style={styles.center}>
+      <NativeScrollView style={styles.permissionRoot} contentContainerStyle={styles.center}>
+        <EnrollmentProgress current={2} />
+        <View style={styles.permissionIcon}><AppIcon name="camera" size={36} /></View>
+        <Text accessibilityRole="header" style={styles.permissionTitle}>พร้อมสแกนใบหน้า</Text>
         <Text style={styles.body}>ต้องใช้กล้องหน้าสแกนหน้าเพื่อลงทะเบียนใบหน้า</Text>
         {permission.canAskAgain ? (
           <Pressable style={styles.primary} onPress={requestPermission}>
@@ -192,7 +199,7 @@ export function EnrollScreen({
         <Pressable style={styles.link} onPress={onSignOut}>
           <Text style={styles.linkGrey}>ออกจากระบบ</Text>
         </Pressable>
-      </View>
+      </NativeScrollView>
     );
   }
 
@@ -209,7 +216,7 @@ export function EnrollScreen({
   const r = hole / 2 + 12;
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={event => setBounds({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}>
       <CameraView
         ref={camera}
         style={StyleSheet.absoluteFill}
@@ -231,7 +238,7 @@ export function EnrollScreen({
             height: hole + edge * 2,
             borderRadius: hole / 2 + edge,
             borderWidth: edge,
-            borderColor: 'rgba(0,0,0,0.65)',
+            borderColor: workspace.cameraScrim,
           }}
         />
         <Svg
@@ -253,20 +260,28 @@ export function EnrollScreen({
         </Svg>
       </View>
 
-      <View style={styles.top}>
-        <Text style={styles.title}>{pose ? HINT[pose] : 'เสร็จแล้ว'}</Text>
+      <View style={[styles.top, landscape && { left: width * 0.56, right: 24 }]}>
+        <Text accessibilityRole="header" style={styles.title}>สแกนใบหน้า</Text>
+        <Text style={styles.progressText} accessibilityLiveRegion="polite">สำเร็จ {done.length} / {POSES.length} มุม</Text>
       </View>
 
-      <NativeScrollView style={[styles.bottom, { top: landscape ? 56 : cy + ring / 2 + 16, bottom: 16 }, landscape && { left: width * 0.56 }]} contentContainerStyle={styles.captureActions}>
+      <NativeScrollView style={[styles.bottom, { top: landscape ? 104 : cy + ring / 2 + 16, bottom: 16 }, landscape && { left: width * 0.56 }]} contentContainerStyle={styles.captureActions}>
+        <View style={styles.poseSteps} accessible accessibilityLabel={`สแกนสำเร็จ ${done.length} จาก ${POSES.length} มุม`}>
+          {POSES.map((p, index) => <View key={p} style={styles.poseStep}>
+            <View style={[styles.poseTrack, { backgroundColor: color(p) }]} />
+            <View style={styles.poseLabel}>{done.includes(p) && <AppIcon name="check" size={14} color={GREEN} />}<Text style={[styles.poseText, p === pose && styles.activePoseText]}>{['ตรง', 'ซ้าย', 'ขวา', 'เงย', 'ก้ม'][index]}</Text></View>
+          </View>)}
+        </View>
+        <Text style={styles.hint} accessibilityLiveRegion="polite">{pose ? HINT[pose] : 'สแกนครบแล้ว'}</Text>
         {stopped ? (
           <>
-            <Text style={styles.error}>{stopped}</Text>
+            <Text accessibilityRole="alert" style={styles.error}>{stopped}</Text>
             <Pressable style={styles.primary} onPress={() => setStopped(null)}>
               <Text style={styles.primaryText}>ลองอีกครั้ง</Text>
             </Pressable>
           </>
         ) : (
-          <Text style={styles.message}>{message ?? (ready ? 'กำลังสแกน…' : 'กำลังเปิดกล้อง…')}</Text>
+          <Text style={styles.message} accessibilityLiveRegion="polite">{message ?? (ready ? 'กำลังสแกน…' : 'กำลังเปิดกล้อง…')}</Text>
         )}
         {pose === 'front' && card && (
           <Pressable
@@ -288,19 +303,30 @@ export function EnrollScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: workspace.camera },
   clip: { overflow: 'hidden' },
-  center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.surface },
+  permissionRoot: { flex: 1, backgroundColor: workspace.background },
+  center: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 20, backgroundColor: workspace.background },
+  permissionTitle: { ...typography.pageTitle },
+  permissionIcon: { width: 80, height: 80, backgroundColor: colors.selected, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   top: { position: 'absolute', top: 16, left: 24, right: 24, alignItems: 'center' },
-  title: { color: colors.surface, fontSize: 22, fontWeight: '600', textAlign: 'center' },
+  title: { color: colors.surface, fontSize: 24, lineHeight: 34, fontWeight: '600', textAlign: 'center' },
+  progressText: { color: workspace.cameraActive, fontSize: 14, lineHeight: 24 },
+  poseSteps: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  poseStep: { flex: 1, gap: 8 },
+  poseTrack: { height: 4, borderRadius: 2 },
+  poseLabel: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 2 },
+  poseText: { color: colors.onAction, fontSize: 12, lineHeight: 20, textAlign: 'center' },
+  activePoseText: { color: workspace.cameraActive, fontWeight: '600' },
+  hint: { color: colors.onAction, fontSize: 18, lineHeight: 28, textAlign: 'center', fontWeight: '500' },
   bottom: { position: 'absolute', left: 24, right: 24 },
-  captureActions: { alignItems: 'center', gap: 8, flexGrow: 1, justifyContent: 'center' },
+  captureActions: { alignItems: 'stretch', gap: 12, flexGrow: 1, padding: 16, borderRadius: 16, backgroundColor: workspace.camera },
   message: { color: colors.surface, fontSize: 16, textAlign: 'center' },
   error: { color: '#fca5a5', fontSize: 16, textAlign: 'center' },
   body: { fontSize: 15, lineHeight: 24, color: colors.muted },
-  primary: { backgroundColor: colors.action, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, alignItems: 'center' },
+  primary: { minHeight: 52, justifyContent: 'center', backgroundColor: colors.action, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, alignItems: 'center' },
   primaryText: { color: colors.surface, fontSize: 16 },
-  link: { alignItems: 'center', padding: 8 },
+  link: { minHeight: 48, alignItems: 'center', justifyContent: 'center', padding: 8 },
   linkGrey: { color: colors.muted },
-  linkLight: { color: 'rgba(255,255,255,0.7)' },
+  linkLight: { color: colors.onAction, fontSize: 14, lineHeight: 24 },
 });

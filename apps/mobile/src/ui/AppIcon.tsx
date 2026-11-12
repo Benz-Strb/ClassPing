@@ -2,6 +2,11 @@ import Svg, { Path } from 'react-native-svg';
 import { colors } from './theme';
 
 const paths = {
+  shield: 'm12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Zm-4 9 3 3 5-6',
+  scan: 'M8 3H4v4m12-4h4v4M4 17v4h4m12-4v4h-4M9 9v2m6-2v2m-6 4c2 2 4 2 6 0',
+  camera: 'M3 7h4l2-3h6l2 3h4v14H3V7Zm13 6a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
+  image: 'M3 3h18v18H3V3Zm0 14 6-6 5 5 3-3 4 4M16 7h.01',
+
   calendar: 'M8 3v4m8-4v4M4 10h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Zm3 9h3m2 0h3m-8 3h3',
   book: 'M12 5C9 3 5 3 3 4v15c3-1 6-1 9 1m0-15c3-2 7-2 9-1v15c-3-1-6-1-9 1V5Z',
   chart: 'M4 4v16h16M8 16v-4m5 4V8m5 8v-6',
