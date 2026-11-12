@@ -1,4 +1,3 @@
-import { SavedTimetableSection } from './SavedTimetableSection';
 import { layout, colors, typography, workspace } from '../ui/theme';
 import { ProfileAvatar } from '../ui/ProfileAvatar';
 import { useEffect, useState } from 'react';
@@ -79,7 +78,6 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
             <Text style={styles.secondary}>{me.fullName ?? me.studentId}</Text>
           </View>
           {enrollBanner}
-          <SavedTimetableSection active={tab === 'home'} refreshTick={focusTick + pullTick} />
           <View style={[styles.dashboard, wide && styles.dashboardWide]}>
             <View style={[styles.panel, styles.schedulePanel, wide && styles.widePanel]}><HomeStudies refreshTick={focusTick + pullTick} onOpenCourses={() => navigate('courses')} onOpenAccount={() => navigate('account')} /></View>
             <View style={[styles.panel, wide && styles.widePanel]}><AttendanceSummarySection active={tab === 'home'} refreshTick={focusTick + pullTick} onSettled={() => setPulling(false)} onOpenAccount={() => navigate('account')} /></View>

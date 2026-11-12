@@ -26,7 +26,7 @@ export function DocumentsScreen({
           {(
             [
               { key: "leave", label: "การลา" },
-              { key: "timetable", label: "ตารางเรียน" },
+              { key: "timetable", label: "อัพโหลดตารางเรียน" },
             ] as const
           ).map((item) => (
             <Pressable

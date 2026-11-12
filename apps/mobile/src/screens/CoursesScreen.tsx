@@ -8,6 +8,7 @@ import { Pressable, ScrollView, Text, TextInput } from '../ui/primitives';
 import { apiFetch } from '../lib/api';
 import type { StudentStudies } from '../lib/types';
 import { AttendanceCourseSection } from './AttendanceCourseSection';
+import { SavedTimetableSection } from './SavedTimetableSection';
 
 const time = (value: string) => new Date(value).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
 const dateLabel = (value: string, short = false) => new Date(`${value}T12:00:00+07:00`).toLocaleDateString('th-TH', {
@@ -136,12 +137,13 @@ export function CoursesScreen({ active, refreshTick = 0, onEnrollmentChanged }: 
       <Text style={styles.name}>{course.name}</Text>
       {course.section && <Text style={styles.muted}>กลุ่ม {course.section}</Text>}
     </> : <>
-      <Text accessibilityRole="header" style={styles.title}>{mode === 'courses' ? 'รายวิชาของฉัน' : 'ตารางเรียน 7 วัน'}</Text>
+      <Text accessibilityRole="header" style={styles.title}>{mode === 'courses' ? 'รายวิชาของฉัน' : 'ตารางเรียน'}</Text>
       <View accessibilityRole="tablist" style={styles.modes}>
         {([['courses', 'รายวิชา'], ['timetable', 'ตารางเรียน']] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: mode === value }} onPress={() => setMode(value)} style={[styles.mode, mode === value && styles.modeSelected]}><Text style={[styles.modeText, mode === value && styles.modeSelectedText]}>{label}</Text></Pressable>)}
       </View>
     </>}
     {error && <View style={styles.feedback}><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable accessibilityRole="button" style={styles.back} onPress={() => setReload((value) => value + 1)}><Text style={styles.link}>ลองใหม่</Text></Pressable></View>}
+    {!course && mode === 'timetable' && <SavedTimetableSection active={active} refreshTick={refreshTick + reload} />}
     {!data ? loading && <ActivityIndicator accessibilityLabel="กำลังโหลดรายวิชา" color={colors.ink} /> : course ? <>
       <AttendanceCourseSection key={course.id} courseId={course.id} />
       <Text style={styles.heading}>คาบเรียนและสอบ · 7 วัน</Text>
