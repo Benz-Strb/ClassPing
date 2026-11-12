@@ -25,13 +25,24 @@ def _path_of(url: str) -> str:
 _JOIN_S = 2
 
 
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+def stamp_text(at: datetime) -> str:
+    """วัน-เดือน-ปี ค.ศ. ชื่อวัน และเวลา 24 ชม. ชื่อวันเป็นอังกฤษเพราะฟอนต์ของ OpenCV เขียนไทยไม่ได้"""
+    return f"{at:%d-%m-%Y} {_WEEKDAYS[at.weekday()]} {at:%H:%M:%S}"
+
+
 def stamp(frame, at: datetime) -> None:
-    """เขียนวันเวลา (ปี พ.ศ.) มุมซ้ายบนแบบกล้องวงจรปิด ขอบดำให้อ่านได้ทั้งพื้นสว่างและมืด"""
-    text = f"{at:%d/%m}/{at.year + 543} {at:%H:%M:%S}"
+    """เขียนวันเวลามุมขวาบนแบบกล้องวงจรปิด ขอบดำให้อ่านได้ทั้งพื้นสว่างและมืด
+    มุมซ้ายบนเว็บใช้แสดงป้ายสด/ย้อนหลัง มุมขวาล่างเป็นชื่อกล้อง"""
+    text = stamp_text(at)
     scale = frame.shape[0] / 720 * 0.8
-    origin = (round(16 * scale), round(40 * scale))
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(frame, text, origin, font, scale, (0, 0, 0), max(1, round(6 * scale)), cv2.LINE_AA)
+    outline = max(1, round(6 * scale))
+    (width, _), _ = cv2.getTextSize(text, font, scale, outline)
+    origin = (frame.shape[1] - width - round(16 * scale), round(40 * scale))
+    cv2.putText(frame, text, origin, font, scale, (0, 0, 0), outline, cv2.LINE_AA)
     cv2.putText(frame, text, origin, font, scale, (255, 255, 255), max(1, round(2 * scale)), cv2.LINE_AA)
 
 
