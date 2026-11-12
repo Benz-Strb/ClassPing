@@ -37,8 +37,12 @@ const REFRESH_MS = 30_000;
 // กดหยุดตอนดูสด ภาพอัดช้ากว่าสดเล็กน้อย ถอยไปเท่านี้ให้มีภาพแน่
 const PAUSE_BACK_MS = 3000;
 const STEP_MS = 10_000;
+const DOWNLOAD_GAP_MS = 800;
 
 type Mode = "live" | "replay";
+
+const spanText = (span: Span) =>
+  `${clock(span.from).slice(0, 5)}–${clock(span.to).slice(0, 5)}`;
 
 // ตัวเล่นกล้องวงจรปิดของคาบ: ดูสดและย้อนหลังในตัวเดียว แถบเวลาเส้นเดียวคุมทุกกล้องให้เล่นเวลาเดียวกัน
 export function CctvPlayer({
@@ -217,39 +221,53 @@ export function CctvPlayer({
     setPlaying(!playing);
   }
 
-  // ดาวน์โหลดช่วงที่มีภาพตรงเวลานี้ทั้งช่วง ของทุกกล้องที่แสดงอยู่ ระบบบันทึกทุกครั้ง
-  async function download() {
-    const targets = shown.flatMap((camera) => {
-      const list = spans[camera] ?? [];
-      const span = spanAt(list, at) ?? (mode === "live" ? list.at(-1) : null);
-      return span ? [{ camera, span }] : [];
-    });
+  // ช่วงที่มีภาพต่อเนื่องตรงเวลาที่ดูอยู่ของกล้องนั้น ตอนดูสดใช้ช่วงล่าสุด
+  function downloadSpan(camera: CameraKind) {
+    const list = spans[camera] ?? [];
+    const span = spanAt(list, at) ?? (mode === "live" ? list.at(-1) : null);
+    return span ? { from: span.from, to: Math.min(span.to, now) } : null;
+  }
+
+  // ผู้ใช้เลือกกล้องเองจากรายการ ไม่ผูกกับมุมมองที่เปิดอยู่ "all" = ทุกกล้องที่มีภาพตรงนี้
+  // ได้ไฟล์แยกกล้องละไฟล์ (ชื่อไฟล์มีชื่อกล้อง) ระบบบันทึกการดาวน์โหลดทุกครั้ง
+  async function download(choice: CameraKind | "all") {
+    const targets = (choice === "all" ? cameras : [choice]).flatMap(
+      (camera) => {
+        const span = downloadSpan(camera);
+        return span ? [{ camera, span }] : [];
+      },
+    );
     if (!targets.length)
       return setMessage("ตรงนี้ไม่มีภาพให้ดาวน์โหลด เลือกเวลาที่มีแถบสี");
     setBusy(true);
     setMessage(null);
     try {
-      for (const { camera, span } of targets) {
-        const to = Math.min(span.to, Date.now());
+      for (const [i, { camera, span }] of targets.entries()) {
         const { url } = await apiFetch<{ url: string }>(
           `/sessions/${sessionId}/recording/link`,
           {
             method: "POST",
             body: JSON.stringify({
               start: new Date(span.from).toISOString(),
-              duration: (to - span.from) / 1000,
+              duration: (span.to - span.from) / 1000,
               download: true,
               camera,
             }),
           },
         );
+        // เบราว์เซอร์บางตัวไม่รับหลายไฟล์ที่สั่งพร้อมกัน เว้นจังหวะก่อนไฟล์ถัดไป
+        if (i > 0)
+          await new Promise((done) => setTimeout(done, DOWNLOAD_GAP_MS));
         // API ตอบเป็นไฟล์แนบ เบราว์เซอร์ดาวน์โหลดโดยไม่ออกจากหน้านี้
         const link = document.createElement("a");
         link.href = `${API_URL}${url}`;
         link.click();
       }
       setMessage(
-        `กำลังดาวน์โหลด ${targets.map(({ camera, span }) => `${SHORT[camera]} ${clock(span.from).slice(0, 5)}–${clock(Math.min(span.to, Date.now())).slice(0, 5)}`).join(", ")}`,
+        `กำลังดาวน์โหลด ${targets.map(({ camera, span }) => `${LABEL[camera]} ${spanText(span)}`).join(", ")}` +
+          (targets.length > 1
+            ? " · ถ้าเบราว์เซอร์ถามว่าให้ดาวน์โหลดหลายไฟล์ไหม กดอนุญาต"
+            : ""),
       );
     } catch (e) {
       setMessage(await handleApiError(e, router));
@@ -387,14 +405,35 @@ export function CctvPlayer({
           </span>
         )}
         {canDownload && (
-          <button
-            type="button"
-            onClick={() => void download()}
-            disabled={busy}
+          <select
+            aria-label="ดาวน์โหลดวิดีโอ เลือกกล้อง"
             className={button}
+            value=""
+            disabled={busy}
+            onChange={(e) =>
+              void download(e.target.value as CameraKind | "all")
+            }
           >
-            ดาวน์โหลด
-          </button>
+            <option value="" disabled hidden>
+              ดาวน์โหลด
+            </option>
+            {cameras.map((camera) => {
+              const span = downloadSpan(camera);
+              return (
+                <option key={camera} value={camera} disabled={!span}>
+                  {LABEL[camera]} {span ? spanText(span) : "(ไม่มีภาพตรงนี้)"}
+                </option>
+              );
+            })}
+            {cameras.length > 1 && (
+              <option
+                value="all"
+                disabled={!cameras.some((c) => downloadSpan(c))}
+              >
+                ทั้ง {cameras.length} กล้อง (แยกไฟล์)
+              </option>
+            )}
+          </select>
         )}
         <button
           type="button"

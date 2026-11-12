@@ -199,6 +199,7 @@ describe('RecordingService.link', () => {
       start: '2026-10-24T10:20:00.000Z',
       dur: 600,
       dl: false,
+      cam: 'front',
     });
     expect(views).toEqual([`playback ${owner.id}`]);
   });
@@ -240,7 +241,7 @@ describe('RecordingService.openClip', () => {
       start: new Date('2026-10-24T10:20:00.000Z'),
       duration: 600,
       download: true,
-      filename: 'classping-20261024-1720.mp4',
+      filename: 'classping-20261024-1720-front.mp4',
     });
   });
 
@@ -289,6 +290,9 @@ describe('RecordingService กล้องประตู', () => {
     expect(result.cameras).toEqual(['front', 'door']);
     const { url } = await service.link(owner, S1, doorLink);
     expect(verifyMediaToken(SECRET, url.replace('/clips/', ''), NOW)?.path).toBe(`cam/${DOOR}`);
+    const download = await service.link(owner, S1, { ...doorLink, download: true });
+    const clip = await service.openClip(download.url.slice('/clips/'.length));
+    expect(clip.filename).toBe('classping-20261024-1720-door.mp4');
   });
 
   it('ห้องไม่มีกล้องประตู ไม่มีไฟล์ ขอลิงก์ไม่ได้ และชื่อกล้องผิดได้ 400', async () => {
