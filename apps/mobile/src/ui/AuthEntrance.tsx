@@ -53,7 +53,7 @@ export function AuthEntrance({ children }: Props) {
         {children(onReady)}
       </Animated.View>
       {!finished && <Animated.View style={[styles.overlay, { opacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]} accessibilityViewIsModal pointerEvents="none">
-        <LoginScreen error={null} onDpuChat={() => {}} transitionZoom={zoom} preparing={ready === null} />
+        <LoginScreen error={null} transitionZoom={zoom} preparing={ready === null} />
       </Animated.View>}
       {!finished && <Animated.View pointerEvents="none" style={[styles.curtain, { opacity: curtainOpacity, height: height + 160, transform: [{ translateY: wipe.interpolate({ inputRange: [0, 1], outputRange: [-160, height] }) }] }]}>
         <Svg width="100%" height={160} preserveAspectRatio="none" viewBox="0 0 1 160">

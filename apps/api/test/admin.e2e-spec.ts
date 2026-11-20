@@ -8,7 +8,6 @@ import { AdminController } from '../src/admin/admin.controller.js';
 import { AdminService } from '../src/admin/admin.service.js';
 import { CatalogController } from '../src/admin/catalog.controller.js';
 import { CurriculaController } from '../src/admin/curricula.controller.js';
-import { CHAT_PROVIDER, MockChatProvider } from '../src/chat/chat.provider.js';
 import { CatalogService } from '../src/admin/catalog.service.js';
 import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
 import { EnvelopeInterceptor } from '../src/common/envelope.interceptor.js';
@@ -31,7 +30,7 @@ describe('Admin HTTP RBAC', () => {
   const routes = [
     ['get', '/admin/users'], ['get', '/admin/rooms'], ['post', '/admin/rooms'],
     ['get', '/admin/cameras'], ['get', '/admin/video-views'], ['post', '/admin/cameras/room/token'], ['patch', '/admin/users/user/role'],
-    ...['curricula', 'reference', 'knowledge'].flatMap((kind) => [
+    ...['curricula', 'reference'].flatMap((kind) => [
       ['get', `/admin/catalog/${kind}`], ['post', `/admin/catalog/${kind}`],
       ['put', `/admin/catalog/${kind}/entry`], ['post', `/admin/catalog/${kind}/import`],
     ]),
@@ -96,23 +95,23 @@ describe('Admin HTTP RBAC', () => {
   it('allows admin and dispatches writes to the intended handler', async () => {
     await request(app.getHttpServer()).get('/admin/catalog/reference').set('x-role', 'admin').expect(200);
     await request(app.getHttpServer()).post('/admin/catalog/reference/import').set('x-role', 'admin').send({ csv: 'example' }).expect(201);
-    await request(app.getHttpServer()).put('/admin/catalog/knowledge/entry').set('x-role', 'admin').send({ name: 'FAQ' }).expect(200);
+    await request(app.getHttpServer()).put('/admin/catalog/reference/entry').set('x-role', 'admin').send({ name: 'FAQ' }).expect(200);
     await request(app.getHttpServer()).get('/admin/video-views?from=2026-11-01&to=2026-11-02').set('x-role', 'admin').expect(200);
     expect(admin.listVideoViews).toHaveBeenCalledWith({ from: '2026-11-01', to: '2026-11-02' });
     await request(app.getHttpServer()).post('/admin/cameras/room/token').set('x-role', 'admin').expect(201);
     expect(catalog.importCsv).toHaveBeenCalledWith('reference', { csv: 'example' });
-    expect(catalog.update).toHaveBeenCalledWith('knowledge', 'entry', { name: 'FAQ' });
+    expect(catalog.update).toHaveBeenCalledWith('reference', 'entry', { name: 'FAQ' });
     expect(admin.createCameraToken).toHaveBeenCalledWith('room', undefined);
   });
 });
 
 describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
   let app: INestApplication<App>;
-  const repo = { saveKnowledge: vi.fn(async (_id: string | null, row: object) => ({ id: 'entry', ...row })), insert: vi.fn(async (_kind: string, rows: object[]) => rows.map((row) => ({ id: 'entry', ...row }))), list: vi.fn(async () => []), update: vi.fn() };
+  const repo = { insert: vi.fn(async (_kind: string, rows: object[]) => rows.map((row) => ({ id: 'entry', ...row }))), list: vi.fn(async () => []), update: vi.fn() };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [CatalogController, CurriculaController],
-      providers: [CatalogService, { provide: CHAT_PROVIDER, useClass: MockChatProvider }, { provide: CATALOG_REPO, useValue: repo },
+      providers: [CatalogService, { provide: CATALOG_REPO, useValue: repo },
         { provide: APP_CONFIG, useValue: { allowedOrigins: [], port: 3001 } },
         { provide: APP_GUARD, useClass: FakeAuth }, { provide: APP_GUARD, useClass: RolesGuard }],
     }).compile();
@@ -122,12 +121,12 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
   });
   afterAll(async () => { await app?.close(); });
   beforeEach(() => vi.clearAllMocks());
-  it('accepts bounded Thai knowledge text larger than the default 100 KB body limit', async () => {
-    const response = await request(app.getHttpServer()).post('/admin/catalog/knowledge').set('x-role', 'admin')
-      .send({ name: 'FAQ', content: 'ก'.repeat(50000), url: '', active: true });
+  it('accepts bounded Thai text larger than the default 100 KB body limit', async () => {
+    const response = await request(app.getHttpServer()).post('/admin/catalog/reference').set('x-role', 'admin')
+      .send({ code: 'FAQ', name: 'FAQ', category: 'ทั่วไป', content: 'ก'.repeat(50000), active: true });
     expect(response.status).toBe(201);
     expect(response.body.data.content).toHaveLength(50000);
-    expect(repo.saveKnowledge).toHaveBeenCalledTimes(1);
+    expect(repo.insert).toHaveBeenCalledTimes(1);
   });
   it('reports invalid CSV row without writing any records', async () => {
     const response = await request(app.getHttpServer()).post('/teacher/curricula/import').set('x-role', 'teacher')
@@ -136,7 +135,7 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
     expect(response.body.error.message).toContain('3');
     expect(repo.insert).not.toHaveBeenCalled();
   });
-  it('rejects unsupported kinds and importing knowledge as CSV', async () => {
+  it('rejects unsupported kinds', async () => {
     await request(app.getHttpServer()).get('/admin/catalog/users').set('x-role', 'admin').expect(400);
     await request(app.getHttpServer()).post('/admin/catalog/knowledge/import').set('x-role', 'admin').send({ csv: 'name\nFAQ' }).expect(400);
     expect(repo.insert).not.toHaveBeenCalled();

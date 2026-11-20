@@ -11,7 +11,6 @@ const ADMIN = [
   { href: '/admin/cameras', label: 'กล้องประจำห้อง' },
   { href: '/admin/video-views', label: 'ประวัติการดูกล้อง' },
   { href: '/admin/courses', label: 'รายวิชาและตารางเรียน' },
-  { href: '/admin/knowledge', label: 'แหล่งความรู้' },
 ];
 export function navigationFor(role: Role | null) {
   if (!role) return [{ href: '/', label: 'หน้าหลัก' }, { href: '/login', label: 'เข้าสู่ระบบ' }];

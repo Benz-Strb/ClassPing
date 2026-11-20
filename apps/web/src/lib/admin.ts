@@ -1,4 +1,4 @@
-export type CatalogKind = "curricula" | "reference" | "knowledge";
+export type CatalogKind = "curricula" | "reference";
 export interface CatalogEntry {
   id: string;
   kind: CatalogKind;
@@ -6,10 +6,8 @@ export interface CatalogEntry {
   name: string;
   year: number | null;
   category: string | null;
-  url: string | null;
   content: string;
   active: boolean;
-  ragStatus?: "synced" | "pending" | "inactive";
 }
 export interface Camera {
   id: string;
