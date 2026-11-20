@@ -14,12 +14,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 interface Props {
   error: string | null;
-  onDpuChat: () => void;
   transitionZoom?: Animated.Value;
   preparing?: boolean;
 }
 
-export function LoginScreen({ error: initialError, onDpuChat, transitionZoom, preparing = false }: Props) {
+export function LoginScreen({ error: initialError, transitionZoom, preparing = false }: Props) {
   const [signingIn, setLoading] = useState(false);
   const loading = signingIn || !!transitionZoom;
   const { width, height } = useWindowDimensions();
@@ -192,14 +191,6 @@ export function LoginScreen({ error: initialError, onDpuChat, transitionZoom, pr
           </Animated.View>
           <Text style={styles.subtitle}>สำหรับบัญชี <Text style={styles.domain}>@dpu.ac.th</Text></Text>
         </Animated.View>
-
-        <View style={styles.guest}>
-          <Pressable accessibilityRole="button" accessibilityLabel="เปิด DPU Chat" style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onDpuChat}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" accessible={false}><Path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l-3 3V11.5A7.5 7.5 0 0 1 9.5 4h3a7.5 7.5 0 0 1 7.5 7.5Z" stroke={colors.action} strokeWidth={1.6} strokeLinejoin="round" /><Path d="M7 10h8m-8 4h5" stroke={colors.action} strokeWidth={1.6} strokeLinecap="round" /></Svg>
-            <Text style={styles.secondaryButtonText}>DPU Chat</Text>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" accessible={false}><Path d="M5 12h14m-6-6 6 6-6 6" stroke={colors.action} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" /></Svg>
-          </Pressable>
-        </View>
       </View>
       </ScrollView>
       </SafeAreaView>
@@ -234,7 +225,4 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
   googleMark: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   buttonText: { color: colors.onAction, fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  guest: { gap: 14, marginTop: 32, alignItems: 'center' },
-  secondaryButton: { minHeight: 48, paddingHorizontal: 20, paddingVertical: 10, flexDirection: 'row', gap: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  secondaryButtonText: { color: colors.action, fontSize: 15, fontWeight: '600', textAlign: 'center' },
 });

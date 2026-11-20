@@ -1,13 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { CHAT_PROVIDER, type ChatProvider } from '../chat/chat.provider.js';
-import { knowledgeChunks } from '../chat/knowledge-chunks.js';
 import { AppError } from '../common/app-error.js';
 import { parseBody } from '../common/validate.js';
 import { parseCsv, MAX_CSV_BYTES } from './catalog.csv.js';
 import { CATALOG_REPO, type CatalogInput, type CatalogKind, type CatalogRepo } from './catalog.repo.js';
 
-const kindSchema = z.enum(['curricula', 'reference', 'knowledge']);
+const kindSchema = z.enum(['curricula', 'reference']);
 const code = z.string().trim().min(1, 'กรุณาใส่รหัส').max(60).transform((s) => s.toUpperCase());
 const name = z.string().trim().min(1, 'กรุณาใส่ชื่อ').max(200);
 const content = z.string().trim().max(50_000, 'เนื้อหาต้องไม่เกิน 50,000 ตัวอักษร').default('');
@@ -15,7 +13,6 @@ const active = z.boolean().default(true);
 const schemas = {
   curricula: z.object({ code, name, year: z.number().int().min(1900).max(3000), content, active }).strict(),
   reference: z.object({ code, name, category: z.string().trim().min(1, 'กรุณาใส่หมวดข้อมูล').max(100), content, active }).strict(),
-  knowledge: z.object({ name, url: z.union([z.literal(''), z.url().max(2000).refine((s) => /^https?:\/\//i.test(s), 'URL ต้องขึ้นต้นด้วย http:// หรือ https://')]).default(''), content: z.string().trim().min(1, 'กรุณาใส่เนื้อหาความรู้').max(50_000), active }).strict(),
 };
 const HEADERS = {
   curricula: ['code', 'name', 'year', 'content', 'active'],
@@ -24,22 +21,18 @@ const HEADERS = {
 
 @Injectable()
 export class CatalogService {
-  constructor(
-    @Inject(CATALOG_REPO) private readonly repo: CatalogRepo,
-    @Inject(CHAT_PROVIDER) private readonly provider: ChatProvider,
-  ) {}
+  constructor(@Inject(CATALOG_REPO) private readonly repo: CatalogRepo) {}
 
   async list(kind: string) { return this.repo.list(parseBody(kindSchema, kind)); }
 
   private input(kind: CatalogKind, body: unknown): CatalogInput {
     const value = parseBody(schemas[kind] as z.ZodType<Record<string, unknown>>, body);
-    return { code: null, category: null, year: null, url: null, ...value, ...('url' in value ? { url: value.url || null } : {}) } as CatalogInput;
+    return { code: null, category: null, year: null, ...value } as CatalogInput;
   }
 
   async create(kindValue: string, body: unknown) {
     const kind = parseBody(kindSchema, kindValue);
     const input = this.input(kind, body);
-    if (kind === 'knowledge') return this.repo.saveKnowledge(null, input, input.active ? await knowledgeChunks(input.content, this.provider) : []);
     return (await this.repo.insert(kind, [input]))[0];
   }
 
@@ -47,15 +40,13 @@ export class CatalogService {
     const kind = parseBody(kindSchema, kindValue);
     const id = parseBody(z.uuid(), idValue);
     const input = this.input(kind, body);
-    const entry = kind === 'knowledge'
-      ? await this.repo.saveKnowledge(id, input, input.active ? await knowledgeChunks(input.content, this.provider) : [])
-      : await this.repo.update(kind, id, input);
+    const entry = await this.repo.update(kind, id, input);
     if (!entry) throw new AppError(404, 'CATALOG_NOT_FOUND', 'ไม่พบรายการนี้');
     return entry;
   }
 
   async importCsv(kindValue: string, body: unknown) {
-    const kind = parseBody(z.enum(['curricula', 'reference']), kindValue);
+    const kind = parseBody(kindSchema, kindValue);
     const { csv } = parseBody(z.object({ csv: z.string().max(MAX_CSV_BYTES) }).strict(), body);
     const [headers, ...rows] = parseCsv(csv);
     const expected = HEADERS[kind];

@@ -9,7 +9,6 @@ import type { FaceStatus, Me } from '../lib/types';
 import { AttendanceSummarySection } from './AttendanceSummarySection';
 import { HomeStudies } from './HomeStudies';
 import { CoursesScreen } from './CoursesScreen';
-import { ChatScreen } from './ChatScreen';
 import { DocumentsScreen } from './DocumentsScreen';
 import { AccountScreen } from './AccountScreen';
 import {StudentTabBar, TABS, type Tab} from '../ui/StudentTabBar';
@@ -91,7 +90,6 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
         </ScrollView>}
         {key === 'courses' && <CoursesScreen active={tab === 'courses'} refreshTick={focusTick + pullTick} onEnrollmentChanged={() => setFocusTick(value => value + 1)} />}
         {key === 'leave' && <DocumentsScreen active={tab === 'leave'} focusTick={focusTick} onTimetableImported={() => setFocusTick(value => value + 1)} />}
-        {key === 'chat' && <ChatScreen authenticated />}
         {key === 'account' && <AccountScreen me={me} face={face} banner={enrollBanner} onSignOut={onSignOut} />}
       </View>)}
     </View>

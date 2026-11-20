@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TimetablesModule } from './timetables/timetables.module.js';
-import { ChatModule } from './chat/chat.module.js';
 import { APP_GUARD } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module.js';
 import { AttendanceModule } from './attendance/attendance.module.js';
@@ -23,7 +22,6 @@ import { UsersModule } from './users/users.module.js';
 @Module({
   imports: [
     TimetablesModule,
-    ChatModule,
     AdminModule,
     SupabaseModule,
     FaceModule,
