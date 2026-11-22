@@ -31,7 +31,8 @@ export function CourseHeader() {
   return (
     <header className="course-heading space-y-4">
       <Link href="/courses" className="back-link">
-        วิชาทั้งหมด
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m12 5-7 7 7 7M5 12h14" /></svg>
+        ย้อนกลับไปรายวิชา
       </Link>
       {error ? (
         <p className="text-red-600">{error}</p>
