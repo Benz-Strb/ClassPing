@@ -114,8 +114,8 @@ export function CoursesScreen({ active, refreshTick = 0, onEnrollmentChanged }: 
     }
   }
 
-  if (uploadedDetail) return <ScrollView contentContainerStyle={styles.content}>
-    <Pressable style={styles.back} onPress={() => setExpandedUpload(null)}><Text style={styles.link}>กลับรายวิชา</Text></Pressable>
+  if (uploadedDetail) return <ScrollView key={uploadedDetail.key} contentContainerStyle={styles.content}>
+    <Pressable style={styles.backButton} onPress={() => setExpandedUpload(null)}><AppIcon name="back" size={20} /><Text style={styles.backText}>ย้อนกลับไปรายวิชา</Text></Pressable>
     <Text accessibilityRole="header" style={styles.title}>{uploadedDetail.code}</Text>
     <Text style={styles.name}>{uploadedDetail.name || 'ยังไม่ระบุชื่อวิชา'}</Text>
     <Text style={styles.muted}>กลุ่ม {uploadedDetail.section || 'ยังไม่ระบุ'} · จากตารางที่อัปโหลด</Text>
@@ -130,9 +130,9 @@ export function CoursesScreen({ active, refreshTick = 0, onEnrollmentChanged }: 
     </View>)}
   </ScrollView>;
 
-  return <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading && !!data} onRefresh={() => setReload((value) => value + 1)} tintColor={colors.ink} />}>
+  return <ScrollView key={course?.id ?? 'course-list'} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading && !!data} onRefresh={() => setReload((value) => value + 1)} tintColor={colors.ink} />}>
     {course ? <>
-      <Pressable accessibilityRole="button" style={styles.back} onPress={() => { setSelected(null); }}><Text style={styles.link}>กลับ{mode === 'courses' ? 'รายวิชา' : 'ตารางเรียน'}</Text></Pressable>
+      <Pressable accessibilityRole="button" style={styles.backButton} onPress={() => { setSelected(null); }}><AppIcon name="back" size={20} /><Text style={styles.backText}>ย้อนกลับไป{mode === 'courses' ? 'รายวิชา' : 'ตารางเรียน'}</Text></Pressable>
       <Text style={styles.title}>{course.code}</Text>
       <Text style={styles.name}>{course.name}</Text>
       {course.section && <Text style={styles.muted}>กลุ่ม {course.section}</Text>}
@@ -200,6 +200,8 @@ const styles = StyleSheet.create({
   code: { flex: 1, fontSize: 15, lineHeight: 24, color: colors.action, fontWeight: '600' },
   link: { fontSize: 14, lineHeight: 22, color: colors.action, textDecorationLine: 'underline' },
   back: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 8 },
+  backButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 14, borderWidth: 1, borderColor: colors.outline, borderRadius: 10, backgroundColor: colors.surface },
+  backText: { fontSize: 14, lineHeight: 22, color: colors.action },
   dayStrip: { flexGrow: 0 },
   days: { gap: 8 },
   day: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.surface, justifyContent: 'center' },

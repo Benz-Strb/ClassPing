@@ -12,6 +12,7 @@ const paths = {
   chart: 'M4 4v16h16M8 16v-4m5 4V8m5 8v-6',
   chevron: 'm9 5 7 7-7 7',
   arrow: 'M5 12h14m-6-6 6 6-6 6',
+  back: 'M19 12H5m7-7-7 7 7 7',
   user: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-2a8 8 0 0 1 16 0v2',
   card: 'M3 5h18v14H3V5Zm4 5h3m-3 4h3m5-5h3m-3 4h3',
   school: 'm2 9 10-6 10 6-10 6L2 9Zm4 3v6l6 3 6-3v-6m4-3v8',
