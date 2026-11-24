@@ -14,9 +14,6 @@ import { ExamBadge } from "./exam-badge";
 // กล้องตรวจหน้าวินาทีละครั้ง
 const FACES_MS = 1000;
 
-// โปรแกรมกล้องกลับภาพหน้าห้องก่อนส่งแล้ว แต่กรอบหน้ามาจากภาพที่ยังไม่กลับ ต้องกลับกรอบเอง
-const MIRROR = true;
-
 const KIND = {
   match: { label: "", box: "border-green-400", tag: "bg-green-500" },
   review: { label: "ไม่แน่ใจ", box: "border-yellow-300", tag: "bg-yellow-500" },
@@ -32,6 +29,8 @@ export function LiveViewer() {
   const [error, setError] = useState<string | null>(null);
   const [frontLive, setFrontLive] = useState(false);
   const [faces, setFaces] = useState<LiveFaces["faces"]>([]);
+  // เว็บแคมกลับภาพก่อนส่งแต่กรอบมาจากภาพที่ยังไม่กลับ ต้องกลับกรอบเอง ส่วนกล้องบอร์ดไม่กลับ
+  const [mirrored, setMirrored] = useState(true);
   const [showBoxes, setShowBoxes] = useState(true);
   const onFrontLive = useCallback((live: boolean) => setFrontLive(live), []);
 
@@ -59,7 +58,11 @@ export function LiveViewer() {
       if (running) return Promise.resolve();
       running = true;
       return apiFetch<LiveFaces>(`/sessions/${sessionId}/live/faces`)
-        .then((data) => !stop && setFaces(data.faces))
+        .then((data) => {
+          if (stop) return;
+          setMirrored(data.mirrored !== false);
+          setFaces(data.faces);
+        })
         .catch(() => !stop && setFaces([]))
         .finally(() => {
           running = false;
@@ -81,7 +84,7 @@ export function LiveViewer() {
         key={face.n}
         className={`absolute border-2 ${KIND[face.kind].box}`}
         style={{
-          left: `${(MIRROR ? 1 - face.box[2] : face.box[0]) * 100}%`,
+          left: `${(mirrored ? 1 - face.box[2] : face.box[0]) * 100}%`,
           top: `${face.box[1] * 100}%`,
           width: `${(face.box[2] - face.box[0]) * 100}%`,
           height: `${(face.box[3] - face.box[1]) * 100}%`,

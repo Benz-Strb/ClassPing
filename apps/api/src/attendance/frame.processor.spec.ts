@@ -634,12 +634,19 @@ describe('FrameProcessor กรอบหน้าสำหรับกล้อ�
     await processor.process(job(1));
     expect(liveFaces.get('s1', new Date(job(1).receivedAt))).toEqual({
       at: new Date(job(1).receivedAt),
+      mirrored: true,
       faces: [
         { box: [0.1, 0.1, 0.2, 0.2], userId: 'a', kind: 'match' },
         { box: [0.5, 0.5, 0.6, 0.6], userId: 'a', kind: 'review' },
         { box: [0, 0, 0.1, 0.1], userId: null, kind: 'unknown' },
       ],
     });
+  });
+
+  it('งานจากบอร์ด (วิดีโอไม่กลับ) เก็บ mirrored เป็น false', async () => {
+    const { processor, liveFaces } = setup();
+    await processor.process(resultJob(1, [face(A)]));
+    expect(liveFaces.get('s1', new Date(job(1).receivedAt))?.mirrored).toBe(false);
   });
 
   it('เฟรมที่ไม่มีหน้า ล้างกรอบเก่า', async () => {
