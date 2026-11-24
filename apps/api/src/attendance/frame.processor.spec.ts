@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../config/config.js';
-import type { DetectedFace } from '../face/face.client.js';
+import type { DetectedFace, DetectResult } from '../face/face.client.js';
 import type {
   AttendanceRepo,
   AttendanceRow,
@@ -51,6 +51,16 @@ const job = (minute: number): FrameJob => ({
   image: Buffer.from('frame').toString('base64'),
 });
 
+const resultJob = (minute: number, faces: DetectedFace[]): FrameJob => {
+  const result: DetectResult = { width: 640, height: 480, faces, skippedSmall: 0 };
+  return {
+    sessionId: 's1',
+    cameraId: 'cam1',
+    receivedAt: new Date(START.getTime() + minute * 60_000).toISOString(),
+    result,
+  };
+};
+
 function setup(
   opts: {
     context?: SessionContext | null;
@@ -58,6 +68,8 @@ function setup(
     liveness?: boolean;
     matchLog?: boolean;
     openTrips?: string[];
+    faceServiceDown?: boolean;
+    verify?: (crop: Buffer) => Promise<number[] | null>;
   } = {},
 ) {
   const rows = new Map<string, AttendanceRow & { record: CameraRecord }>();
@@ -68,10 +80,13 @@ function setup(
   let failWrite = false;
   let beforeWrite = () => {};
   let detectCalls = 0;
+  const verifyCalls: Buffer[] = [];
+  let verifyAs: (crop: Buffer) => Promise<number[] | null> = opts.verify ?? (async () => A);
   const closes: { userId: string; backAt: Date; by: string }[] = [];
   let closeResult = true;
   let failClose: string | null = null;
   let failLoad = false;
+  const modelsAsked: string[] = [];
 
   const embeddings: FaceEmbedding[] = [];
   for (const [userId, vector] of [
@@ -84,7 +99,10 @@ function setup(
 
   const repo: AttendanceRepo = {
     sessionContext: async () => (opts.context === undefined ? context : opts.context),
-    faceEmbeddings: async (userIds) => embeddings.filter((e) => userIds.includes(e.userId)),
+    faceEmbeddings: async (userIds, model) => {
+      modelsAsked.push(model);
+      return embeddings.filter((e) => userIds.includes(e.userId));
+    },
     find: async (_s, userId) => rows.get(userId) ?? null,
     insertIfAbsent: async (record) => {
       beforeWrite();
@@ -147,7 +165,14 @@ function setup(
       detectCalls++;
       return { width: 640, height: 480, faces, skippedSmall: 0 };
     },
-    model: async () => 'buffalo_l',
+    verifyCrop: async (crop) => {
+      verifyCalls.push(crop);
+      return verifyAs(crop);
+    },
+    model: async () => {
+      if (opts.faceServiceDown) throw new Error('face service down');
+      return 'buffalo_l';
+    },
     enrolledUserIds: async () => ['a', 'b'],
   };
   const config = {
@@ -156,6 +181,8 @@ function setup(
     matchLog: opts.matchLog ?? false,
     livenessMin: opts.liveness ? 0.15 : null,
     livenessStreak: 3,
+    boardFaceModel: 'board_model',
+    boardVerifyMin: 0.9,
   } as AppConfig;
   const rejected = new RejectedGuesses(() => new Date(START.getTime() + 3_600_000));
   const liveFaces = new LiveFaces();
@@ -189,6 +216,9 @@ function setup(
       rows.set(userId, { ...row, updatedBy: 'teacher1' });
     },
     detectCalls: () => detectCalls,
+    verifyCalls,
+    verifyAs: (fn: (crop: Buffer) => Promise<number[] | null>) => (verifyAs = fn),
+    modelsAsked,
     rejected,
     liveFaces,
     // จำลองอาจารย์กดแก้ระหว่างที่กล้องกำลังอัปโหลดรูป
@@ -197,6 +227,251 @@ function setup(
 }
 
 describe('FrameProcessor', () => {
+  describe('งานที่มีผลจากบอร์ดแล้ว', () => {
+    it('ไม่เรียก detect และบันทึกหน้ามั่นใจเหมือนงานภาพ', async () => {
+      const t = setup();
+      await expect(t.processor.process(resultJob(5, [face(A)]))).resolves.toEqual({
+        matched: 1,
+        review: 0,
+        unknown: 0,
+      });
+      expect(t.detectCalls()).toBe(0);
+      const row = t.rows.get('a')!;
+      expect(row.status).toBe('present');
+      expect(row.record.firstSeenAt).toEqual(new Date(resultJob(5, []).receivedAt));
+      expect(t.uploads).toHaveLength(1);
+    });
+
+    it('คะแนนกลางเป็นรอตรวจ คนแปลกหน้าเป็นไม่รู้จัก เหมือนงานภาพ', async () => {
+      const t = setup();
+      await expect(
+        t.processor.process(resultJob(5, [face(between), face(stranger)])),
+      ).resolves.toEqual({ matched: 0, review: 1, unknown: 1 });
+      expect(t.rows.get('a')!.status).toBe('pending');
+      expect(t.unknowns).toHaveLength(1);
+      expect(t.detectCalls()).toBe(0);
+
+      const image = setup();
+      image.show([face(between), face(stranger)]);
+      await expect(image.processor.process(job(5))).resolves.toEqual({
+        matched: 0,
+        review: 1,
+        unknown: 1,
+      });
+    });
+
+    it('โหลด gallery ด้วย boardFaceModel แม้ face service ล่ม', async () => {
+      const t = setup({ faceServiceDown: true });
+      await t.processor.process(resultJob(5, [face(A)]));
+      expect(t.modelsAsked).toEqual(['board_model']);
+      expect(t.rows.get('a')!.status).toBe('present');
+    });
+
+    it('ไม่มีหน้าเลย ไม่ error', async () => {
+      const t = setup();
+      await expect(t.processor.process(resultJob(5, []))).resolves.toEqual({
+        matched: 0,
+        review: 0,
+        unknown: 0,
+      });
+    });
+  });
+
+  describe('ตรวจหน้าจากบอร์ดซ้ำก่อนบันทึกว่ามา', () => {
+    const warns = () => vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    it('verifies_before_marking_present', async () => {
+      const t = setup();
+      await t.processor.process(resultJob(5, [face(A)]));
+      expect(t.verifyCalls).toEqual([Buffer.from('Y3JvcA==', 'base64')]);
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'present', reviewReason: null });
+      const late = setup({ verify: async () => B });
+      await late.processor.process(resultJob(20, [face(B)]));
+      expect(late.rows.get('b')!.status).toBe('late');
+    });
+
+    it('interpolated_embedding_attack_becomes_pending', async () => {
+      // cos(A,crop)=0.2, cos(e,A)=0.6, cos(e,crop)~0.904
+      const crop = [0.2, Math.sqrt(1 - 0.04), 0];
+      const e = [0.6, 0.8, 0];
+      const dot = (x: number[], y: number[]) => x.reduce((n, v, i) => n + v * y[i]!, 0);
+      expect(dot(e, A)).toBeGreaterThan(0.5);
+      expect(dot(e, crop)).toBeGreaterThanOrEqual(0.9);
+      expect(dot(crop, A)).toBeLessThan(0.36);
+      const t = setup({ complete: ['a'], verify: async () => crop });
+      await t.processor.process(resultJob(5, [face(e)]));
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'pending', reviewReason: null });
+    });
+
+    it('server_embedding_matching_other_student_becomes_pending', async () => {
+      const t = setup({ verify: async () => B });
+      await t.processor.process(resultJob(5, [face(A)]));
+      expect(t.rows.get('a')!.record.status).toBe('pending');
+      expect(t.rows.has('b')).toBe(false);
+    });
+
+    it('mismatch_becomes_pending', async () => {
+      const warn = warns();
+      const t = setup({ verify: async () => [0.5, 0.866, 0] });
+      await t.processor.process(resultJob(5, [face(A)]));
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'pending', reviewReason: null });
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
+    it('no_face_in_crop_becomes_pending', async () => {
+      const t = setup({ verify: async () => null });
+      await t.processor.process(resultJob(5, [face(A)]));
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'pending', reviewReason: null });
+    });
+
+    it('null_crop_becomes_pending', async () => {
+      const t = setup();
+      await t.processor.process(resultJob(5, [face(A, null)]));
+      expect(t.verifyCalls).toHaveLength(0);
+      expect(t.rows.get('a')!.record.status).toBe('pending');
+    });
+
+    it('face_service_error_becomes_pending_not_throw', async () => {
+      const t = setup({
+        verify: async () => {
+          throw new Error('face down');
+        },
+      });
+      await expect(t.processor.process(resultJob(5, [face(A)]))).resolves.toMatchObject({
+        matched: 1,
+      });
+      expect(t.rows.get('a')!.record.status).toBe('pending');
+    });
+
+    it('no_verify_for_skip_or_pending', async () => {
+      const t = setup();
+      await t.processor.process(resultJob(5, [face(between)])); // review -> pending
+      await t.processor.process(resultJob(6, [face(A, 'Y3JvcA==')])); // upgrade, verifies once
+      expect(t.verifyCalls).toHaveLength(1);
+      await t.processor.process(resultJob(7, [face(A)])); // already present -> skip
+      expect(t.verifyCalls).toHaveLength(1);
+    });
+
+    it('image_jobs_never_verify', async () => {
+      const t = setup();
+      t.show([face(A)]);
+      await t.processor.process(job(5));
+      expect(t.verifyCalls).toHaveLength(0);
+      expect(t.rows.get('a')!.status).toBe('present');
+    });
+
+    it('failed_verify_then_success_upgrades_pending', async () => {
+      const t = setup();
+      t.verifyAs(async () => null);
+      await t.processor.process(resultJob(5, [face(A)]));
+      expect(t.rows.get('a')!.status).toBe('pending');
+      t.verifyAs(async () => A);
+      await t.processor.process(resultJob(6, [face(A)]));
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'present', reviewReason: null });
+    });
+
+    it('failed_verify_does_not_clear_spoof_row', async () => {
+      const t = setup({ liveness: true });
+      await t.processor.process(resultJob(0, [{ ...face(A), liveness: 0.05 }]));
+      const before = t.rows.get('a');
+      t.verifyAs(async () => null);
+      for (const m of [1, 2, 3, 4]) {
+        await t.processor.process(resultJob(m, [{ ...face(A), liveness: 0.9 }]));
+      }
+      expect(t.rows.get('a')).toBe(before);
+      t.verifyAs(async () => A);
+      await t.processor.process(resultJob(5, [{ ...face(A), liveness: 0.9 }]));
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'present', reviewReason: null });
+    });
+  });
+
+  describe('เว้นการตรวจครอปซ้ำหลังไม่ผ่าน', () => {
+    const at = (seconds: number, faces: DetectedFace[]) => resultJob(5 + seconds / 60, faces);
+
+    const down = async (): Promise<number[] | null> => {
+      throw new Error('face down');
+    };
+
+    it('content_failure_skips_verify_within_5s', async () => {
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const t = setup({ verify: async () => null });
+      await t.processor.process(at(0, [face(A)]));
+      await t.processor.process(at(4, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(t.rows.get('a')!.record.status).toBe('pending');
+      warn.mockRestore();
+    });
+
+    it('backoff_keeps_pending_write_for_new_row', async () => {
+      // แถวรอตรวจยังถูกเขียนตามปกติระหว่างช่วงเว้น
+      const t = setup({ verify: down });
+      await t.processor.process(at(0, [face(A)]));
+      t.rows.delete('a');
+      await t.processor.process(at(10, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(1);
+      expect(t.rows.get('a')!.record).toMatchObject({ status: 'pending', reviewReason: null });
+    });
+
+    it.each([
+      ['no face', async () => null],
+      ['board mismatch', async () => [0.5, 0.866, 0]],
+      ['other student', async () => B],
+    ])('content_failure_retries_after_5s (%s)', async (_name, verify) => {
+      const t = setup({ verify });
+      await t.processor.process(at(0, [face(A)]));
+      t.verifyAs(async () => A);
+      await t.processor.process(at(4.9, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(1);
+      await t.processor.process(at(5, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(2);
+      expect(t.rows.get('a')!.status).toBe('present');
+    });
+
+    it('service_error_waits_30s', async () => {
+      const t = setup({ verify: down });
+      await t.processor.process(at(0, [face(A)]));
+      t.verifyAs(async () => A);
+      await t.processor.process(at(5, [face(A)]));
+      await t.processor.process(at(29, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(1);
+      await t.processor.process(at(30, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(2);
+      expect(t.rows.get('a')!.status).toBe('present');
+    });
+
+    it('backoff_is_per_user', async () => {
+      const t = setup({ verify: async (crop) => (crop.toString() === 'b' ? B : null) });
+      await t.processor.process(at(0, [face(A, Buffer.from('a').toString('base64'))]));
+      await t.processor.process(at(5, [face(B, Buffer.from('b').toString('base64'))]));
+      expect(t.verifyCalls).toHaveLength(2);
+      expect(t.rows.get('b')!.status).toBe('present');
+    });
+
+    it('pass_clears_backoff', async () => {
+      const t = setup({ verify: async () => null });
+      await t.processor.process(at(0, [face(A)]));
+      const waits = t.processor['verifyWaits'];
+      expect(waits.get('s1')!.until.has('a')).toBe(true);
+      t.verifyAs(async () => A);
+      await t.processor.process(at(6, [face(A)]));
+      expect(waits.get('s1')!.until.has('a')).toBe(false);
+      // ผ่านแล้วไม่มีช่วงเว้นค้าง ครั้งต่อไปที่ไม่ผ่านเริ่มนับใหม่
+      t.verifyAs(down);
+      await t.processor.process(at(7, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(2);
+    });
+
+    it('null_crop_does_not_start_backoff', async () => {
+      const t = setup();
+      await t.processor.process(at(0, [face(A, null)]));
+      await t.processor.process(at(5, [face(A)]));
+      expect(t.verifyCalls).toHaveLength(1);
+      expect(t.rows.get('a')!.status).toBe('present');
+    });
+  });
+
   it('คาบหายไปแล้วไม่ทำอะไร', async () => {
     const t = setup({ context: null });
     t.show([face(A)]);
@@ -550,6 +825,48 @@ describe('FrameProcessor กล้องหน้าห้องปิดรอ�
     await t.processor.process(job(30));
     expect(t.closes).toHaveLength(1);
     await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('ผลจากบอร์ดที่ตรวจครอปไม่ผ่าน ไม่ปิดรอบ', async () => {
+    const t = setup({ openTrips: ['a'], verify: async () => null });
+    await t.processor.process(resultJob(30, [face(A)]));
+    expect(t.closes).toHaveLength(0);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+    expect(t.verifyCalls).toHaveLength(1); // ปิดรอบกับเขียนแถวใช้ผลตรวจเดียวกัน
+    expect(t.rows.get('a')!.status).toBe('pending');
+  });
+
+  it('ผลจากบอร์ดที่ไม่มีครอป ไม่ปิดรอบ', async () => {
+    const t = setup({ openTrips: ['a'] });
+    await t.processor.process(resultJob(30, [face(A, null)]));
+    expect(t.closes).toHaveLength(0);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+  });
+
+  it('ผลจากบอร์ดที่ตรวจครอปผ่าน ปิดรอบ', async () => {
+    const t = setup({ openTrips: ['a'] });
+    await t.processor.process(resultJob(30, [face(A)]));
+    expect(t.closes).toEqual([
+      { userId: 'a', backAt: new Date(resultJob(30, []).receivedAt), by: 'front' },
+    ]);
+    expect(t.verifyCalls).toHaveLength(1);
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(false);
+    expect(t.rows.get('a')!.status).toBe('late');
+  });
+
+  it('ผลจากบอร์ดที่มีแถวแล้ว ตรวจครอปเฉพาะตอนมีรอบเปิด', async () => {
+    const t = setup({ openTrips: ['a'] });
+    await t.processor.process(resultJob(5, [face(A)]));
+    expect(t.verifyCalls).toHaveLength(1);
+    await t.processor.process(resultJob(6, [face(A)])); // ไม่มีรอบเปิดแล้ว แถวมาแล้ว -> ไม่ตรวจ
+    expect(t.verifyCalls).toHaveLength(1);
+    await t.openTrips.add('s1', 'a');
+    t.verifyAs(async () => null);
+    await t.processor.process(resultJob(30, [face(A)]));
+    expect(t.verifyCalls).toHaveLength(2);
+    expect(t.closes).toHaveLength(1); // ครั้งแรกเท่านั้น
+    await expect(t.openTrips.has('s1', 'a')).resolves.toBe(true);
+    expect(t.rows.get('a')!.status).toBe('present');
   });
 
   it('closeTrip พัง log แล้วเช็คชื่อหน้าอื่นในเฟรมต่อ', async () => {

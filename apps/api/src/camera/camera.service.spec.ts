@@ -55,6 +55,7 @@ function setup(
   const entries = new DoorEntries(() => NOW);
   const config = {
     cameraOpenBeforeMin: opts.openBefore ?? 0,
+    boardFaceModel: 'buffalo_l',
     mediaServerSecret: opts.media ? 's'.repeat(32) : null,
     mediaTokenSecret: opts.media ? 't'.repeat(32) : null,
     mediaRtspUrl: 'rtsp://media.test:8554',
@@ -258,5 +259,76 @@ describe('CameraService.currentSession (กล้องประตู)', () => 
       session: { id: 's1' },
       stream: { fps: 15, bitrateKbps: 1500 },
     });
+  });
+});
+
+describe('CameraService.acceptFaces', () => {
+  const embedding = Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0));
+  const body = (over: Record<string, unknown> = {}) => ({
+    capturedAt: '2020-01-01T00:00:00Z',
+    model: 'buffalo_l',
+    width: 640,
+    height: 480,
+    skippedSmall: 0,
+    faces: [{ bbox: [10, 10, 100, 100], detScore: 0.9, embedding, liveness: 0.8, crop: null }],
+    ...over,
+  });
+
+  it('กล้องประตูได้ 403', async () => {
+    const { service } = setup();
+    await expect(service.acceptFaces(door, body())).rejects.toMatchObject({
+      status: 403,
+      code: 'NOT_FRONT_CAMERA',
+    });
+  });
+
+  it('body ผิดได้ 400 INVALID_FACES และไม่เข้าคิว', async () => {
+    const { service, added } = setup();
+    await expect(service.acceptFaces(front, body({ model: 'x' }))).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_FACES',
+    });
+    expect(added).toEqual([]);
+  });
+
+  it('ไม่มีคาบได้ 409', async () => {
+    const { service } = setup({ live: null });
+    await expect(service.acceptFaces(front, body())).rejects.toMatchObject({
+      status: 409,
+      code: 'NO_LIVE_SESSION',
+    });
+  });
+
+  it('คิวรอเกินได้ 429', async () => {
+    const { service, added } = setup({ waiting: MAX_WAITING_FRAMES + 1 });
+    await expect(service.acceptFaces(front, body())).rejects.toMatchObject({
+      status: 429,
+      code: 'BUSY',
+    });
+    expect(added).toEqual([]);
+  });
+
+  it('คิวรอเท่าเพดานพอดียังรับ', async () => {
+    const { service, added } = setup({ waiting: MAX_WAITING_FRAMES });
+    await service.acceptFaces(front, body());
+    expect(added).toHaveLength(1);
+  });
+
+  it('มี capturedAt แล้ว receivedAt ยังเป็นนาฬิกา API', async () => {
+    const { service, added } = setup();
+    await service.acceptFaces(front, body({ capturedAt: '2031-01-01T00:00:00Z' }));
+    expect(added[0].receivedAt).toBe(NOW.toISOString());
+  });
+
+  it('ปกติเข้าคิวพร้อม result และ receivedAt เป็นนาฬิกา API ไม่ใช่ capturedAt', async () => {
+    const { service, added } = setup();
+    await expect(service.acceptFaces(front, body())).resolves.toEqual({ queued: true });
+    expect(added).toHaveLength(1);
+    const job = added[0];
+    expect(job.receivedAt).toBe(NOW.toISOString());
+    expect(job.sessionId).toBe('s1');
+    expect(job.cameraId).toBe('cam1');
+    expect('result' in job && job.result.faces).toHaveLength(1);
+    expect('image' in job).toBe(false);
   });
 });

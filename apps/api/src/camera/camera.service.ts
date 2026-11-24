@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { FRAME_QUEUE, type FrameQueue } from '../attendance/frame-queue.js';
 import { AppError } from '../common/app-error.js';
 import { CLOCK, type Clock } from '../common/clock.js';
@@ -9,6 +9,7 @@ import { cameraPath } from '../media/media-path.js';
 import { signMediaToken } from '../media/media-token.js';
 import { DoorEntries } from '../door/door-entries.js';
 import { DoorProcessor, type TripResult } from '../door/door.processor.js';
+import { parseFacesBody, readCapturedAt } from './faces-body.js';
 import { CAMERA_REPO, type CameraIdentity, type CameraRepo } from './camera.repo.js';
 
 export interface CameraSession {
@@ -37,6 +38,8 @@ const MINUTE = 60_000;
 
 @Injectable()
 export class CameraService {
+  private readonly logger = new Logger(CameraService.name);
+
   constructor(
     @Inject(CAMERA_REPO) private readonly repo: CameraRepo,
     @Inject(FRAME_QUEUE) private readonly queue: FrameQueue,
@@ -85,6 +88,31 @@ export class CameraService {
       cameraId: camera.id,
       receivedAt: receivedAt.toISOString(),
       image: file.buffer.toString('base64'),
+    });
+    return { queued: true };
+  }
+
+  // บอร์ดหน้าห้องตรวจหน้ามาเองแล้ว เข้าคิวเดียวกับภาพ เวลาที่เห็นใช้เวลาที่ API รับ
+  // (capturedAt ที่บอร์ดส่งมาไม่ใช้)
+  async acceptFaces(camera: CameraIdentity, body: unknown): Promise<{ queued: true }> {
+    if (camera.kind !== 'front') {
+      throw new AppError(403, 'NOT_FRONT_CAMERA', 'กล้องนี้ไม่ใช่กล้องหน้าห้อง');
+    }
+    const result = parseFacesBody(body, this.config.boardFaceModel);
+    this.logger.debug(`faces จากกล้อง ${camera.id} capturedAt=${readCapturedAt(body) ?? '-'}`);
+
+    const receivedAt = this.now();
+    const live = await this.liveSessionFor(camera, receivedAt);
+    if (!live) throw new AppError(409, 'NO_LIVE_SESSION', 'ตอนนี้ห้องนี้ไม่มีคาบ');
+    if ((await this.queue.waiting()) > MAX_WAITING_FRAMES) {
+      throw new AppError(429, 'BUSY', 'ภาพรอตรวจเยอะเกินไป ข้ามภาพนี้ไปก่อน');
+    }
+
+    await this.queue.add({
+      sessionId: live.id,
+      cameraId: camera.id,
+      receivedAt: receivedAt.toISOString(),
+      result,
     });
     return { queued: true };
   }

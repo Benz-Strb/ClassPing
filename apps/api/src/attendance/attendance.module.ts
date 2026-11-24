@@ -37,6 +37,13 @@ import { UnknownCleanupRunner } from './unknown-cleanup.runner.js';
       inject: [FaceClient, RosterService],
       useFactory: (face: FaceClient, roster: RosterService): FrameDeps => ({
         detect: (image, mime, opts) => face.detect(image, mime, opts),
+        verifyCrop: async (crop) => {
+          const { faces } = await face.detect(crop, 'image/jpeg');
+          if (!faces.length) return null;
+          const area = (f: (typeof faces)[number]) =>
+            (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]);
+          return faces.reduce((a, b) => (area(b) > area(a) ? b : a)).embedding;
+        },
         model: () => face.model(),
         enrolledUserIds: (courseId) => roster.enrolledUserIds(courseId),
       }),

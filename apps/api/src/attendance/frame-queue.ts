@@ -2,16 +2,17 @@ import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { AppError } from '../common/app-error.js';
 import { APP_CONFIG, type AppConfig } from '../config/config.js';
+import type { DetectResult } from '../face/face.client.js';
 
 export const FRAMES_QUEUE_NAME = 'frames';
 
-// ภาพหนึ่งเฟรมจากกล้องหน้าห้อง receivedAt คือเวลาที่ API รับภาพ ใช้เป็นเวลาที่เห็นหน้า
-export interface FrameJob {
+// หนึ่งเฟรมจากกล้องหน้าห้อง receivedAt คือเวลาที่ API รับ ใช้เป็นเวลาที่เห็นหน้า
+// image = ภาพให้ face service ตรวจ, result = บอร์ดตรวจหน้ามาแล้ว
+export type FrameJob = {
   sessionId: string;
   cameraId: string;
   receivedAt: string;
-  image: string;
-}
+} & ({ image: string } | { result: DetectResult });
 
 export interface FrameQueue {
   add(job: FrameJob): Promise<void>;

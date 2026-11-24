@@ -15,6 +15,10 @@ export interface AppConfig {
   matchReviewMin: number;
   cameraOpenBeforeMin: number;
   matchLog: boolean;
+  // โมเดลใบหน้าที่บอร์ดหน้าห้องใช้ ต้องตรงกับที่ลงทะเบียนไว้ใน gallery
+  boardFaceModel: string;
+  // คะแนนขั้นต่ำที่บอร์ดใช้ยืนยันหน้า (ใช้ฝั่งตรวจซ้ำ)
+  boardVerifyMin: number;
   // คะแนน liveness ต่ำกว่านี้ถือว่าเป็นรูปหรือจอ null = ปิด
   livenessMin: number | null;
   // ต้องเจอคนจริงติดกันกี่ภาพ ถึงล้างสถานะสงสัยของแถวที่รอตรวจ
@@ -125,6 +129,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     matchReviewMin,
     cameraOpenBeforeMin: wholeNumber(env, 'CAMERA_OPEN_BEFORE_MIN', 20),
     matchLog: env.MATCH_LOG?.trim() === '1',
+    boardFaceModel: env.BOARD_FACE_MODEL?.trim() || 'buffalo_l',
+    boardVerifyMin: score(env, 'BOARD_VERIFY_MIN', 0.9),
     livenessMin: optionalOpenScore(env, 'LIVENESS_MIN'),
     livenessStreak: positiveWhole(env, 'LIVENESS_STREAK', 3),
     mediaTokenSecret: optionalSecret(env, 'MEDIA_TOKEN_SECRET'),
