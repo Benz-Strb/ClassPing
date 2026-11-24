@@ -28,6 +28,21 @@ PROVIDERS = {
 }
 
 
+def pad_small(image: np.ndarray, size: int) -> np.ndarray:
+    """รูปที่เล็กกว่า det_size ทั้งสองด้าน วางมุมซ้ายบนของผืนดำ size x size
+
+    InsightFace ย่อ/ขยายรูปให้พอดี det_size ภาพหน้าที่ตัดมาเล็ก ๆ จะถูกขยายจนหน้าใหญ่เกิน
+    ที่ตัวตรวจจับหาเจอ วางบนผืนดำแทน พิกัดกรอบหน้าและ landmark จึงเท่ากับรูปเดิม
+    รูปที่ด้านใดด้านหนึ่งถึง det_size แล้วคืนตัวเดิม
+    """
+    height, width = image.shape[:2]
+    if height >= size or width >= size:
+        return image
+    canvas = np.zeros((size, size, *image.shape[2:]), dtype=image.dtype)
+    canvas[:height, :width] = image
+    return canvas
+
+
 class InsightFaceEngine:
     """ใช้ชุดโมเดล InsightFace (ค่าเริ่มต้น buffalo_l: SCRFD + ArcFace 512 + landmark 3D)
 
@@ -50,10 +65,11 @@ class InsightFaceEngine:
         # วัดแล้ว CoreML ใช้ CPU 36 ms/ภาพ จาก 2,600 ms ค่าใบหน้า cosine >= 0.9998 กรอบหน้าเท่าเดิม
         ctx_id = -1 if settings.provider == "cpu" else 0
         self._app.prepare(ctx_id=ctx_id, det_size=(settings.det_size, settings.det_size))
+        self._det_size = settings.det_size
 
     def analyze(self, image: np.ndarray) -> list[DetectedFace]:
         faces = []
-        for face in self._app.get(image):
+        for face in self._app.get(pad_small(image, self._det_size)):
             pose = face.get("pose")
             faces.append(
                 DetectedFace(

@@ -154,3 +154,17 @@ def test_coreml_matches_cpu(model_settings, real_engine, group_image):
         assert float(a.embedding @ b.embedding) > 0.999
         assert np.allclose(a.bbox, b.bbox, atol=1)
         assert abs(a.det_score - b.det_score) < 0.01
+
+
+
+def test_model_small_crop_found(group_image):
+    # หน้าที่บอร์ดตัดมาเล็ก ๆ (~180 px) ต้องหาเจอที่ det_size 960 แบบที่เครื่องจริงตั้ง
+    # ก่อนวางบนผืนดำ รูปถูกขยายจนหน้าใหญ่เกินตัวตรวจจับและหาไม่เจอ
+    engine = InsightFaceEngine(load_settings({"FACE_SERVICE_TOKEN": TOKEN, "FACE_DET_SIZE": "960"}))
+    faces = engine.analyze(group_image)
+    assert faces
+    for face in faces:
+        crop = crop_with_margin(group_image, face.bbox, size=180)
+        found = engine.analyze(crop)
+        assert len(found) == 1
+        assert float(np.dot(found[0].embedding, face.embedding)) >= 0.85
