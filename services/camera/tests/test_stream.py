@@ -4,8 +4,9 @@ import threading
 import time
 
 import numpy as np
+import pytest
 
-from camera.stream import Streamer
+from camera.stream import Streamer, install_hint
 
 URL = "rtsp://media.test:8554/cam/c1?token=secret123"
 
@@ -47,6 +48,9 @@ class FakeProc:
     def kill(self):
         self.killed = True
         self.returncode = -9
+
+    def terminate(self):
+        self.terminated = True
 
 
 def frame(width=1920, height=1080):
@@ -132,7 +136,15 @@ def test_missing_ffmpeg_returns_false(caplog):
 
     streamer = Streamer(source=frame, max_width=1280, popen=popen, feed=False)
     assert not streamer.start(URL, fps=15, bitrate_kbps=1500)
-    assert "brew install ffmpeg" in caplog.text
+    assert install_hint() in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("platform", "hint"), [("darwin", "brew install ffmpeg"), ("linux", "sudo apt install ffmpeg")]
+)
+def test_install_hint_matches_platform(monkeypatch, platform, hint):
+    monkeypatch.setattr("camera.stream.sys.platform", platform)
+    assert install_hint() == hint
 
 
 def test_stop_closes_stdin_and_waits():
@@ -255,3 +267,58 @@ def test_mirror_flips_picture_but_not_the_time():
     assert a[350, 50].tolist() == [200, 200, 200]
     # เวลาเขียนหลังกลับภาพ อยู่ขวาบนเหมือนกัน ตัวหนังสือไม่กลับด้าน
     assert b[:60, -560:].max() == 255 and not b[:60, :600].any()
+
+
+def test_stop_terminates_then_kills_ffmpeg_that_ignores_eof(monkeypatch):
+    """ffmpeg ไม่จบหลังปิด stdin: terminate ก่อน ไม่จบอีกค่อย kill และ stop() ต้องไม่ค้าง"""
+    monkeypatch.setattr("camera.stream._JOIN_S", 0.05)
+    calls: list[str] = []
+
+    class StubbornProc(FakeProc):
+        def wait(self, timeout=None):
+            calls.append(f"wait {timeout}")
+            if not self.killed:
+                raise subprocess.TimeoutExpired("ffmpeg", timeout)
+            return self.returncode
+
+        def terminate(self):
+            calls.append("terminate")
+
+        def kill(self):
+            calls.append("kill")
+            super().kill()
+
+    procs: list[StubbornProc] = []
+
+    def popen(cmd, **_):
+        procs.append(StubbornProc(cmd))
+        return procs[-1]
+
+    streamer = Streamer(source=frame, max_width=1280, popen=popen, feed=False)
+    streamer.start(URL, fps=10, bitrate_kbps=800)
+    began = time.monotonic()
+    streamer.stop()
+    assert time.monotonic() - began < 1
+    assert [c for c in calls if not c.startswith("wait")] == ["terminate", "kill"]
+    assert calls[0] == "wait 3"
+    assert not streamer.running
+
+
+def test_stop_gives_up_on_ffmpeg_that_never_dies(monkeypatch):
+    monkeypatch.setattr("camera.stream._JOIN_S", 0.05)
+
+    class Unkillable(FakeProc):
+        def wait(self, timeout=None):
+            raise subprocess.TimeoutExpired("ffmpeg", timeout)
+
+    procs: list[Unkillable] = []
+
+    def popen(cmd, **_):
+        procs.append(Unkillable(cmd))
+        return procs[-1]
+
+    streamer = Streamer(source=frame, max_width=1280, popen=popen, feed=False)
+    streamer.start(URL, fps=10, bitrate_kbps=800)
+    streamer.stop()
+    assert procs[0].killed
+    assert not streamer.running

@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Protocol
+from typing import Any, Protocol
 
 from camera.api import ApiDown, Session
 
@@ -20,12 +20,12 @@ class CameraError(Exception):
 
 class Api(Protocol):
     def session(self) -> Session | None: ...
-    def send(self, frame: bytes) -> str: ...
+    def send(self, payload: Any) -> str: ...
 
 
 class Camera(Protocol):
     def open(self) -> None: ...
-    def read(self) -> bytes | None: ...
+    def read(self) -> Any | None: ...
     def close(self) -> None: ...
 
 
