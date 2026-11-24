@@ -24,6 +24,7 @@ class Webcam:
         self.max_width = max_width
         self._cap: cv2.VideoCapture | None = None
         self._frame = None
+        self._fresh = False
         self._lock = threading.Lock()
         self._running = False
         self._thread: threading.Thread | None = None
@@ -48,6 +49,7 @@ class Webcam:
                 fails = 0
                 with self._lock:
                     self._frame = frame
+                    self._fresh = True
                 continue
             fails += 1
             if fails == FAILS_BEFORE_WARNING:
@@ -62,7 +64,8 @@ class Webcam:
 
     def read(self) -> bytes | None:
         with self._lock:
-            frame, self._frame = self._frame, None
+            frame = self._frame if self._fresh else None
+            self._fresh = False
         if frame is None:
             return None
         height, width = frame.shape[:2]
@@ -80,3 +83,4 @@ class Webcam:
             self._cap.release()
         self._cap = None
         self._frame = None
+        self._fresh = False

@@ -94,6 +94,7 @@ class Streamer:
     def start(self, url: str, fps: int, bitrate_kbps: int) -> bool:
         frame = self.source()
         if frame is None:
+            log.info("ยังไม่มีภาพจากกล้อง เริ่มส่งวิดีโอไม่ได้ ลองใหม่รอบหน้า")
             return False
         height, width = frame.shape[:2]
         out_w = min(width, self.max_width)

@@ -62,7 +62,9 @@ class RtspCamera:
     def __init__(self, url: str, capture_factory: Callable = cv2.VideoCapture):
         self._url = url
         self._factory = capture_factory
+        # _frame คือภาพล่าสุดให้วิดีโอ ไม่ถูกล้างตอนวิเคราะห์ _fresh บอกว่ายังไม่มีใครวิเคราะห์ภาพนี้
         self._frame: np.ndarray | None = None
+        self._fresh = False
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._reader = _Reader()
@@ -75,6 +77,7 @@ class RtspCamera:
         # ตัวใหม่ใช้ธงหยุดกับกล้องของตัวเอง จึงไม่ชนกัน
         reader = _Reader()
         self._reader = reader
+        self._reset_frame()
         self._connect(reader)
         self._thread = threading.Thread(target=self._grab, args=(reader,), daemon=True)
         reader.thread = self._thread
@@ -97,6 +100,12 @@ class RtspCamera:
         with self._lock:
             if not reader.stop.is_set():
                 self._frame = frame
+                self._fresh = frame is not None
+
+    def _reset_frame(self) -> None:
+        with self._lock:
+            self._frame = None
+            self._fresh = False
 
     def _connect(self, reader: _Reader | None = None) -> bool:
         reader = reader or self._reader
@@ -153,8 +162,10 @@ class RtspCamera:
 
     def read_frame(self) -> np.ndarray | None:
         with self._lock:
-            frame, self._frame = self._frame, None
-        return frame
+            if not self._fresh:
+                return None
+            self._fresh = False
+            return self._frame
 
     def close(self) -> None:
         reader = self._reader
@@ -168,8 +179,7 @@ class RtspCamera:
         elif reader.thread is None:
             # ไม่เคยมี thread ของ reader นี้ ปิดกล้องเองได้ ถ้ามี (แม้ยังค้าง read()) ปล่อยให้ thread ปิด
             self._drop_cap(reader)
-        with self._lock:
-            self._frame = None
+        self._reset_frame()
 
 
 class AnalyzingCamera:
