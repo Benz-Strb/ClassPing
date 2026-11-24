@@ -1,6 +1,7 @@
 import logging
 import re
 import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -16,6 +17,11 @@ _TOKEN = re.compile(r"token=[^&\s]+")
 
 def _hide(text: str) -> str:
     return _TOKEN.sub("token=***", text)
+
+
+def install_hint() -> str:
+    """คำสั่งติดตั้ง ffmpeg ของเครื่องนี้ (Mac ใช้ brew บอร์ด Linux ใช้ apt)"""
+    return "brew install ffmpeg" if sys.platform == "darwin" else "sudo apt install ffmpeg"
 
 
 def _path_of(url: str) -> str:
@@ -147,7 +153,7 @@ class Streamer:
                 cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
             )
         except FileNotFoundError:
-            log.error("ไม่เจอ ffmpeg ติดตั้งก่อน: brew install ffmpeg")
+            log.error("ไม่เจอ ffmpeg ติดตั้งก่อน: %s", install_hint())
             return False
         self._url = url
         self._broken = False
@@ -193,17 +199,27 @@ class Streamer:
         closer = threading.Thread(target=self._close_stdin, args=(proc,), daemon=True)
         closer.start()
         closer.join(timeout=_JOIN_S)
-        try:
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
+        # ปิด stdin แล้ว ffmpeg ควรจบเอง ไม่จบก็ terminate แล้วค่อย kill ห้ามรอไม่มีกำหนด
+        if not self._wait(proc, 3):
+            proc.terminate()
+            if not self._wait(proc, _JOIN_S):
+                proc.kill()
+                if not self._wait(proc, _JOIN_S):
+                    log.warning("ffmpeg ไม่ยอมจบ ปล่อยไว้")
         if proc.returncode not in (0, None) or self._broken:
             detail = " | ".join(self._tail) or f"รหัส {proc.returncode}"
             log.warning("วิดีโอไป %s หยุด: %s", _path_of(self._url), detail)
         else:
             log.info("หยุดส่งวิดีโอ %s", _path_of(self._url))
         self._proc = None
+
+    @staticmethod
+    def _wait(proc: subprocess.Popen, seconds: float) -> bool:
+        try:
+            proc.wait(timeout=seconds)
+            return True
+        except subprocess.TimeoutExpired:
+            return False
 
     @staticmethod
     def _close_stdin(proc: subprocess.Popen) -> None:

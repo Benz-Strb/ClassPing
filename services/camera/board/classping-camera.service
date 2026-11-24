@@ -1,0 +1,23 @@
+# ติดตั้งโดย install.sh ไปที่ /etc/systemd/system/
+# ค่าตั้งอยู่ใน /home/student/workspace/classping-camera/board.env (คัดจาก board.env.example แล้วกรอกเอง ห้าม commit)
+[Unit]
+Description=ClassPing camera (ROCK 5B+)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=student
+WorkingDirectory=/home/student/workspace/classping-camera
+EnvironmentFile=/home/student/workspace/classping-camera/board.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/student/workspace/classping-camera/.venv/bin/python -m camera.board_main
+Restart=always
+# 78 = ค่าตั้งหรือ token ผิด ให้แก้ board.env ก่อน ไม่ต้องเริ่มใหม่วนไป
+RestartPreventExitStatus=78
+RestartSec=5
+# stop ส่ง SIGTERM ให้ python ตัวเดียว ให้มันปิด ffmpeg เอง (อัดวิดีโอจบสวย) เกินเวลาค่อยฆ่าทั้งกลุ่มรวม ffmpeg
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

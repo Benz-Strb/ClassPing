@@ -20,7 +20,8 @@ import { OpenTrips } from './open-trips.js';
 
 export type TripResult = TripStatus | 'duplicate';
 
-// เหมือน FrameDeps ของกล้องหน้าห้อง
+// เหมือน FrameDeps ของกล้องหน้าห้อง แต่ไม่ต้องตรวจครอปซ้ำ
+export type DoorDeps = Omit<FrameDeps, 'verifyCrop'>;
 export const DOOR_DEPS = Symbol('DOOR_DEPS');
 
 // ลงทะเบียนหรือรีเซ็ตหน้ากลางคาบ มีผลภายในเวลานี้
@@ -45,7 +46,7 @@ export class DoorProcessor {
   constructor(
     @Inject(ATTENDANCE_REPO) private readonly attendance: AttendanceRepo,
     @Inject(DOOR_REPO) private readonly repo: DoorRepo,
-    @Inject(DOOR_DEPS) private readonly deps: FrameDeps,
+    @Inject(DOOR_DEPS) private readonly deps: DoorDeps,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly now: Clock,
     private readonly openTrips: OpenTrips,
@@ -133,7 +134,7 @@ export class DoorProcessor {
     let failures = 0;
     let lastError: unknown;
     for (const image of images) {
-      let faces: Awaited<ReturnType<FrameDeps['detect']>>['faces'];
+      let faces: Awaited<ReturnType<DoorDeps['detect']>>['faces'];
       try {
         ({ faces } = await this.deps.detect(image, 'image/jpeg', { crops: true }));
       } catch (error) {

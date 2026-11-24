@@ -22,6 +22,7 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["board: ต้องรันบนบอร์ด Radxa ที่มี NPU (rknnlite)"]
 
 [tool.ruff]
 line-length = 100

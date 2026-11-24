@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ATTENDANCE_REPO, SupabaseAttendanceRepo } from '../attendance/attendance.repo.js';
-import type { FrameDeps } from '../attendance/frame.processor.js';
 import { CLOCK } from '../common/clock.js';
 import { CoursesModule } from '../courses/courses.module.js';
 import { RosterService } from '../courses/roster.service.js';
 import { FaceClient } from '../face/face.client.js';
 import { DoorEntries } from './door-entries.js';
-import { DOOR_DEPS, DoorProcessor } from './door.processor.js';
+import { DOOR_DEPS, DoorProcessor, type DoorDeps } from './door.processor.js';
 import { DOOR_REPO, SupabaseDoorRepo } from './door.repo.js';
 import { OpenTrips } from './open-trips.js';
 
@@ -22,7 +21,7 @@ import { OpenTrips } from './open-trips.js';
     {
       provide: DOOR_DEPS,
       inject: [FaceClient, RosterService],
-      useFactory: (face: FaceClient, roster: RosterService): FrameDeps => ({
+      useFactory: (face: FaceClient, roster: RosterService): DoorDeps => ({
         detect: (image, mime, opts) => face.detect(image, mime, opts),
         model: () => face.model(),
         enrolledUserIds: (courseId) => roster.enrolledUserIds(courseId),

@@ -61,6 +61,12 @@ export class CameraController {
     return this.camera.acceptFrame(camera, file);
   }
 
+  @Post('faces')
+  @HttpCode(202)
+  faces(@CurrentCamera() camera: CameraIdentity, @Body() body: unknown): Promise<{ queued: true }> {
+    return this.camera.acceptFaces(camera, body);
+  }
+
   @Post('door')
   @UseInterceptors(
     DoorUploadErrorsInterceptor,

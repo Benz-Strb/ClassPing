@@ -11,8 +11,7 @@ import { hashToken } from './../src/camera/camera-token.js';
 import { DoorEntries } from './../src/door/door-entries.js';
 import { DoorProcessor } from './../src/door/door.processor.js';
 import { CLOCK } from './../src/common/clock.js';
-import { EnvelopeInterceptor } from './../src/common/envelope.interceptor.js';
-import { HttpExceptionFilter } from './../src/common/http-exception.filter.js';
+import { configureApp } from './../src/app.setup.js';
 import { APP_CONFIG } from './../src/config/config.js';
 
 // guard + multer จริง ส่วนฐานข้อมูลและคิวเป็นของปลอม
@@ -20,6 +19,7 @@ describe('กล้องหน้าห้อง (e2e)', () => {
   let app: INestApplication<App>;
   let added: FrameJob[];
   let outs: Buffer[][];
+  let touched: string[];
 
   const jpeg = Buffer.alloc(500, 1);
   jpeg.set([0xff, 0xd8, 0xff]);
@@ -27,6 +27,7 @@ describe('กล้องหน้าห้อง (e2e)', () => {
   beforeEach(async () => {
     added = [];
     outs = [];
+    touched = [];
     const repo: CameraRepo = {
       findByTokenHash: async (hash) =>
         hash === hashToken('good')
@@ -35,7 +36,7 @@ describe('กล้องหน้าห้อง (e2e)', () => {
             ? { id: 'cam2', roomId: 'r1', kind: 'door' }
             : null,
       findById: async () => null,
-      touch: async () => undefined,
+      touch: async (id) => void touched.push(id),
       liveSession: async () => ({
         id: 's1',
         courseCode: 'CS101',
@@ -64,13 +65,12 @@ describe('กล้องหน้าห้อง (e2e)', () => {
           provide: FRAME_QUEUE,
           useValue: { add: async (job: FrameJob) => void added.push(job), waiting: async () => 0 },
         },
-        { provide: APP_CONFIG, useValue: { cameraOpenBeforeMin: 0 } },
+        { provide: APP_CONFIG, useValue: { cameraOpenBeforeMin: 0, boardFaceModel: 'buffalo_l' } },
         { provide: CLOCK, useValue: () => new Date('2026-10-22T02:05:00Z') },
       ],
     }).compile();
     app = moduleRef.createNestApplication();
-    app.useGlobalInterceptors(new EnvelopeInterceptor());
-    app.useGlobalFilters(new HttpExceptionFilter());
+    configureApp(app);
     await app.init();
   });
 
@@ -117,6 +117,70 @@ describe('กล้องหน้าห้อง (e2e)', () => {
       .expect({ data: { queued: true } });
     expect(added).toHaveLength(1);
     expect(added[0].receivedAt).toBe('2026-10-22T02:05:00.000Z');
+  });
+
+  describe('POST /camera/faces', () => {
+    const post = () => request(app.getHttpServer()).post('/camera/faces');
+    const embedding = Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0));
+    const crop = Buffer.alloc(30_000, 1);
+    crop.set([0xff, 0xd8, 0xff]);
+    const facesBody = (count: number) => ({
+      capturedAt: '2026-10-22T02:05:00Z',
+      model: 'buffalo_l',
+      width: 1920,
+      height: 1080,
+      skippedSmall: 0,
+      faces: Array.from({ length: count }, () => ({
+        bbox: [10, 10, 200, 200],
+        detScore: 0.9,
+        embedding,
+        liveness: 0.8,
+        crop: crop.toString('base64'),
+      })),
+    });
+
+    it('40 หน้า (ราว 1.5 MB) ได้ 202 และเข้าคิวพร้อม result', async () => {
+      const payload = facesBody(40);
+      expect(JSON.stringify(payload).length).toBeGreaterThan(1_400_000);
+      await post()
+        .set('X-Camera-Token', 'good')
+        .send(payload)
+        .expect(202)
+        .expect({ data: { queued: true } });
+      expect(added).toHaveLength(1);
+      const job = added[0];
+      expect('result' in job && job.result.faces).toHaveLength(40);
+      expect(job.receivedAt).toBe('2026-10-22T02:05:00.000Z');
+      expect(touched).toEqual(['cam1']);
+    });
+
+    it('token ผิดได้ 401', async () => {
+      await post()
+        .set('X-Camera-Token', 'wrong')
+        .send(facesBody(1))
+        .expect(401)
+        .expect({ error: { code: 'BAD_CAMERA_TOKEN', message: 'token กล้องไม่ถูกต้อง' } });
+      expect(added).toEqual([]);
+    });
+
+    it('body 2.5 MB ได้ 413', async () => {
+      await post()
+        .set('X-Camera-Token', 'good')
+        .send({ ...facesBody(1), padding: 'x'.repeat(2.5 * 1024 * 1024) })
+        .expect(413)
+        .expect((res) => expect(res.body.error.code).toBe('BODY_TOO_LARGE'));
+      expect(added).toEqual([]);
+    });
+
+    it('กล้องประตูได้ 403 และ body ผิดได้ 400', async () => {
+      await post().set('X-Camera-Token', 'door').send(facesBody(1)).expect(403);
+      await post()
+        .set('X-Camera-Token', 'good')
+        .send({ ...facesBody(1), model: 'x' })
+        .expect(400)
+        .expect((res) => expect(res.body.error.code).toBe('INVALID_FACES'));
+      expect(added).toEqual([]);
+    });
   });
 
   describe('POST /camera/door', () => {

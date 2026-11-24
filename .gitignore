@@ -12,3 +12,4 @@ recordings/
 /File-text-OCR-Log/
 *.[mM][dD]
 !/DESIGN.md
+board.env

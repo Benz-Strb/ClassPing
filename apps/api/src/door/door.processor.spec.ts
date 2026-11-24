@@ -4,10 +4,9 @@ import type {
   FaceEmbedding,
   SessionContext,
 } from '../attendance/attendance.repo.js';
-import type { FrameDeps } from '../attendance/frame.processor.js';
 import type { AppConfig } from '../config/config.js';
 import type { DetectedFace } from '../face/face.client.js';
-import { DoorProcessor } from './door.processor.js';
+import { DoorProcessor, type DoorDeps } from './door.processor.js';
 import type { DoorRepo, NewTrip } from './door.repo.js';
 import { OpenTrips } from './open-trips.js';
 
@@ -97,7 +96,7 @@ function setup(
       return true;
     },
   } as unknown as DoorRepo;
-  const deps: FrameDeps = {
+  const deps: DoorDeps = {
     detect: async () => {
       const result = opts.detect?.(detectCalls++) ?? [];
       if (result instanceof Error) throw result;
