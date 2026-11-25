@@ -103,7 +103,7 @@ export class FrameProcessor {
     const seenAt = new Date(job.receivedAt);
     const live: LiveFace[] = [];
     if (!faces.length) {
-      this.liveFaces.set(job.sessionId, seenAt, live);
+      this.liveFaces.set(job.sessionId, seenAt, live, !board);
       return outcome;
     }
 
@@ -166,7 +166,7 @@ export class FrameProcessor {
         outcome[verdict.kind === 'match' ? 'matched' : 'review']++;
       }
     }
-    this.liveFaces.set(job.sessionId, seenAt, live);
+    this.liveFaces.set(job.sessionId, seenAt, live, !board);
     return outcome;
   }
 

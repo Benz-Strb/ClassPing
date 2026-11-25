@@ -199,7 +199,9 @@ describe('LiveService.startLive', () => {
     expect((await rejection(setup([noCam]).service.startLive(owner, S1))).code).toBe('NO_CAMERA');
     // ภาพสดของห้องหลังลบคาบอาจเป็นของวิชาอื่น
     const cancelled = make({ cancelledAt: NOW });
-    expect((await rejection(setup([cancelled]).service.startLive(owner, S1))).code).toBe('NOT_LIVE');
+    expect((await rejection(setup([cancelled]).service.startLive(owner, S1))).code).toBe(
+      'NOT_LIVE',
+    );
   });
 
   it('ห้องยังมีคาบก่อนหน้าอยู่ (กล้องเปิดก่อนเวลา) ขอดูไม่ได้ 409 NOT_LIVE และรายการขึ้นว่ายังไม่เปิด', async () => {
@@ -221,13 +223,19 @@ describe('LiveService.startLive', () => {
 describe('LiveService.faces', () => {
   it('ตอบกรอบล่าสุด เรียงซ้ายไปขวาพร้อมเลขที่ ชื่อ รหัส และไม่บันทึกการเปิดดูซ้ำ', async () => {
     const { service, liveFaces, views } = setup([make({})]);
-    liveFaces.set(S1, new Date(NOW.getTime() - 500), [
-      { box: [0.6, 0.2, 0.7, 0.3], userId: null, kind: 'unknown' },
-      { box: [0.1, 0.2, 0.2, 0.3], userId: 'ua', kind: 'match' },
-      { box: [0.3, 0.2, 0.4, 0.3], userId: 'ua', kind: 'review' },
-    ]);
+    liveFaces.set(
+      S1,
+      new Date(NOW.getTime() - 500),
+      [
+        { box: [0.6, 0.2, 0.7, 0.3], userId: null, kind: 'unknown' },
+        { box: [0.1, 0.2, 0.2, 0.3], userId: 'ua', kind: 'match' },
+        { box: [0.3, 0.2, 0.4, 0.3], userId: 'ua', kind: 'review' },
+      ],
+      false,
+    );
     expect(await service.faces(owner, S1)).toEqual({
       at: new Date(NOW.getTime() - 500).toISOString(),
+      mirrored: false,
       faces: [
         {
           n: 1,
@@ -251,7 +259,7 @@ describe('LiveService.faces', () => {
 
   it('ยังไม่มีผลหรือผลเก่าเกิน ได้รายการว่าง', async () => {
     const { service } = setup([make({})]);
-    expect(await service.faces(owner, S1)).toEqual({ at: null, faces: [] });
+    expect(await service.faces(owner, S1)).toEqual({ at: null, mirrored: true, faces: [] });
   });
 
   it('ไม่มีสิทธิ์ดูคาบนี้ได้ 404', async () => {

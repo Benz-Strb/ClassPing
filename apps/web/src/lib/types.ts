@@ -139,6 +139,8 @@ export interface LiveTicket {
 // กรอบหน้าล่าสุดจากกล้องเช็คชื่อ box เป็นสัดส่วนของภาพ [ซ้าย, บน, ขวา, ล่าง]
 export interface LiveFaces {
   at: string | null;
+  // วิดีโอสดกลับซ้ายขวาอยู่ไหม API เก่าไม่ส่งมา ถือว่ากลับ
+  mirrored?: boolean;
   faces: {
     n: number;
     box: [number, number, number, number];

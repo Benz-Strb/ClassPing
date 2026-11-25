@@ -246,3 +246,101 @@ def test_analyzing_camera_adds_captured_at():
     assert result["capturedAt"][-6] in "+-"
     assert result["faces"] == []
     assert analyzing.read() is None
+
+
+def test_rtsp_read_frame_consumes_but_latest_raw_keeps_frame():
+    cam = RtspCamera(URL, factory_of(FakeCapture([FRAME])))
+    cam._connect()
+    assert cam.read_frame() is None  # ยังไม่มีภาพ
+    cam._step()
+    assert cam.read_frame() is FRAME
+    assert cam.latest_raw() is FRAME
+    assert cam.read_frame() is None  # ภาพเดิมไม่คืนซ้ำ
+
+
+def test_rtsp_read_frame_none_until_new_frame_arrives():
+    newer = FRAME + 1
+    cam = RtspCamera(URL, factory_of(FakeCapture([FRAME, newer])))
+    cam._connect()
+    cam._step()
+    assert cam.read_frame() is FRAME
+    assert cam.read_frame() is None
+    cam._step()
+    assert cam.read_frame() is newer
+    assert cam.latest_raw() is newer
+
+
+def test_rtsp_latest_raw_is_none_after_close_and_reopen():
+    cam = RtspCamera(URL, factory_of(FakeCapture([FRAME]), FakeCapture([])))
+    cam._connect()
+    cam._step()
+    assert cam.latest_raw() is FRAME
+    cam.close()
+    assert cam.latest_raw() is None
+    assert cam.read_frame() is None
+
+
+def test_rtsp_open_clears_stale_frame(monkeypatch):
+    cam = RtspCamera(URL, factory_of(FakeCapture([FRAME]), FakeCapture([])))
+    cam._connect()
+    cam._step()
+    monkeypatch.setattr(cam, "_connect", lambda reader=None: False)
+    cam.open()
+    try:
+        assert cam.latest_raw() is None
+        assert cam.read_frame() is None
+    finally:
+        cam.close()
+
+
+def test_rtsp_stopped_reader_cannot_touch_new_frame():
+    cam = RtspCamera(URL, factory_of(FakeCapture([FRAME])))
+    old = cam._reader
+    old.stop.set()
+    cam._publish(old, FRAME)
+    assert cam.latest_raw() is None
+    assert cam.read_frame() is None
+
+
+def test_stream_starts_even_when_analysis_consumes_every_frame():
+    """วิเคราะห์ทุกรอบกินภาพทันที (wait 0) รอบลองเริ่มวิดีโอเจอภาพที่เพิ่งถูกอ่านไป ต้องยังเริ่มได้"""
+    from datetime import timedelta
+
+    from camera.api import Session, Stream
+    from camera.loop import CameraLoop
+    from camera.stream import Streamer
+    from tests.test_stream import FakeProc
+
+    class Api:
+        def session(self):
+            return Session(
+                id="s1",
+                course="X",
+                ends_at=datetime(2026, 11, 20, 8, 0, tzinfo=UTC),
+                fps=1.0,
+                stream=Stream(url="rtsp://m/cam?token=t", fps=15, bitrate_kbps=1500),
+            )
+
+        def send(self, frame):
+            return "queued"
+
+    clock = [datetime(2026, 11, 20, 5, 0, tzinfo=UTC)]
+    cam = RtspCamera(URL, factory_of(FakeCapture([FRAME + i for i in range(1, 20)])))
+    cam._connect()
+    analyzing = AnalyzingCamera(cam, FakeAnalyzer(), lambda: clock[0])
+    analyzing.open = lambda: None  # ขับ reader ด้วย _step เอง ไม่เปิด thread จริง
+    streamer = Streamer(
+        cam.latest_raw, max_width=640, popen=lambda cmd, **_: FakeProc(cmd), feed=False
+    )
+    loop = CameraLoop(Api(), analyzing, lambda: clock[0], streamer)
+
+    loop.tick()  # ยังไม่มีภาพ เริ่มวิดีโอไม่ได้ ลองใหม่อีก 5 วิ
+    assert not streamer.running
+    for _ in range(1, 5):
+        clock[0] += timedelta(seconds=1)
+        cam._step()
+        loop.tick()  # วิเคราะห์ภาพที่เพิ่งมา
+    clock[0] += timedelta(seconds=1)
+    loop.tick()  # ถึงรอบลอง ภาพล่าสุดถูกวิเคราะห์ไปแล้ว ภาพถัดไปยังไม่มา
+    assert streamer.running
+    streamer.stop()

@@ -7,6 +7,13 @@ export interface LiveFace {
   kind: 'match' | 'review' | 'unknown';
 }
 
+// mirrored = วิดีโอสดของคาบนี้ถูกกลับซ้ายขวา (เว็บแคม) กรอบเป็นพิกัดภาพที่ไม่กลับเสมอ
+export interface LiveEntry {
+  at: Date;
+  faces: LiveFace[];
+  mirrored: boolean;
+}
+
 // กล้องส่งภาพวินาทีละครั้ง ไม่มีผลใหม่นานกว่านี้ถือว่ากล้องหยุดแล้ว
 const STALE_MS = 5000;
 
@@ -14,13 +21,13 @@ const STALE_MS = 5000;
 // เก็บในหน่วยความจำอย่างเดียว ไม่มีรูป ไม่ลงฐานข้อมูล
 @Injectable()
 export class LiveFaces {
-  private readonly latest = new Map<string, { at: Date; faces: LiveFace[] }>();
+  private readonly latest = new Map<string, LiveEntry>();
 
-  set(sessionId: string, at: Date, faces: LiveFace[]) {
-    this.latest.set(sessionId, { at, faces });
+  set(sessionId: string, at: Date, faces: LiveFace[], mirrored: boolean) {
+    this.latest.set(sessionId, { at, faces, mirrored });
   }
 
-  get(sessionId: string, now: Date): { at: Date; faces: LiveFace[] } | null {
+  get(sessionId: string, now: Date): LiveEntry | null {
     const entry = this.latest.get(sessionId);
     if (!entry) return null;
     if (now.getTime() - entry.at.getTime() > STALE_MS || now < entry.at) {

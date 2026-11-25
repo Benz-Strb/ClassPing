@@ -39,6 +39,8 @@ export interface LiveSessionView {
 export interface LiveFacesView {
   // เวลาของเฟรมที่ตรวจ null = ยังไม่มีผล / กล้องหยุดส่ง
   at: string | null;
+  // วิดีโอสดของคาบนี้กลับซ้ายขวาอยู่ไหม (กรอบเป็นพิกัดภาพที่ไม่กลับ)
+  mirrored: boolean;
   // เรียงซ้ายไปขวา n คือเลขที่แสดงบนกรอบ
   faces: {
     n: number;
@@ -90,7 +92,11 @@ export class LiveService {
     return sessions.map((s) => this.view(user, s, current.get(s.roomId) === s.id));
   }
 
-  async startLive(user: AppUser, sessionId: string, kind: CameraKind = 'front'): Promise<LiveTicket> {
+  async startLive(
+    user: AppUser,
+    sessionId: string,
+    kind: CameraKind = 'front',
+  ): Promise<LiveTicket> {
     const session = await this.watchable(user, sessionId);
     if (!this.cameraOpen(session)) {
       throw new AppError(409, 'NOT_LIVE', 'ตอนนี้กล้องของคาบนี้ไม่ได้เปิด');
@@ -120,7 +126,7 @@ export class LiveService {
   async faces(user: AppUser, sessionId: string): Promise<LiveFacesView> {
     const session = await this.watchable(user, sessionId);
     const latest = this.liveFaces.get(session.id, this.now());
-    if (!latest) return { at: null, faces: [] };
+    if (!latest) return { at: null, mirrored: true, faces: [] };
     const people = await this.peopleOf(session.courseId);
     const faces = [...latest.faces]
       .sort((a, b) => a.box[0] + a.box[2] - (b.box[0] + b.box[2]))
@@ -134,7 +140,7 @@ export class LiveService {
           studentCode: person?.studentCode ?? null,
         };
       });
-    return { at: latest.at.toISOString(), faces };
+    return { at: latest.at.toISOString(), mirrored: latest.mirrored, faces };
   }
 
   private async watchable(user: AppUser, sessionId: string): Promise<WatchableSession> {
