@@ -219,7 +219,7 @@ export default function CourseReportsPage() {
           <button
             onClick={() => handleDownload("pdf")}
             disabled={downloading !== null || loading || !data}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg action-filled px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
             {downloading === "pdf" ? "กำลังส่งออก..." : "ส่งออก PDF"}
           </button>

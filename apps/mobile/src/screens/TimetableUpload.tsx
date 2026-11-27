@@ -131,7 +131,7 @@ export function TimetableUpload({ onImported }: { onImported: () => void }) {
       style={({ pressed }) => [styles.primary, styles.upload, pressed && styles.pressed, !!busy && styles.disabled]}
       disabled={!!busy} onPress={upload}>
       <Svg width={22} height={22} viewBox="0 0 24 24" accessibilityElementsHidden>
-        <Path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4" stroke={colors.onAction} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M12 16V4m-4 4 4-4 4 4M4 16v4h16v-4" stroke={colors.ink} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </Svg>
       <Text style={styles.primaryText}>{hasRead ? 'อัปโหลดตารางเรียนใหม่' : 'อัปโหลดตารางเรียน'}</Text>
     </Pressable>}
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   identityHeader: { gap: 4, paddingBottom: 16, borderBottomWidth: 1, borderColor: colors.border },
   panel: { gap: 16, paddingVertical: 16 }, emptyPanel: { flexGrow: 1, justifyContent: 'center' },
   row: { gap: 14, padding: 20, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface },
-  upload: { flexDirection: 'row', gap: 10, minHeight: 56 }, pressed: { backgroundColor: colors.actionHover },
+  upload: { flexDirection: 'row', gap: 10, minHeight: 56 }, pressed: { backgroundColor: colors.actionFillPressed },
   summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginTop: 12 },
   saveActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   saveButton: { flex: 1 },
@@ -219,8 +219,8 @@ const styles = StyleSheet.create({
   heading: { color: colors.identity, fontSize: 18, lineHeight: 28, fontWeight: '600' },
   label: { color: colors.ink, fontSize: 16, lineHeight: 26 }, note: { color: colors.muted, fontSize: 14, lineHeight: 24 },
   field: { gap: 6 }, input: { minHeight: 48, borderWidth: 1, borderColor: colors.outline, borderRadius: 12, padding: 12, fontSize: 16, color: colors.ink },
-  link: { color: colors.action, fontSize: 16, lineHeight: 24 }, primary: { minHeight: 48, padding: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action, borderRadius: 12 },
-  primaryText: { color: colors.surface, fontSize: 16, fontWeight: '600' }, disabled: { opacity: 0.5 },
+  link: { color: colors.action, fontSize: 16, lineHeight: 24 }, primary: { minHeight: 48, padding: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.actionFill, borderRadius: 12 },
+  primaryText: { color: colors.ink, fontSize: 16, fontWeight: '600' }, disabled: { opacity: 0.5 },
   error: { color: colors.danger, fontSize: 16, lineHeight: 24 }, busy: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   feedback: { padding: 12, gap: 8, borderRadius: 12, backgroundColor: colors.selected },
 });

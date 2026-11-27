@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { CLOCK } from '../common/clock.js';
+import { LeaveOcrClient } from '../leave/leave-ocr.client.js';
 import { AdminController } from './admin.controller.js';
 import { ADMIN_REPO, SupabaseAdminRepo } from './admin.repo.js';
 import { AdminService } from './admin.service.js';
@@ -12,6 +14,8 @@ import { CATALOG_REPO, SupabaseCatalogRepo } from './catalog.repo.js';
   providers: [
     AdminService,
     CatalogService,
+    LeaveOcrClient,
+    { provide: CLOCK, useValue: () => new Date() },
     { provide: CATALOG_REPO, useClass: SupabaseCatalogRepo },
     { provide: ADMIN_REPO, useClass: SupabaseAdminRepo },
   ],

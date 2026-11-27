@@ -12,7 +12,7 @@ export function configureApp(app: INestApplication): AppConfig {
   const catalogJson = json({ limit: '1mb' });
   // Keep Nest's global JSON parser enabled for routes outside the catalog.
   const parseCatalogJson: RequestHandler = (req, res, next) => catalogJson(req, res, next);
-  app.use('/admin/catalog', parseCatalogJson);
+  app.use(['/admin/catalog', '/teacher/curricula'], parseCatalogJson);
   // ผลหน้าจากบอร์ด (embedding + รูปครอป สูงสุด 50 หน้า) ใหญ่กว่า 100 KB
   const facesJson = json({ limit: '2mb' });
   const parseFacesJson: RequestHandler = (req, res, next) =>

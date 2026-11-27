@@ -207,13 +207,13 @@ const styles = StyleSheet.create({
   ok: { color: colors.action, marginTop: 8 },
   pending: { color: colors.muted, marginTop: 8 },
   primary: {
-    backgroundColor: colors.action,
+    backgroundColor: colors.actionFill,
     borderRadius: 12,
     padding: 12,
     alignItems: "center",
     marginTop: 8,
   },
-  primaryText: { color: colors.surface, fontSize: 16 },
+  primaryText: { color: colors.ink, fontSize: 16 },
   button: {
     borderWidth: 1,
     borderRadius: 12,

@@ -437,7 +437,7 @@ function FormButtons({ busy, onCancel }: { busy: boolean; onCancel: () => void }
     <div className="space-x-3">
       <button
         disabled={busy}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+        className="rounded-lg action-filled px-4 py-2 disabled:opacity-50"
       >
         {busy ? "กำลังบันทึก..." : "บันทึก"}
       </button>

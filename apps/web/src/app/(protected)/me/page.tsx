@@ -43,7 +43,7 @@ export default function MePage() {
       {me.role === "admin" && (
         <Link
           href="/admin"
-          className="block w-fit rounded-lg bg-blue-700 px-4 py-2 text-white hover:bg-blue-800"
+          className="block w-fit rounded-lg action-filled px-4 py-2"
         >
           ระบบผู้ดูแล
         </Link>

@@ -1,9 +1,10 @@
 export const colors = {
-  background: '#FAF8F4', surface: '#FFFFFF', ink: '#282330', muted: '#6D6477',
-  border: '#E6DFEB', outline: '#6D6477', action: '#7652C5', actionHover: '#5D3C9E',
-  selected: '#EEE8F7', onAction: '#FFFFFF', danger: '#AE2929', dangerBg: '#FFF0EE',
-  warning: '#765000', warningBg: '#FFF3D5', info: '#5B21B6', infoBg: '#F1ECF8',
-  identity: '#4D3282', subtle: '#F3EFF8', onSelected: '#5D3C9E',
+  background: '#F6FAFD', surface: '#FFFFFF', ink: '#223A51', muted: '#4B6075',
+  border: '#D5E2EE', outline: '#4B6075', action: '#365E83', actionHover: '#294E71',
+  selected: '#E6F0FA', onAction: '#FFFFFF', danger: '#AE2929', dangerBg: '#FFF0EE',
+  warning: '#765000', warningBg: '#FFF3D5', info: '#294E71', infoBg: '#EAF3FB',
+  actionFill: '#AACCEB', actionFillPressed: '#99BFE3',
+  identity: '#223A51', subtle: '#EDF5FC', onSelected: '#294E71',
 } as const;
 
 export const layout = { compact: 360, tablet: 768, desktop: 1024, content: 1040, form: 560, target: 48 } as const;
@@ -20,14 +21,14 @@ export const fontAssets = {
 };
 
 export const workspace = {
-  background: '#F7F5FA',
-  tint: '#F0EAF9',
-  divider: '#EEEAF3',
-  title: '#332B42',
-  camera: '#181222',
-  cameraActive: '#C4ADF4',
+  background: '#F6FAFD',
+  tint: '#D6E7F7',
+  divider: '#E2ECF5',
+  title: '#223A51',
+  camera: '#142638',
+  cameraActive: '#AACCEB',
   cameraComplete: '#82D9BC',
-  cameraScrim: 'rgba(24,18,34,0.82)',
+  cameraScrim: 'rgba(20,38,56,0.82)',
 } as const;
 
 export const typography = {

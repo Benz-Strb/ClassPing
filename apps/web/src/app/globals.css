@@ -14,53 +14,62 @@
 
 :root {
   color-scheme: light;
-  --cp-bg: #faf8f4;
+  --cp-bg: #f6fafd;
+  --cp-feature: #d6e7f7;
+  --cp-fill: #aacceb;
+  --cp-fill-hover: #99bfe3;
   --cp-surface: #ffffff;
-  --cp-ink: #282330;
-  --cp-muted: #6d6477;
-  --cp-border: #e6dfeb;
-  --cp-action: #7652c5;
-  --cp-action-hover: #5d3c9e;
-  --cp-selected: #eee8f7;
+  --cp-ink: #223a51;
+  --cp-muted: #4b6075;
+  --cp-border: #d5e2ee;
+  --cp-action: #365e83;
+  --cp-action-hover: #294e71;
+  --cp-selected: #e6f0fa;
 }
 
 @theme {
   --font-sans: Geist, Kanit, system-ui, sans-serif;
-  --color-blue-50: #f1ecf8;
-  --color-blue-100: #eee8f7;
-  --color-blue-500: #7652c5;
-  --color-blue-600: #7652c5;
-  --color-blue-700: #5d3c9e;
-  --color-blue-800: #4d3282;
-  --color-gray-50: #faf8f4;
+  --color-blue-50: #eaf3fb;
+  --color-blue-100: #e6f0fa;
+  --color-blue-500: #365e83;
+  --color-blue-600: #365e83;
+  --color-blue-700: #294e71;
+  --color-blue-800: #223a51;
+  --color-gray-50: #f6fafd;
   --color-gray-100: #f3f4f6;
-  --color-gray-200: #e6dfeb;
-  --color-gray-500: #6d6477;
-  --color-gray-600: #6d6477;
-  --color-gray-700: #45404c;
-  --color-gray-900: #282330;
+  --color-gray-200: #d5e2ee;
+  --color-gray-500: #4b6075;
+  --color-gray-600: #4b6075;
+  --color-gray-700: #354b62;
+  --color-gray-900: #223a51;
   --color-red-50: #fff0ee;
   --color-red-100: #fff0ee;
   --color-yellow-100: #fff3d5;
   --color-yellow-800: #765000;
   --color-orange-100: #fff3d5;
   --color-orange-800: #765000;
-  --color-purple-100: #f1ecf8;
-  --color-purple-800: #5b21b6;
+  --color-purple-100: #eaf3fb;
+  --color-purple-800: #294e71;
   --color-red-600: #ae2929;
   --color-red-700: #ae2929;
-  --color-green-100: #eee8f7;
-  --color-green-800: #5d3c9e;
-  --color-green-600: #7652c5;
-  --color-green-700: #5d3c9e;
-  --color-green-50: #eee8f7;
+  --color-green-100: #e6f0fa;
+  --color-green-800: #294e71;
+  --color-green-600: #365e83;
+  --color-green-700: #294e71;
+  --color-green-50: #e6f0fa;
+}
+
+@utility action-filled {
+  background-color: var(--cp-fill);
+  color: var(--cp-ink);
+  &:enabled:hover, &:any-link:hover { background-color: var(--cp-fill-hover); }
 }
 
 @layer base {
   * { border-color: var(--cp-border); }
-  html { scrollbar-color: #c6bdd2 var(--cp-bg); scrollbar-width: thin; background: var(--cp-bg); scroll-padding-top: 5rem; }
+  html { scrollbar-color: #aacceb var(--cp-bg); scrollbar-width: thin; background: var(--cp-bg); scroll-padding-top: 5rem; }
   body { margin: 0; color: var(--cp-ink); font-family: var(--font-sans); line-height: 1.6; }
-  ::selection { background: var(--cp-selected); color: #4d3282; }
+  ::selection { background: var(--cp-selected); color: #223a51; }
   :focus-visible { outline: 2px solid var(--cp-action); outline-offset: 3px; }
   h1 { font-size: clamp(1.5rem, 2vw, 1.875rem); line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
   h2 { font-size: 1.25rem; line-height: 1.5; font-weight: 600; }

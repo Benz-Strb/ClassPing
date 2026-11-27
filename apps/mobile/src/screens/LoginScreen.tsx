@@ -140,9 +140,9 @@ export function LoginScreen({ error: initialError, transitionZoom, preparing = f
         <Svg width="100%" height="100%" viewBox="0 0 400 850" preserveAspectRatio="xMidYMid slice">
           <Defs>
             <LinearGradient id="loginSky" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#E5DAF6" />
+              <Stop offset="0" stopColor="#D6E7F7" />
               <Stop offset="0.48" stopColor={colors.background} />
-              <Stop offset="1" stopColor="#E8DFF2" />
+              <Stop offset="1" stopColor="#E6F0FA" />
             </LinearGradient>
             <LinearGradient id="loginArc" x1="0" y1="0" x2="1" y2="1">
               <Stop offset="0" stopColor={colors.action} stopOpacity="0.12" />
@@ -167,8 +167,8 @@ export function LoginScreen({ error: initialError, transitionZoom, preparing = f
             <Animated.View style={[styles.emblem, { transform: waitingTransform }, transitionZoom && emblemPosition && { opacity: 0 }]}>
               <Animated.View style={transitionZoom ? { opacity: transitionZoom.interpolate({ inputRange: [0, 0.3, 1], outputRange: [1, 0, 0] }) } : undefined}>
               <Svg width={66} height={66} viewBox="0 0 64 64" fill="none">
-                <Path d="M43 16a22 22 0 1 0 5 31" stroke={colors.onAction} strokeWidth={7} strokeLinecap="round" />
-                <Path d="m24 31 8 8 19-22" stroke={colors.onAction} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M43 16a22 22 0 1 0 5 31" stroke={colors.ink} strokeWidth={7} strokeLinecap="round" />
+                <Path d="m24 31 8 8 19-22" stroke={colors.ink} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
               </Animated.View>
             </Animated.View>
@@ -180,7 +180,7 @@ export function LoginScreen({ error: initialError, transitionZoom, preparing = f
           {error && <View style={styles.errorBox}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.error}>{error}</Text></View>}
           <Animated.View style={{ transform: [{ scale: press }] }}>
             <Pressable accessibilityRole="button" accessibilityLabel="เข้าสู่ระบบด้วย Google" accessibilityState={{ disabled: loading, busy: loading }} style={({ pressed }) => [styles.button, pressed && styles.pressed]} onPress={signIn} onPressIn={() => animatePress(true)} onPressOut={() => animatePress(false)} disabled={loading}>
-              {loading ? <ActivityIndicator color={colors.onAction} /> : <View style={styles.googleMark}><Svg width={21} height={21} viewBox="0 0 24 24" accessible={false}>
+              {loading ? <ActivityIndicator color={colors.ink} /> : <View style={styles.googleMark}><Svg width={21} height={21} viewBox="0 0 24 24" accessible={false}>
                 <Path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.36Z" />
                 <Path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.04.96-3.38.96-2.6 0-4.81-1.76-5.6-4.13H3.05v2.59A10 10 0 0 0 12 22Z" />
                 <Path fill="#FBBC05" d="M6.4 13.91a6 6 0 0 1 0-3.82V7.5H3.05a10 10 0 0 0 0 9l3.35-2.59Z" />
@@ -197,8 +197,8 @@ export function LoginScreen({ error: initialError, transitionZoom, preparing = f
       {transitionZoom && emblemPosition && <Animated.View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.emblem, { position: 'absolute', left: emblemPosition.x, top: emblemPosition.y, transform: [...waitingTransform, { scale: transitionZoom.interpolate({ inputRange: [0, 1], outputRange: [1, Math.hypot(width, height) / 25] }) }] }]}>
         <Animated.View style={{ opacity: transitionZoom.interpolate({ inputRange: [0, 0.3, 1], outputRange: [1, 0, 0] }) }}>
           <Svg width={66} height={66} viewBox="0 0 64 64" fill="none">
-            <Path d="M43 16a22 22 0 1 0 5 31" stroke={colors.onAction} strokeWidth={7} strokeLinecap="round" />
-            <Path d="m24 31 8 8 19-22" stroke={colors.onAction} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M43 16a22 22 0 1 0 5 31" stroke={colors.ink} strokeWidth={7} strokeLinecap="round" />
+            <Path d="m24 31 8 8 19-22" stroke={colors.ink} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
         </Animated.View>
       </Animated.View>}
@@ -215,14 +215,14 @@ const styles = StyleSheet.create({
   hero: { zIndex: 1, paddingBottom: 48, alignItems: 'center' },
   emblemArea: { width: 180, height: 172, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   pingRing: { position: 'absolute', width: 142, height: 142, borderRadius: 71, borderWidth: 2, borderColor: colors.action },
-  emblem: { width: 112, height: 112, borderRadius: 32, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center', shadowColor: colors.action, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 5, transform: [{ rotate: '-6deg' }] },
+  emblem: { width: 112, height: 112, borderRadius: 32, backgroundColor: colors.actionFill, alignItems: 'center', justifyContent: 'center', shadowColor: colors.action, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 20, elevation: 5, transform: [{ rotate: '-6deg' }] },
   form: { gap: 16, alignItems: 'stretch' },
   subtitle: { fontSize: 13, lineHeight: 22, color: colors.muted, textAlign: 'center' },
   domain: { fontSize: 13, color: colors.action, fontWeight: '500' },
   errorBox: { padding: 12, backgroundColor: colors.dangerBg, borderRadius: 12 },
   error: { fontSize: 15, lineHeight: 24, color: colors.danger },
-  button: { minHeight: 60, flexDirection: 'row', gap: 12, backgroundColor: colors.action, borderRadius: 16, padding: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  button: { minHeight: 60, flexDirection: 'row', gap: 12, backgroundColor: colors.actionFill, borderRadius: 16, padding: 14, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   pressed: { opacity: 0.85 },
   googleMark: { width: 32, height: 32, borderRadius: 9, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: colors.onAction, fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  buttonText: { color: colors.ink, fontSize: 16, fontWeight: '600', textAlign: 'center' },
 });

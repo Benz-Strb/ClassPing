@@ -84,7 +84,7 @@ export function TimetableImport({ courses }: { courses: Course[] }) {
     </table></div>}
     <div className="flex flex-wrap gap-3">
       <button type="button" disabled={!!busy || rows.length >= 100} className="rounded-lg border px-4 py-2" onClick={() => { setRows(value => [...value, blank()]); setResults([]); }}>เพิ่มแถว</button>
-      <button type="button" disabled={!!busy || !courseId || !rows.length || results.length > 0 && results.every(result => result.status !== 'failed')} className="rounded-lg bg-blue-600 px-4 py-2 text-white" onClick={() => void save()}>ยืนยันและบันทึกตาราง</button>
+      <button type="button" disabled={!!busy || !courseId || !rows.length || results.length > 0 && results.every(result => result.status !== 'failed')} className="rounded-lg action-filled px-4 py-2" onClick={() => void save()}>ยืนยันและบันทึกตาราง</button>
     </div>
   </section>;
 }

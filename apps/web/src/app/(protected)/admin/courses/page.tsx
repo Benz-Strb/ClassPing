@@ -65,7 +65,7 @@ export default function AdminCoursesPage() {
             <option value="">เลือกอาจารย์</option>{data?.users.filter((user) => user.role === "teacher").map((user) => <option key={user.id} value={user.id}>{user.fullName || user.email}</option>)}
           </select></label>
           {data && !data.users.some((user) => user.role === "teacher") && <p className="text-sm text-amber-800">ยังไม่มีบัญชีอาจารย์ กรุณาตรวจบทบาทที่หน้าผู้ใช้ก่อน</p>}
-          <div className="flex gap-3"><button className="rounded bg-blue-700 px-4 py-2 text-white">{saving ? "กำลังบันทึก..." : "บันทึก"}</button>
+          <div className="flex gap-3"><button className="rounded action-filled px-4 py-2">{saving ? "กำลังบันทึก..." : "บันทึก"}</button>
             {editing && <button type="button" onClick={() => { setEditing(null); setForm(EMPTY); }} className="rounded border px-3 py-2">ยกเลิก</button>}</div>
         </fieldset>
       </form>

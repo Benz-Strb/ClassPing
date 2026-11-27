@@ -100,8 +100,8 @@ const styles = StyleSheet.create({
   link: { color: colors.action, fontSize: 14, lineHeight: 24, fontWeight: '500' },
   viewer: { flex: 1, paddingHorizontal: 16, gap: 16, backgroundColor: workspace.background },
   preview: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  primary: { minHeight: 52, padding: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.action, borderRadius: 12 },
-  primaryText: { color: colors.onAction, fontSize: 16, fontWeight: '600' },
+  primary: { minHeight: 52, padding: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.actionFill, borderRadius: 12 },
+  primaryText: { color: colors.ink, fontSize: 16, fontWeight: '600' },
   warning: { color: colors.warning, fontSize: 14, lineHeight: 24 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 24 },
 });

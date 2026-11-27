@@ -28,6 +28,6 @@ export function WebOnlyScreen({ me, face, onEnroll, onSignOut }: Props) {
 const styles = StyleSheet.create({
   banner: { gap: 8 },
   muted: { fontSize: 14, lineHeight: 23, color: colors.muted },
-  action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
-  actionText: { fontSize: 16, color: colors.onAction, fontWeight: '500' },
+  action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.actionFill, alignItems: 'center', justifyContent: 'center' },
+  actionText: { fontSize: 16, color: colors.ink, fontWeight: '500' },
 });

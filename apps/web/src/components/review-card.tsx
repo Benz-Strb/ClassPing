@@ -69,7 +69,7 @@ export function ReassignForm({
       )}
       <button
         disabled={busy || !toCode}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+        className="rounded-lg action-filled px-4 py-2 disabled:opacity-50"
       >
         บันทึก
       </button>
@@ -136,7 +136,7 @@ export function ReviewCard({
             <button
               disabled={busy}
               onClick={() => onReview({ action: "confirm" })}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+              className="rounded-lg action-filled px-4 py-2 disabled:opacity-50"
             >
               ใช่
             </button>

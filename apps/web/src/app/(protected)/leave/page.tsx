@@ -322,7 +322,7 @@ function StudentLeavePage() {
           <button
             type="submit"
             disabled={saving || availableSessions.length === 0}
-            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+            className="rounded-lg action-filled px-4 py-2 font-medium disabled:opacity-50"
           >
             {saving ? "กำลังส่ง..." : "ส่งคำขอลา"}
           </button>

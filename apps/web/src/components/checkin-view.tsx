@@ -450,7 +450,7 @@ function UnknownTripCard({
             <button
               disabled={busy || candidates.length === 0}
               onClick={() => setChoosing(true)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+              className="rounded-lg action-filled px-4 py-2 disabled:opacity-50"
             >
               ระบุตัว
             </button>

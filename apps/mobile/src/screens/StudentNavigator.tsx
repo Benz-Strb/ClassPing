@@ -1,4 +1,5 @@
 import { layout, colors, typography, workspace } from '../ui/theme';
+import { AppIcon } from '../ui/AppIcon';
 import { ProfileAvatar } from '../ui/ProfileAvatar';
 import { useEffect, useState } from 'react';
 import { AppState, BackHandler, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -49,6 +50,7 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, focusTick]);
 
+  const today = new Date().toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', weekday: 'long', day: 'numeric', month: 'long' });
   const needsFace = !!face && !face.complete;
   const enrollBanner = needsFace && <View style={styles.banner}>
     <Text style={styles.secondary}>{me.pdpaConsentAt ? 'ยังลงทะเบียนใบหน้าไม่ครบ กล้องในห้องเรียนจะยังเช็คชื่อให้คุณไม่ได้' : 'ยังไม่ได้ยินยอมให้ใช้ข้อมูลใบหน้า อาจารย์จะเช็คชื่อให้แทน'}</Text>
@@ -66,15 +68,19 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
 
   return <View style={[styles.root, wide && styles.wide]}>
     <View style={[styles.main, wide && { paddingBottom: bottom }]}>
-      <View style={styles.header}>
-        <View style={styles.brandGroup} accessible accessibilityLabel="ClassPing"><View style={styles.brandMark}><Svg width={25} height={25} viewBox="0 0 64 64" fill="none" accessible={false}><Path d="M43 16a22 22 0 1 0 5 31m-24-16 8 8 19-22" stroke={colors.onAction} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" /></Svg></View></View>
+      <View style={[styles.header, { paddingHorizontal: width < layout.compact ? 16 : 24 }]}>
+        <View style={styles.brandGroup} accessible accessibilityLabel="ClassPing"><View style={styles.brandMark}><Svg width={25} height={25} viewBox="0 0 64 64" fill="none" accessible={false}><Path d="M43 16a22 22 0 1 0 5 31m-24-16 8 8 19-22" stroke={colors.ink} strokeWidth={7} strokeLinecap="round" strokeLinejoin="round" /></Svg></View><Text style={styles.wordmark}>ClassPing</Text></View>
         <Pressable accessibilityLabel="เปิดข้อมูลบัญชี" onPress={() => navigate('account')} style={styles.avatarButton}><ProfileAvatar user={me} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
       </View>
       {TABS.map(({ key }) => visited.has(key) && <View key={key} style={[styles.scene, tab !== key && styles.hidden]} accessibilityElementsHidden={tab !== key} importantForAccessibility={tab === key ? 'auto' : 'no-hide-descendants'}>
         {key === 'home' && <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={pulling} tintColor={colors.action} onRefresh={() => { setPulling(true); setPullTick((value) => value + 1); }} />}>
           <View style={styles.greeting}>
             <Text accessibilityRole="header" maxFontSizeMultiplier={1.8} style={styles.homeName}>วันนี้ของคุณ</Text>
-            <Text style={styles.secondary}>{me.fullName ?? me.studentId}</Text>
+            <Text style={styles.studentName}>{me.fullName ?? me.studentId}</Text>
+            <View style={styles.dateRow}>
+              <AppIcon name="calendar" size={17} color={colors.action} />
+              <Text style={styles.date}>{today}</Text>
+            </View>
           </View>
           {enrollBanner}
           <View style={[styles.dashboard, wide && styles.dashboardWide]}>
@@ -83,7 +89,7 @@ export function StudentNavigator({ me, face, onEnroll, onRefresh, onSignOut }: {
           </View>
           <View style={styles.shortcuts}>
             {(['courses', 'leave'] as const).map((key) => <Pressable key={key} onPress={() => navigate(key)} style={[styles.shortcut, key === 'courses' && styles.primaryShortcut]}>
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={key === 'courses' ? colors.onAction : colors.action} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><Path d={TABS.find(item => item.key === key)!.path} /></Svg>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={key === 'courses' ? colors.ink : colors.action} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round"><Path d={TABS.find(item => item.key === key)!.path} /></Svg>
               <Text style={[styles.shortcutText, key === 'courses' && styles.primaryShortcutText]}>{key === 'courses' ? 'รายวิชาของฉัน' : 'เอกสารของฉัน'}</Text>
             </Pressable>)}
           </View>
@@ -101,29 +107,33 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: workspace.background },
   wide: { flexDirection: 'row-reverse' },
   main: { flex: 1, minWidth: 0 },
-  header: { backgroundColor: colors.surface, paddingHorizontal: 24, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
-  brandGroup: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandMark: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
+  header: { backgroundColor: colors.surface, paddingHorizontal: 24, paddingVertical: 6, borderBottomWidth: 1, borderColor: workspace.divider, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  brandGroup: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  wordmark: { fontSize: 19, fontWeight: '700', letterSpacing: -0.45, color: workspace.title },
+  brandMark: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.actionFill, alignItems: 'center', justifyContent: 'center' },
   scene: { flex: 1 },
   hidden: { display: 'none' },
-  content: { paddingTop: 24, paddingHorizontal: 24, gap: 20, flexGrow: 1, width: '100%', maxWidth: 1040, alignSelf: 'center', paddingBottom: 32 },
+  content: { paddingTop: 18, gap: 16, flexGrow: 1, width: '100%', maxWidth: 1040, alignSelf: 'center', paddingBottom: 32 },
   avatarButton: { width: 48, height: 48, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 44, height: 44, flexShrink: 0, borderRadius: 22, backgroundColor: colors.selected, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: colors.action, fontWeight: '600', fontSize: 18 },
-  greeting: { gap: 6, paddingBottom: 4 },
-  homeName: { ...typography.pageTitle },
+  greeting: { gap: 3, padding: 20, borderRadius: 16, backgroundColor: workspace.tint },
+  homeName: { ...typography.pageTitle, fontSize: 30, lineHeight: 42, color: colors.ink },
+  studentName: { fontSize: 16, color: colors.muted },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  date: { fontSize: 14, color: colors.muted },
   shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  shortcut: { flex: 1, minWidth: 130, minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 14, backgroundColor: colors.surface },
-  primaryShortcut: { backgroundColor: colors.action },
+  shortcut: { flex: 1, minWidth: 130, minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  primaryShortcut: { backgroundColor: colors.actionFill, borderColor: colors.actionFill },
   shortcutText: { fontSize: 14, color: colors.action, fontWeight: '500' },
-  primaryShortcutText: { color: colors.onAction },
+  primaryShortcutText: { color: colors.ink },
   dashboard: { gap: 16 },
   dashboardWide: { flexDirection: 'row', alignItems: 'flex-start' },
-  panel: { flexGrow: 1, minWidth: 0, backgroundColor: colors.surface, padding: 20, borderRadius: 16 },
-  schedulePanel: { flexGrow: 2, backgroundColor: workspace.tint },
+  panel: { flexGrow: 1, minWidth: 0, backgroundColor: colors.surface, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: workspace.divider },
+  schedulePanel: { flexGrow: 2 },
   widePanel: { flex: 1 },
   secondary: { fontSize: 16, color: colors.muted, lineHeight: 24 },
   banner: { gap: 10, padding: 16, borderRadius: 16, backgroundColor: workspace.tint },
-  action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.action, alignItems: 'center', justifyContent: 'center' },
-  actionText: { fontSize: 16, color: colors.onAction, fontWeight: '500' },
+  action: { minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.actionFill, alignItems: 'center', justifyContent: 'center' },
+  actionText: { fontSize: 16, color: colors.ink, fontWeight: '500' },
 });

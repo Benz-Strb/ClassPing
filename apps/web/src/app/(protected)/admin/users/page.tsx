@@ -118,14 +118,12 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <section aria-labelledby="users-title" className="space-y-4">
-      <div>
-        <h2 id="users-title" className="text-xl font-semibold">
+    <section aria-labelledby="users-title" className="admin-users">
+      <div className="admin-users-heading">
+        <h2 id="users-title">
           ผู้ใช้ทั้งหมด
         </h2>
-        <p className="text-sm text-gray-600">
-          เปลี่ยนบทบาทและรีเซ็ตการลงทะเบียนใบหน้า
-        </p>
+        {users && <p>{users.length.toLocaleString("th-TH")} คน</p>}
       </div>
       {error && (
         <p className="text-red-700" role="alert">
@@ -138,9 +136,9 @@ export default function AdminUsersPage() {
       ) : users.length === 0 ? (
         <p className="text-gray-600">ยังไม่มีผู้ใช้</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="min-w-full divide-y text-left text-sm">
-            <thead className="bg-gray-50">
+        <div className="admin-users-table" role="region" aria-labelledby="users-title" tabIndex={0}>
+          <table>
+            <thead>
               <tr>
                 <th scope="col" className="px-4 py-3 font-medium">
                   ผู้ใช้
@@ -156,14 +154,14 @@ export default function AdminUsersPage() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y bg-white">
+            <tbody>
               {users.map((user) => (
                 <tr key={user.id} aria-busy={busyIds.has(user.id)}>
                   <td className="px-4 py-3">
-                    <span className="block font-medium">
+                    <span className="admin-users-name">
                       {user.fullName ?? "ไม่ระบุชื่อ"}
                     </span>
-                    <span className="text-gray-600">{user.email}</span>
+                    <span className="admin-users-email">{user.email}</span>
                   </td>
                   <td className="px-4 py-3">
                     <label className="sr-only" htmlFor={`role-${user.id}`}>
@@ -176,7 +174,7 @@ export default function AdminUsersPage() {
                       onChange={(event) =>
                         void changeRole(user, event.target.value as Role)
                       }
-                      className="rounded-md border px-2 py-1.5 disabled:opacity-50"
+                      className="admin-users-role"
                     >
                       {(Object.keys(ROLE_LABEL) as Role[]).map((role) => (
                         <option key={role} value={role}>
@@ -186,25 +184,28 @@ export default function AdminUsersPage() {
                     </select>
                   </td>
                   <td className="px-4 py-3">
-                    {user.hasFace ? "ลงทะเบียนแล้ว" : "ยังไม่ลงทะเบียน"}
+                    <span className="admin-users-status" data-registered={user.hasFace}>
+                      {user.hasFace ? "ลงทะเบียนแล้ว" : "ยังไม่ลงทะเบียน"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      disabled={!user.hasFace || busyIds.has(user.id)}
-                      onClick={() => void resetFace(user)}
-                      className="rounded-md border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      รีเซ็ตใบหน้า
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busyIds.has(user.id)}
-                      onClick={() => void withdrawConsent(user)}
-                      className="ml-2 rounded-md border border-red-300 px-3 py-1.5 text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      ถอนความยินยอม
-                    </button>
+                    <div className="admin-users-actions">
+                      <button
+                        type="button"
+                        disabled={!user.hasFace || busyIds.has(user.id)}
+                        onClick={() => void resetFace(user)}
+                      >
+                        รีเซ็ตใบหน้า
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyIds.has(user.id)}
+                        onClick={() => void withdrawConsent(user)}
+                        className="admin-users-withdraw"
+                      >
+                        ถอนความยินยอม
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

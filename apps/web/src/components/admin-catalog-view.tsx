@@ -4,24 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { handleApiError } from "@/lib/auth-error";
+import { readCatalogSpreadsheet } from "@/lib/catalog-spreadsheet";
 import { readAdminText, type CatalogEntry, type CatalogKind } from "@/lib/admin";
 
+import { CurriculumContent } from "@/components/curriculum-study-plan";
+import { CurriculumDraftForm, type CurriculumDraft } from "@/components/curriculum-draft-form";
+import { CurriculumDocumentImport } from "@/components/curriculum-document-import";
+
 const TITLES = { curricula: "หลักสูตร", reference: "ข้อมูลกลาง" };
-const EMPTY = { code: "", name: "", year: "2569", category: "", content: "", active: true };
-const inputClass = "mt-1 w-full rounded-md border bg-white px-3 py-2";
 
 export function AdminCatalogView({ kind, endpoint = `/admin/catalog/${kind}` }: { kind: CatalogKind; endpoint?: string }) {
   const router = useRouter();
   const [entries, setEntries] = useState<CatalogEntry[] | null>(null);
-  const [form, setForm] = useState(EMPTY);
-  const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CurriculumDraft | null>(null);
   const [status, setStatus] = useState("");
   const [version, setVersion] = useState(0);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [spreadsheetFile, setSpreadsheetFile] = useState<File | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
-  const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let cancelled = false;
     apiFetch<CatalogEntry[]>(endpoint)
@@ -30,73 +32,80 @@ export function AdminCatalogView({ kind, endpoint = `/admin/catalog/${kind}` }: 
     return () => { cancelled = true; };
   }, [endpoint, router, version]);
 
-  async function save(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError(null); setStatus("");
-    const body = {
-      name: form.name, content: form.content, active: form.active,
-      code: form.code,
-      ...(kind === "curricula" && { year: Number(form.year) }),
-      ...(kind === "reference" && { category: form.category }),
-    };
+  const isTeacherCurricula = kind === "curricula" && endpoint === "/teacher/curricula";
+
+  async function importSpreadsheet(event: React.FormEvent) {
+    event.preventDefault(); if (!spreadsheetFile || busy || draft) return;
+    setBusy(true); setImportError(null); setStatus("");
     try {
-      const row = await apiFetch<CatalogEntry>(`${endpoint}${editing ? `/${editing}` : ""}`, { method: editing ? "PUT" : "POST", body: JSON.stringify(body) });
-      setEntries((current) => [...(current ?? []).filter((item) => item.id !== row.id), row].sort((a, b) => a.name.localeCompare(b.name, "th")));
-      setStatus(editing ? "แก้ไขรายการแล้ว" : "เพิ่มรายการแล้ว"); setEditing(null); setForm(EMPTY);
-    } catch (value) { setError(await handleApiError(value, router)); }
-    finally { setBusy(false); }
-  }
-  async function importCsv(event: React.FormEvent) {
-    event.preventDefault(); if (!csvFile) return;
-    setBusy(true); setError(null); setStatus("");
-    try {
-      const csv = await readAdminText(csvFile);
-      const result = await apiFetch<{ imported: number }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify({ csv }) });
-      setStatus(`นำเข้า ${result.imported} รายการแล้ว`); setCsvFile(null);
+      const resultFile = isTeacherCurricula && /\.xlsx$/i.test(spreadsheetFile.name)
+        ? await readCatalogSpreadsheet(spreadsheetFile)
+        : { csv: await readAdminText(spreadsheetFile) };
+      if (resultFile.draft) {
+        setDraft(resultFile.draft);
+        setStatus("อ่านรายงานแล้ว กรุณาระบุรหัสหลักสูตรและตรวจร่างก่อนบันทึก");
+        return;
+      }
+      const result = await apiFetch<{ imported: number }>(`${endpoint}/import`, { method: "POST", body: JSON.stringify({ csv: resultFile.csv }) });
+      setStatus(`นำเข้า ${result.imported} รายการแล้ว`); setSpreadsheetFile(null);
       if (importInput.current) importInput.current.value = "";
       setVersion((current) => current + 1);
-    } catch (value) { setError(value instanceof Error && !(value instanceof ApiError) ? value.message : await handleApiError(value, router)); }
+    } catch (value) { setImportError(value instanceof Error && !(value instanceof ApiError) ? value.message : await handleApiError(value, router)); }
     finally { setBusy(false); }
   }
-  function edit(row: CatalogEntry) {
-    setEditing(row.id); setForm({ code: row.code ?? "", name: row.name, year: String(row.year ?? 2569), category: row.category ?? "", content: row.content, active: row.active });
-    setStatus(""); nameInput.current?.focus();
-  }
-  return <section aria-labelledby="catalog-title" className="space-y-4">
-    <div><h2 id="catalog-title" className="text-xl font-semibold">{TITLES[kind]}</h2>
-      <p className="text-sm text-gray-600">เพิ่ม แก้ไข และนำเข้าข้อมูลจาก CSV UTF-8</p></div>
-    {error && <p className="text-red-700" role="alert">{error}</p>}
-    {status && <p className="text-green-800" role="status">{status}</p>}
-    <div className="grid items-start gap-6 lg:grid-cols-2">
-      <div className="admin-catalog-view space-y-4">
-        {entries === null ? !error && <p role="status">กำลังโหลดข้อมูล...</p> : !entries.length ? <p className="text-gray-600">ยังไม่มีรายการ</p> :
-          <ul className="divide-y rounded-lg border bg-white">{entries.map((row) => <li key={row.id} className="space-y-2 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="font-medium">{row.code && `${row.code} · `}{row.name}</h3><span className={`rounded px-2 py-1 text-xs ${row.active ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-600"}`}>{row.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span></div>
-            {row.year && <p className="text-sm text-gray-600">ปีหลักสูตร {row.year}</p>}
-            {row.category && <p className="text-sm text-gray-600">หมวด {row.category}</p>}
-            {row.content && <p className="line-clamp-3 whitespace-pre-wrap break-words text-sm text-gray-600">{row.content}</p>}
-            <button type="button" disabled={busy} onClick={() => edit(row)} className="text-sm text-blue-700 underline disabled:opacity-50">แก้ไขรายการ</button>
-          </li>)}</ul>}
-        <form onSubmit={importCsv} className="space-y-3 rounded-lg border bg-gray-50 p-4">
-          <h3 className="font-medium">นำเข้ารายการใหม่</h3>
-          <p className="text-sm text-gray-600">CSV UTF-8 ไม่เกิน 200 KB และ 500 รายการ ตรวจทั้งไฟล์ก่อนบันทึก รหัสซ้ำจะไม่นำเข้าทั้งชุด</p>
-          <a download href={`/admin-${kind}-template.csv`} className="inline-block text-sm text-blue-700 underline">ดาวน์โหลดไฟล์ตัวอย่าง</a>
-          <label className="block text-sm">ไฟล์ CSV<input ref={importInput} required disabled={busy || entries === null} type="file" accept=".csv,text/csv" onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)} className="mt-1 block w-full" /></label>
-          <button disabled={busy || !csvFile || entries === null} className="rounded border bg-white px-4 py-2 disabled:opacity-50">{busy ? "กำลังดำเนินการ..." : "นำเข้า CSV"}</button>
-        </form>
-      </div>
-      <form onSubmit={save} className="space-y-3 rounded-lg border bg-white p-4">
-        <h3 className="font-medium">{editing ? "แก้ไขรายการ" : "เพิ่มรายการ"}</h3>
-        <fieldset disabled={busy || entries === null} className="space-y-3 disabled:opacity-60">
-          <label className="block text-sm">ชื่อ<input ref={nameInput} required maxLength={200} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className={inputClass} /></label>
-          <label className="block text-sm">รหัส<input required maxLength={60} value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} className={inputClass} /></label>
-          {kind === "curricula" && <label className="block text-sm">ปีหลักสูตร (พ.ศ. หรือ ค.ศ.)<input required type="number" min={1900} max={3000} step={1} value={form.year} onChange={(event) => setForm({ ...form, year: event.target.value })} className={inputClass} /></label>}
-          {kind === "reference" && <label className="block text-sm">หมวดข้อมูล<input required maxLength={100} value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} placeholder="เช่น คณะ สาขา ระเบียบ" className={inputClass} /></label>}
-          <label className="block text-sm">รายละเอียด<textarea maxLength={50000} rows={8} value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} className={inputClass} /></label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} />เปิดใช้งาน</label>
-          <div className="flex gap-3"><button className="rounded bg-blue-700 px-4 py-2 text-white">{busy ? "กำลังดำเนินการ..." : "บันทึก"}</button>
-            {editing && <button type="button" onClick={() => { setEditing(null); setForm(EMPTY); }} className="rounded border px-3 py-2">ยกเลิก</button>}</div>
-        </fieldset>
-      </form>
+
+  return <section aria-labelledby="catalog-title" className="space-y-6 p-1">
+    <div>
+      <h2 id="catalog-title" className="font-semibold">จัดการ{TITLES[kind]}</h2>
+      <p className="mt-1 text-sm text-gray-600">{isTeacherCurricula ? "อ่านเอกสารด้วย OCR หรือนำเข้าหลายรายการจาก CSV และ XLSX" : "นำเข้าข้อมูลจากไฟล์ CSV"}</p>
     </div>
+    {error && <p className="text-red-700" role="alert">{error}</p>}
+
+    {isTeacherCurricula && <CurriculumDocumentImport endpoint={endpoint} onSaved={() => setVersion((current) => current + 1)} />}
+
+    <section aria-labelledby="catalog-import-title" className="work-surface space-y-4">
+      <form onSubmit={importSpreadsheet}>
+        <div className="grid items-start gap-5 xl:grid-cols-2">
+          <div>
+            <h3 id="catalog-import-title" className="text-lg font-semibold">{isTeacherCurricula ? "นำเข้าจาก CSV หรือ XLSX" : "นำเข้าจากไฟล์ CSV"}</h3>
+            <ol className="mt-3 list-decimal space-y-2 ps-5 text-sm text-gray-700">
+              <li><a download href={`/admin-${kind}-template.csv`} className="font-medium text-blue-700 underline">ดาวน์โหลดไฟล์ตัวอย่าง</a> แล้วเปิดใน Excel หรือ Google Sheets</li>
+              <li>แทนที่แถวตัวอย่างด้วยข้อมูลของคุณ เก็บหัวตารางเดิม แล้วบันทึกเป็น {isTeacherCurricula ? "CSV UTF-8 หรือ Excel (.xlsx)" : "CSV UTF-8"}</li>
+              <li>เลือกไฟล์ที่บันทึก แล้วกด <strong>{isTeacherCurricula ? "นำเข้าไฟล์" : "นำเข้า CSV"}</strong></li>
+            </ol>
+            <p id="catalog-import-limits" className="mt-3 text-sm text-gray-600">สูงสุด 200 KB และ 500 รายการ หากมีรหัสซ้ำ ระบบจะไม่นำเข้าทั้งไฟล์{isTeacherCurricula && " XLSX อ่านจากชีตแรกและรองรับรายงานแผนการศึกษาประจำภาคเรียน"}</p>
+          </div>
+
+          <div className="min-w-0 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <label htmlFor="catalog-import-file" className="block text-sm font-medium">{isTeacherCurricula ? "ไฟล์ CSV หรือ XLSX" : "ไฟล์ CSV"}</label>
+            <input id="catalog-import-file" ref={importInput} required disabled={busy || draft !== null || entries === null} type="file" accept={isTeacherCurricula ? ".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : ".csv,text/csv"} aria-describedby="catalog-import-limits" onChange={(event) => { setSpreadsheetFile(event.target.files?.[0] ?? null); setImportError(null); setStatus(""); }} className="block w-full min-w-0 text-sm file:me-3 file:min-h-11 file:rounded-lg file:border file:border-blue-200 file:bg-white file:px-3 file:font-medium file:text-blue-700 enabled:file:cursor-pointer disabled:opacity-60" />
+            <button disabled={busy || draft !== null || !spreadsheetFile || entries === null} className="min-h-11 rounded-lg border border-transparent action-filled px-4 py-2 text-sm">{busy ? "กำลังดำเนินการ..." : isTeacherCurricula ? "นำเข้าไฟล์" : "นำเข้า CSV"}</button>
+            {importError && <p role="alert">{importError}</p>}
+            <p role="status" className="text-sm" hidden={!status}>{status}</p>
+          </div>
+        </div>
+      </form>
+      {draft && <CurriculumDraftForm draft={draft} endpoint={endpoint} contentLabel="รายวิชาจากแผนการศึกษา" showStudyPlan
+        onCancel={() => { setDraft(null); setStatus(""); }}
+        onSaved={() => {
+          setDraft(null);
+          setSpreadsheetFile(null);
+          if (importInput.current) importInput.current.value = "";
+          setStatus("บันทึกหลักสูตรแล้ว");
+          setVersion((current) => current + 1);
+        }}
+      />}
+    </section>
+
+    <section aria-labelledby="catalog-list-title" className="min-w-0 space-y-4">
+      <h3 id="catalog-list-title" className="text-lg font-semibold">รายการ{TITLES[kind]}</h3>
+      {entries === null ? !error && <p role="status">กำลังโหลดข้อมูล...</p> : !entries.length ? <p className="surface-feedback">ยังไม่มีรายการ</p> :
+        <ul className="grid gap-3 md:grid-cols-2">{entries.map((row) => <li key={row.id} className="space-y-2 rounded-xl border border-[var(--cp-border)] bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="min-w-0 font-medium [overflow-wrap:anywhere]">{row.code && `${row.code} · `}{row.name}</h4><span className={`rounded px-2 py-1 text-xs ${row.active ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-600"}`}>{row.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</span></div>
+          {row.year && <p className="text-sm text-gray-600">ปีหลักสูตร {row.year}</p>}
+          {row.category && <p className="text-sm text-gray-600">หมวด {row.category}</p>}
+          {row.content && <CurriculumContent content={row.content} />}
+        </li>)}</ul>}
+    </section>
   </section>;
 }

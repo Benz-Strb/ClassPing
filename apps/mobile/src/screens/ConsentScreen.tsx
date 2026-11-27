@@ -97,7 +97,7 @@ export function ConsentScreen({ onAccepted, onContinueWithout, onSignOut }: Prop
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator color={colors.surface} />
+            <ActivityIndicator color={colors.ink} />
           ) : (
             <Text style={styles.primaryText}>ยินยอม</Text>
           )}
@@ -124,8 +124,8 @@ const styles = StyleSheet.create({
   note: { fontSize: 14, lineHeight: 24, color: colors.muted },
   footer: { width: "100%", maxWidth: 640, alignSelf: "center", padding: 24, paddingBottom: 16, gap: 10, backgroundColor: colors.surface },
   error: { color: colors.danger },
-  primary: { minHeight: 52, justifyContent: "center", backgroundColor: colors.action, borderRadius: 12, padding: 14, alignItems: 'center' },
-  primaryText: { color: colors.surface, fontSize: 16 },
+  primary: { minHeight: 52, justifyContent: "center", backgroundColor: colors.actionFill, borderRadius: 12, padding: 14, alignItems: 'center' },
+  primaryText: { color: colors.ink, fontSize: 16 },
   secondary: { minHeight: 52, justifyContent: "center", borderWidth: 1, borderColor: colors.outline, borderRadius: 12, padding: 14, alignItems: 'center' },
   disabled: { opacity: 0.5 },
   link: { alignItems: 'center', padding: 8 },

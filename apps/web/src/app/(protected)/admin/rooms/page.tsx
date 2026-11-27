@@ -97,7 +97,7 @@ export default function AdminRoomsPage() {
         />
         <button
           disabled={saving}
-          className="rounded-md bg-blue-700 px-4 py-2 text-white disabled:opacity-50"
+          className="rounded-md action-filled px-4 py-2 disabled:opacity-50"
         >
           {saving ? "กำลังเพิ่ม..." : "เพิ่มห้อง"}
         </button>

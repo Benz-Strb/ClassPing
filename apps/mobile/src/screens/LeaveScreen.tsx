@@ -361,7 +361,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
           disabled={busy || reading || availableSessions.length === 0}
         >
           {submitting ? (
-            <ActivityIndicator color={colors.surface} />
+            <ActivityIndicator color={colors.ink} />
           ) : (
             <Text style={styles.primaryText}>ส่งคำขอลา</Text>
           )}
@@ -444,12 +444,12 @@ const styles = StyleSheet.create({
   },
   primary: {
     minHeight: 48, justifyContent: "center",
-    backgroundColor: colors.action,
+    backgroundColor: colors.actionFill,
     borderRadius: 12,
     padding: 14,
     alignItems: "center",
   },
-  primaryText: { color: colors.surface, fontSize: 16, fontWeight: "500" },
+  primaryText: { color: colors.ink, fontSize: 16, fontWeight: "500" },
   secondary: {
     minHeight: 48, justifyContent: "center",
     borderWidth: 1,

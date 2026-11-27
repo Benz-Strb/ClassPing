@@ -54,7 +54,7 @@ export function IdentityScreen({ error, onPicked, onSignOut }: Props) {
       ))}</View>
       {(problem ?? error) && <Text accessibilityRole="alert" style={styles.error}>{problem ?? error}</Text>}
       <Pressable style={styles.primary} onPress={pick} disabled={busy} accessibilityState={{ busy, disabled: busy }}>
-        {busy ? <ActivityIndicator color={colors.surface} /> : <View style={styles.buttonContent}><AppIcon name="image" color={colors.onAction} size={22} /><Text style={styles.primaryText}>เลือกภาพบัตรนักศึกษา</Text></View>}
+        {busy ? <ActivityIndicator color={colors.ink} /> : <View style={styles.buttonContent}><AppIcon name="image" color={colors.ink} size={22} /><Text style={styles.primaryText}>เลือกภาพบัตรนักศึกษา</Text></View>}
       </Pressable>
       <Pressable style={styles.link} onPress={onSignOut}>
         <Text style={styles.linkText}>ออกจากระบบ</Text>
@@ -75,8 +75,8 @@ const styles = StyleSheet.create({
   title: { ...typography.pageTitle },
   body: { fontSize: 15, lineHeight: 24, color: colors.muted },
   error: { color: colors.danger, fontSize: 15, padding: 14, borderRadius: 12, backgroundColor: colors.dangerBg },
-  primary: { minHeight: 56, justifyContent: 'center', backgroundColor: colors.action, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  primaryText: { color: colors.surface, fontSize: 16 },
+  primary: { minHeight: 56, justifyContent: 'center', backgroundColor: colors.actionFill, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  primaryText: { color: colors.ink, fontSize: 16 },
   link: { minHeight: 48, justifyContent: 'center', alignItems: 'center', padding: 8 },
   linkText: { color: colors.muted },
 });

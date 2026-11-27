@@ -6,9 +6,11 @@ import type { AppUser } from '../users/users.service.js';
 const logger = new Logger('OcrTextLog');
 const safeName = (value: string) => value.normalize('NFC').replace(/[<>:"/\\|?*\p{Cc}]/gu, '_').replace(/\.{2,}/g, '_').trim().slice(0, 80) || 'unknown';
 
-export function formatOcrText(type: 'ใบลา' | 'ตารางเรียน', text: string): string {
+type OcrLogType = 'ใบลา' | 'ตารางเรียน' | 'หลักสูตร';
+
+export function formatOcrText(type: OcrLogType, text: string): string {
   const lines = text.replace(/\r\n?/g, '\n').split('\n').map((line) => line.trim());
-  if (type === 'ใบลา') return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (type !== 'ตารางเรียน') return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
   let course = 0;
   return lines.map((line) => {
@@ -24,11 +26,13 @@ export function formatOcrText(type: 'ใบลา' | 'ตารางเรี�
 
 export async function writeOcrTextLog(
   user: Pick<AppUser, 'id' | 'studentId' | 'fullName'>,
-  type: 'ใบลา' | 'ตารางเรียน',
+  type: OcrLogType,
   text: string,
 ): Promise<void> {
   // ใบลามักเป็นใบรับรองแพทย์ บันทึกเป็นไฟล์เฉพาะตอน debug ที่ตั้ง OCR_TEXT_LOG_DIR เอง และไม่ทำงานบนเครื่องจริง
-  const directory = process.env.OCR_TEXT_LOG_DIR?.trim();
+  const directory = (type === 'หลักสูตร'
+    ? process.env.CURRICULUM_OCR_LOG_DIR
+    : process.env.OCR_TEXT_LOG_DIR)?.trim();
   if (!directory || process.env.NODE_ENV === 'production') return;
   try {
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -36,7 +40,10 @@ export async function writeOcrTextLog(
     const timestamp = new Intl.DateTimeFormat('th-TH', {
       dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Bangkok',
     }).format(new Date());
-    const entry = `\n=== ${type} | ${timestamp} (เวลาไทย) ===\n\nข้อมูลนักศึกษา\nเลขนักศึกษา: ${user.studentId || 'ไม่ระบุ'}\nชื่อ: ${user.fullName || 'ไม่ระบุ'}\nบัญชี: ${user.id}\n\nข้อความจาก OCR\n${'-'.repeat(60)}\n${formatOcrText(type, text)}\n${'-'.repeat(60)}\n`;
+    const author = type === 'หลักสูตร'
+      ? `ข้อมูลอาจารย์\nชื่อ: ${user.fullName || 'ไม่ระบุ'}\nบัญชี: ${user.id}`
+      : `ข้อมูลนักศึกษา\nเลขนักศึกษา: ${user.studentId || 'ไม่ระบุ'}\nชื่อ: ${user.fullName || 'ไม่ระบุ'}\nบัญชี: ${user.id}`;
+    const entry = `\n=== ${type} | ${timestamp} (เวลาไทย) ===\n\n${author}\n\nข้อความจาก OCR\n${'-'.repeat(60)}\n${formatOcrText(type, text)}\n${'-'.repeat(60)}\n`;
     await appendFile(join(directory, filename), entry, { encoding: 'utf8', mode: 0o600 });
   } catch (error) {
     logger.error('เขียนไฟล์ OCR log ไม่สำเร็จ', error instanceof Error ? error.stack : String(error));

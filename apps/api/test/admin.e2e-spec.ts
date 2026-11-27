@@ -13,6 +13,8 @@ import { HttpExceptionFilter } from '../src/common/http-exception.filter.js';
 import { EnvelopeInterceptor } from '../src/common/envelope.interceptor.js';
 import { CATALOG_REPO } from '../src/admin/catalog.repo.js';
 import { configureApp } from '../src/app.setup.js';
+import { CLOCK } from '../src/common/clock.js';
+import { LeaveOcrClient } from '../src/leave/leave-ocr.client.js';
 import { APP_CONFIG } from '../src/config/config.js';
 
 class FakeAuth implements CanActivate {
@@ -22,6 +24,13 @@ class FakeAuth implements CanActivate {
     return true;
   }
 }
+
+const OCR_PATH = '/teacher/curricula/document/preview';
+const ocr = { readLeaveDocument: vi.fn().mockResolvedValue({ lines: [{ text: 'ข้อความหลักสูตร' }] }) };
+const ocrProviders = [
+  { provide: CLOCK, useValue: () => new Date() },
+  { provide: LeaveOcrClient, useValue: ocr },
+];
 
 describe('Admin HTTP RBAC', () => {
   let app: INestApplication<App>;
@@ -39,6 +48,7 @@ describe('Admin HTTP RBAC', () => {
     const module = await Test.createTestingModule({
       controllers: [AdminController, CatalogController, CurriculaController],
       providers: [
+        ...ocrProviders,
         { provide: AdminService, useValue: admin }, { provide: CatalogService, useValue: catalog },
         { provide: APP_GUARD, useClass: FakeAuth }, { provide: APP_GUARD, useClass: RolesGuard },
       ],
@@ -92,6 +102,17 @@ describe('Admin HTTP RBAC', () => {
       for (const fn of Object.values(catalog)) expect(fn).not.toHaveBeenCalled();
     });
   }
+  it('allows only teachers to submit documents for OCR', async () => {
+    for (const role of ['student', 'admin', '']) {
+      await request(app.getHttpServer()).post(OCR_PATH).set('x-role', role)
+        .attach('document', Buffer.from('%PDF-1.7'), 'curriculum.pdf').expect(403);
+    }
+    expect(ocr.readLeaveDocument).not.toHaveBeenCalled();
+    const response = await request(app.getHttpServer()).post(OCR_PATH).set('x-role', 'teacher')
+      .attach('document', Buffer.from('%PDF-1.7'), 'curriculum.pdf').expect(201);
+    expect(response.body.data).toEqual({ content: 'ข้อความหลักสูตร' });
+    expect(catalog.create).not.toHaveBeenCalled();
+  });
   it('allows admin and dispatches writes to the intended handler', async () => {
     await request(app.getHttpServer()).get('/admin/catalog/reference').set('x-role', 'admin').expect(200);
     await request(app.getHttpServer()).post('/admin/catalog/reference/import').set('x-role', 'admin').send({ csv: 'example' }).expect(201);
@@ -111,7 +132,7 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       controllers: [CatalogController, CurriculaController],
-      providers: [CatalogService, { provide: CATALOG_REPO, useValue: repo },
+      providers: [...ocrProviders, CatalogService, { provide: CATALOG_REPO, useValue: repo },
         { provide: APP_CONFIG, useValue: { allowedOrigins: [], port: 3001 } },
         { provide: APP_GUARD, useClass: FakeAuth }, { provide: APP_GUARD, useClass: RolesGuard }],
     }).compile();
@@ -126,6 +147,14 @@ describe('Admin catalog HTTP validation and UTF-8 payloads', () => {
       .send({ code: 'FAQ', name: 'FAQ', category: 'ทั่วไป', content: 'ก'.repeat(50000), active: true });
     expect(response.status).toBe(201);
     expect(response.body.data.content).toHaveLength(50000);
+    expect(repo.insert).toHaveBeenCalledTimes(1);
+  });
+  it('saves a reviewed Thai curriculum draft larger than the default JSON limit', async () => {
+    const content = 'ก'.repeat(50_000);
+    const draft = { code: 'CS', name: 'หลักสูตรตัวอย่าง', year: 2569, content };
+    const response = await request(app.getHttpServer()).post('/teacher/curricula').set('x-role', 'teacher')
+      .send(draft).expect(201);
+    expect(response.body.data).toMatchObject(draft);
     expect(repo.insert).toHaveBeenCalledTimes(1);
   });
   it('reports invalid CSV row without writing any records', async () => {
