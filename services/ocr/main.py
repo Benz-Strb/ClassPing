@@ -2,6 +2,7 @@
 import hmac
 import os
 import sys
+from contextlib import closing
 from pathlib import Path
 from threading import Lock
 
@@ -46,9 +47,10 @@ def create_app(reader, token: str) -> FastAPI:
 
         def recognize():
             lines = []
-            with lock:
-                for frame in document_frames(data):
-                    result = reader.read(frame)
+            with closing(document_frames(data)) as frames:
+                for frame in frames:
+                    with lock:
+                        result = reader.read(frame)
                     if isinstance(result, str):
                         lines.extend({'text': text.strip(), 'score': None} for text in result.splitlines() if text.strip())
                     else:

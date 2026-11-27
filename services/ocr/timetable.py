@@ -20,9 +20,10 @@ def read_timetable_lines(data, reader, lock):
             return [{'text': line.strip(), 'score': None}
                     for page in pages for line in page.splitlines() if line.strip()]
     lines = []
-    with lock:
-        for frame in document_frames(data, max_pages=100):
-            result = reader.read(frame)
+    with closing(document_frames(data, max_pages=100)) as frames:
+        for frame in frames:
+            with lock:
+                result = reader.read(frame)
             if isinstance(result, str):
                 lines.extend({'text': text.strip(), 'score': None}
                              for text in result.splitlines() if text.strip())

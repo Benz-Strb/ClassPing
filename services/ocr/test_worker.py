@@ -32,6 +32,25 @@ class WorkerTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(len(response.json()['data']['lines']), 2)
 
+    def test_pdf_lock_is_released_during_ocr(self):
+        from app.documents import PDF_LOCK
+
+        lock_states = []
+
+        class CheckingReader:
+            def read(self, image):
+                lock_states.append(PDF_LOCK.locked())
+                return 'TEST'
+
+        client = TestClient(worker.create_app(CheckingReader(), 'x' * 32))
+        data = io.BytesIO()
+        page = Image.new('RGB', (100, 100), 'white')
+        page.save(data, format='PDF', save_all=True, append_images=[page])
+        response = client.post('/leave/ocr', headers=self.headers,
+                               files={'image': ('test.pdf', data.getvalue(), 'application/pdf')})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(lock_states, [False, False])
+
     def test_auth_before_parsing_upload(self):
         self.assertEqual(self.client.post('/leave/ocr', content=b'bad').status_code, 401)
 
