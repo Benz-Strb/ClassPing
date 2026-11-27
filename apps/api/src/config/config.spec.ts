@@ -31,6 +31,12 @@ describe('loadConfig', () => {
     expect(config.adminEmails).toEqual([]);
   });
 
+  it('ตั้งรายการ proxy จาก environment และปิดโดยค่าเริ่มต้น', () => {
+    expect(loadConfig(base()).trustedProxies).toEqual([]);
+    expect(loadConfig(base({ TRUSTED_PROXY_ADDRESSES: '127.0.0.1, 192.0.2.0/24' })).trustedProxies)
+      .toEqual(['127.0.0.1', '192.0.2.0/24']);
+  });
+
   it('อ่าน ALLOWED_ORIGINS เป็นรายการ', () => {
     expect(
       loadConfig(base({ ALLOWED_ORIGINS: 'http://localhost:3000, http://a.test' })).allowedOrigins,

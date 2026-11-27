@@ -8,6 +8,9 @@ import { APP_CONFIG, type AppConfig } from './config/config.js';
 // ใช้ทั้งตอนรันจริงและใน e2e test ให้พฤติกรรมเหมือนกัน
 export function configureApp(app: INestApplication): AppConfig {
   const config = app.get<AppConfig>(APP_CONFIG);
+  if (config.trustedProxies?.length) {
+    app.getHttpAdapter().getInstance().set('trust proxy', config.trustedProxies);
+  }
   // Bounded UTF-8 CSV/text payloads can exceed Express's default 100 KB.
   const catalogJson = json({ limit: '1mb' });
   // Keep Nest's global JSON parser enabled for routes outside the catalog.

@@ -4,6 +4,7 @@ export interface AppConfig {
   supabaseServiceRoleKey: string;
   adminEmails: string[];
   allowedOrigins: string[];
+  trustedProxies: string[];
   leaveOcrServiceUrl?: string;
   leaveOcrServiceToken?: string | null;
   faceServiceUrl: string;
@@ -119,6 +120,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     supabaseServiceRoleKey: required(env, 'SUPABASE_SERVICE_ROLE_KEY'),
     adminEmails: list(env.ADMIN_EMAILS).map((e) => e.toLowerCase()),
     allowedOrigins: list(env.ALLOWED_ORIGINS),
+    trustedProxies: list(env.TRUSTED_PROXY_ADDRESSES),
     faceServiceUrl: (env.FACE_SERVICE_URL?.trim() || 'http://127.0.0.1:8001').replace(/\/+$/, ''),
     faceServiceToken: faceToken(env),
     leaveOcrServiceUrl: url(env, 'LEAVE_OCR_SERVICE_URL', 'http://127.0.0.1:8002'),
