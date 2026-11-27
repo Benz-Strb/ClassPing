@@ -49,6 +49,7 @@ export interface AdminRepo {
   listVideoViews(fromAt: string, toAt: string): Promise<VideoViewRow[]>;
   listUsers(): Promise<AdminUser[]>;
   findUser(id: string): Promise<AdminUser | null>;
+  countTaughtCourses(id: string): Promise<number>;
   updateUserRole(id: string, role: Role): Promise<AdminUser | null>;
   listRooms(): Promise<RoomView[]>;
   createRoom(name: string): Promise<RoomView>;
@@ -201,6 +202,15 @@ export class SupabaseAdminRepo implements AdminRepo {
       .maybeSingle();
     if (error) throw dbError();
     return data ? toUser(data as unknown as UserRow) : null;
+  }
+
+  async countTaughtCourses(id: string): Promise<number> {
+    const { count, error } = await this.db
+      .from('courses')
+      .select('id', { count: 'exact', head: true })
+      .eq('teacher_id', id);
+    if (error || count === null) throw dbError();
+    return count;
   }
 
   async updateUserRole(id: string, role: Role): Promise<AdminUser | null> {

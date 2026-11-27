@@ -25,6 +25,7 @@ function fakeRepo() {
   const repo: AdminRepo = {
     listVideoViews: async () => [],
     listUsers: async () => users,
+    countTaughtCourses: async () => 0,
     updateUserRole: async (id, role) => {
       const user = users.find((item) => item.id === id);
       if (!user) return null;
@@ -69,6 +70,15 @@ describe('AdminService', () => {
         role: 'owner',
       }),
     ).rejects.toMatchObject({ status: 400, code: 'BAD_REQUEST' });
+  });
+
+  it.each(['student', 'admin'])('ปฏิเสธการเปลี่ยนผู้สอนที่ยังมีวิชาเป็น %s', async (role) => {
+    const { repo, users } = fakeRepo();
+    users[0].role = 'teacher';
+    repo.countTaughtCourses = async () => 2;
+    await expect(new AdminService(repo).changeRole(users[0].id, { role }))
+      .rejects.toMatchObject({ status: 409, code: 'TEACHER_HAS_COURSES' });
+    expect(users[0].role).toBe('teacher');
   });
 
   it('เปลี่ยน role ของ id ที่ไม่มีอยู่ได้ USER_NOT_FOUND', async () => {

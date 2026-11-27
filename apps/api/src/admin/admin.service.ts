@@ -82,6 +82,16 @@ export class AdminService {
         );
       }
     }
+    if (role !== 'teacher') {
+      const count = await this.repo.countTaughtCourses(userId);
+      if (count > 0) {
+        throw new AppError(
+          409,
+          'TEACHER_HAS_COURSES',
+          `ผู้ใช้นี้ยังรับผิดชอบ ${count} รายวิชา กรุณาเปลี่ยนผู้สอนก่อนเปลี่ยนบทบาท`,
+        );
+      }
+    }
     const user = await this.repo.updateUserRole(userId, role as Role);
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'ไม่พบผู้ใช้นี้');
     return user;
