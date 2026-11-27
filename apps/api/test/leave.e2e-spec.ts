@@ -174,13 +174,16 @@ class MemoryLeaveRepo implements LeaveRepo {
     if (!item) throw new Error('LEAVE_REQUEST_NOT_FOUND');
     if (teacherId !== 'teacher-user')
       throw new Error('LEAVE_REQUEST_FORBIDDEN');
-    if (item.status !== 'pending') throw new Error('LEAVE_REQUEST_NOT_PENDING');
+    if (item.status === decision) throw new Error('LEAVE_REQUEST_NOT_PENDING');
+    const wasApproved = item.status === 'approved';
     item.status = decision;
     item.reviewedBy = teacherId;
     item.reviewedAt = '2026-10-28T03:00:00.000Z';
     item.reviewNote = reviewNote;
     if (decision === 'approved')
       this.attendance.set(`${item.sessionId}:${item.student.id}`, 'leave');
+    else if (wasApproved && this.attendance.get(`${item.sessionId}:${item.student.id}`) === 'leave')
+      this.attendance.delete(`${item.sessionId}:${item.student.id}`);
   }
 
   async listByStudent(studentId: string) {
@@ -472,6 +475,24 @@ describe('ระบบลา (e2e)', () => {
       .expect({ data: [] });
   });
 
+  it('reverses a leave decision and synchronizes attendance', async () => {
+    const server = app.getHttpServer();
+    await request(server).post('/leave-requests').set('x-role', 'student')
+      .field('sessionId', SESSION.id).field('reason', 'sick')
+      .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' })
+      .expect(201);
+
+    const review = (decision: 'approved' | 'rejected') => request(server)
+      .post(`/leave-requests/${repo.requests[0].id}/review`).set('x-role', 'teacher')
+      .send({ decision });
+    const key = `${SESSION.id}:student-user`;
+    await review('approved').expect(200);
+    await review('rejected').expect(200);
+    expect(repo.attendance.has(key)).toBe(false);
+    await review('approved').expect(200);
+    expect(repo.attendance.get(key)).toBe('leave');
+  });
+
   it('อาจารย์ปฏิเสธคำขอโดยไม่เปลี่ยน attendance', async () => {
     const server = app.getHttpServer();
     await request(server)
@@ -577,7 +598,7 @@ describe('ระบบลา (e2e)', () => {
     await request(server)
       .post(reviewPath)
       .set('x-role', 'teacher')
-      .send({ decision: 'approved' })
+      .send({ decision: 'rejected' })
       .expect(409);
   });
 });

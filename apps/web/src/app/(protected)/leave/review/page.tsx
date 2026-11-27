@@ -151,7 +151,9 @@ function TeacherLeaveReviewPage() {
                   เปิดหลักฐาน: {request.attachments[0].fileName}
                 </button>
               )}
-              {request.status === "pending" ? (
+              {request.reviewNote && (
+                <p className="text-sm">หมายเหตุที่บันทึก: {request.reviewNote}</p>
+              )}
                 <div className="space-y-3 border-t pt-3">
                   <label
                     htmlFor={`review-note-${request.id}`}
@@ -174,31 +176,24 @@ function TeacherLeaveReviewPage() {
                     />
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    {request.status !== "approved" && <button
                       type="button"
                       disabled={busy === request.id}
                       onClick={() => void review(request.id, "approved")}
                       className="rounded-lg bg-green-700 px-3 py-2 text-white disabled:opacity-50"
                     >
-                      {busy === request.id ? "กำลังบันทึก..." : "อนุมัติ"}
-                    </button>
-                    <button
+                      {busy === request.id ? "กำลังบันทึก..." : request.status === "rejected" ? "เปลี่ยนเป็นอนุมัติ" : "อนุมัติ"}
+                    </button>}
+                    {request.status !== "rejected" && <button
                       type="button"
                       disabled={busy === request.id}
                       onClick={() => void review(request.id, "rejected")}
                       className="rounded-lg bg-red-700 px-3 py-2 text-white disabled:opacity-50"
                     >
-                      ปฏิเสธ
-                    </button>
+                      {request.status === "approved" ? "ยกเลิกการอนุมัติ" : "ปฏิเสธ"}
+                    </button>}
                   </div>
                 </div>
-              ) : (
-                request.reviewNote && (
-                  <p className="text-sm">
-                    หมายเหตุที่บันทึก: {request.reviewNote}
-                  </p>
-                )
-              )}
             </li>
           ))}
         </ul>

@@ -230,6 +230,9 @@ export class SupabaseAttendanceAdminRepo implements AttendanceAdminRepo {
       },
       { onConflict: 'session_id,student_id' },
     );
+    if (error?.message === 'ATTENDANCE_HAS_APPROVED_LEAVE') {
+      throw new AppError(409, 'ATTENDANCE_HAS_APPROVED_LEAVE', 'คาบนี้มีใบลาที่อนุมัติแล้ว กรุณาแก้ผลจากหน้าตรวจใบลา');
+    }
     if (error) throw dbError();
   }
 

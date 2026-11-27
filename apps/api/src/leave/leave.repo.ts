@@ -359,6 +359,9 @@ export class SupabaseLeaveRepo implements LeaveRepo {
       p_review_note: reviewNote,
     });
     if (!error) return;
+    if (error.code === '23505') {
+      throw new AppError(409, 'LEAVE_REQUEST_DUPLICATE', 'คาบนี้มีคำขอลาใหม่ที่ยังมีผลอยู่');
+    }
     if (
       error.message === 'LEAVE_REQUEST_NOT_FOUND' ||
       error.message === 'LEAVE_REQUEST_FORBIDDEN' ||
