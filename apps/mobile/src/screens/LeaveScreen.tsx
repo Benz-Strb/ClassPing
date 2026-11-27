@@ -36,7 +36,8 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
   const [sessions, setSessions] = useState<LeaveSession[] | null>(null);
   const [requests, setRequests] = useState<LeaveRequest[] | null>(null);
   const [courseId, setCourseId] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const sessionId = sessionIds[0];
   const [reason, setReason] = useState("");
   const [documentDetails, setDocumentDetails] = useState<DocumentDetails>({ ...EMPTY_DOCUMENT_DETAILS });
   const [evidence, setEvidence] = useState<{ uri: string; fileName: string } | null>(
@@ -59,6 +60,10 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
     ]);
     setSessions(nextSessions);
     setRequests(nextRequests);
+    const eligibleIds = new Set(nextSessions.map(session => session.id));
+    const activeRequests = new Set(nextRequests.filter(request => request.status !== "rejected")
+      .map(request => request.sessionId));
+    setSessionIds(current => current.filter(id => eligibleIds.has(id) && !activeRequests.has(id)));
     setLoadError(null);
   }
 
@@ -85,7 +90,10 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
     value: session.courseId,
     label: `${session.courseCode} · ${session.courseName}${session.section ? ` · กลุ่ม ${session.section}` : ''}`,
   }])).values()), [availableSessions]);
-  const courseSessions = availableSessions.filter(session => session.courseId === courseId);
+  const courseSessions = availableSessions.filter(session =>
+    session.courseId === courseId && !sessionIds.includes(session.id),
+  );
+  const selectedSessions = availableSessions.filter(session => sessionIds.includes(session.id));
 
   async function autoReadEvidence(targetSessionId: string, uri: string) {
     setReading(true);
@@ -199,14 +207,14 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await submitLeave(sessionId, reason.trim(), evidence.uri, documentDetails);
+      await submitLeave(sessionIds, reason.trim(), evidence.uri, documentDetails);
       discardLeaveEvidence(evidence.uri);
       evidenceUri.current = null;
       setEvidence(null);
       setOcrText(null);
       setReason("");
       setDocumentDetails({ ...EMPTY_DOCUMENT_DETAILS });
-      setSessionId(null);
+      setSessionIds([]);
       setCourseId(null);
       setOcrError(null);
       await load();
@@ -258,7 +266,7 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>ยื่นคำขอลา</Text>
-          <Text style={styles.help}>เลือกคาบและแนบหลักฐาน</Text>
+          <Text style={styles.help}>เลือกคาบได้หลายวันและแนบหลักฐานครั้งเดียว</Text>
         </View>
         {onBack && <Pressable style={styles.secondary} onPress={onBack}>
           <Text>กลับ</Text>
@@ -271,18 +279,32 @@ export function LeaveScreen({ onBack, active = true, focusTick = 0 }: Props) {
         {availableSessions.length === 0 ? <Text style={styles.help}>ไม่มีคาบที่ยื่นลาได้</Text> : <>
           <SelectField label="รายวิชา" placeholder="เลือกรายวิชาที่ต้องการลา" value={courseId}
             options={courses} disabled={busy}
-            onChange={value => { setCourseId(value); setSessionId(null); }} />
-          <SelectField key={courseId ?? 'no-course'} label="คาบเรียน" placeholder={courseId ? 'เลือกวันและคาบเรียน' : 'เลือกรายวิชาก่อน'}
-            value={sessionId} options={courseSessions.map(session => ({ value: session.id,
+            onChange={setCourseId} />
+          <SelectField key={courseId ?? 'no-course'} label="เพิ่มคาบที่ต้องการลา" placeholder={courseId ? 'เลือกวันและคาบเรียน' : 'เลือกรายวิชาก่อน'}
+            value={null} options={courseSessions.map(session => ({ value: session.id,
               label: `${session.kind === 'exam' ? 'สอบ · ' : ''}${formatLeaveSession(session).split('\n').slice(1).join('\n')}${session.title ? ` · ${session.title}` : ''}`,
             }))} onChange={(value) => {
-              setSessionId(value);
-              if (value && evidence && !reason.trim() && !reading) {
+              if (!value || sessionIds.length >= 30 || sessionIds.includes(value)) return;
+              setSessionIds(current => [...current, value]);
+              if (!sessionId && evidence && !reason.trim() && !reading) {
                 setBusy(true);
                 void autoReadEvidence(value, evidence.uri).finally(() => setBusy(false));
               }
-            }} disabled={busy || !courseId} />
+            }} disabled={busy || !courseId || !courseSessions.length || sessionIds.length >= 30} />
         </>}
+
+        {selectedSessions.map(session => (
+          <Pressable
+            key={session.id}
+            style={styles.secondary}
+            disabled={busy || reading}
+            accessibilityRole="button"
+            accessibilityLabel={`นำคาบออก ${formatLeaveSession(session)}`}
+            onPress={() => setSessionIds(current => current.filter(id => id !== session.id))}
+          >
+            <Text>{formatLeaveSession(session)} · นำออก</Text>
+          </Pressable>
+        ))}
 
         <SelectField
           label="แนบหลักฐานการลา"

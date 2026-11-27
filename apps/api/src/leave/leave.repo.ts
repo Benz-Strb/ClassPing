@@ -1,3 +1,4 @@
+import { AppError } from '../common/app-error.js';
 import type { DocumentDetails } from './leave-draft.js';
 import { Inject, Injectable } from '@nestjs/common';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -11,6 +12,14 @@ export interface LeaveRequestInput {
   documentDetails?: DocumentDetails;
   ocrText: string;
   ocrStatus: 'pending' | 'completed' | 'failed';
+}
+
+export interface LeaveBatchInput extends Omit<LeaveRequestInput, 'sessionId'> {
+  sessionIds: string[];
+  path: string;
+  fileName: string;
+  mime: string;
+  size: number;
 }
 
 export interface LeaveRequestRecord {
@@ -69,6 +78,7 @@ export interface LeaveRepo {
   studentCanRequest(studentId: string, sessionId: string): Promise<boolean>;
   hasActiveRequest(studentId: string, sessionId: string): Promise<boolean>;
   createRequest(input: LeaveRequestInput): Promise<LeaveRequestRecord>;
+  createBatch(input: LeaveBatchInput): Promise<LeaveRequestRecord[]>;
   deleteRequest(id: string): Promise<void>;
   saveOcrResult(id: string, ocrText: string, ocrStatus: 'completed' | 'failed'): Promise<void>;
   uploadEvidence(path: string, bytes: Buffer, mime: string): Promise<void>;
@@ -264,6 +274,23 @@ export class SupabaseLeaveRepo implements LeaveRepo {
     if (error?.code === '23505') throw new Error('LEAVE_REQUEST_DUPLICATE');
     if (error) throw dbError();
     return data as LeaveRequestRecord;
+  }
+
+  async createBatch(input: LeaveBatchInput): Promise<LeaveRequestRecord[]> {
+    const { data, error } = await this.db.rpc('submit_leave_batch', {
+      p_student_id: input.studentId,
+      p_session_ids: input.sessionIds,
+      p_reason: input.reason,
+      p_document_details: input.documentDetails ?? {},
+      p_storage_path: input.path,
+      p_file_name: input.fileName,
+      p_mime_type: input.mime,
+      p_file_size: input.size,
+    });
+    if (error?.code === '23505') throw new Error('LEAVE_REQUEST_DUPLICATE');
+    if (error?.code === 'P0002') throw new AppError(404, 'SESSION_NOT_FOUND', 'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้');
+    if (error) throw dbError();
+    return data as LeaveRequestRecord[];
   }
 
   // เขียนผล OCR ที่อ่านเบื้องหลัง เฉพาะคำขอที่ยังรอผลอยู่

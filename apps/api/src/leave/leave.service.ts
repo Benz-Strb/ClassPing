@@ -108,15 +108,18 @@ export class LeaveService {
 
   async submit(
     user: AppUser,
-    sessionId: string,
+    selection: string | string[],
     reason: string,
     evidence?: LeaveEvidence,
     documentDetails?: unknown,
   ) {
     if (user.role !== 'student' || !user.studentId)
       throw new AppError(403, 'STUDENT_ONLY', 'ยื่นลาได้เฉพาะบัญชีนักศึกษา');
-    if (typeof sessionId !== 'string' || !UUID.test(sessionId))
-      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา');
+    const selected = Array.isArray(selection) ? selection : [selection];
+    if (!selected.length || selected.length > 30 || selected.some(id => typeof id !== 'string' || !UUID.test(id)))
+      throw new AppError(400, 'BAD_REQUEST', 'กรุณาเลือกคาบที่ต้องการลา 1–30 คาบ');
+    const sessionIds = [...new Set(selected.map(id => id.toLowerCase()))];
+    const [sessionId] = sessionIds;
     const cleanReason = typeof reason === 'string' ? reason.trim() : '';
     if (!cleanReason)
       throw new AppError(400, 'REASON_REQUIRED', 'กรุณาระบุเหตุผลการลา');
@@ -128,21 +131,42 @@ export class LeaveService {
       );
     const details = parseBody(documentDetailsSchema, documentDetails ?? {});
     this.validateEvidence(evidence);
-    if (!(await this.repo.studentCanRequest(user.id, sessionId))) {
-      throw new AppError(
-        404,
-        'SESSION_NOT_FOUND',
-        'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้',
-      );
+    for (const id of sessionIds) {
+      if (!(await this.repo.studentCanRequest(user.id, id))) {
+        throw new AppError(404, 'SESSION_NOT_FOUND', 'ไม่พบคาบเรียนที่นักศึกษาลงทะเบียนไว้');
+      }
+      if (await this.repo.hasActiveRequest(user.id, id)) {
+        throw new AppError(409, 'LEAVE_REQUEST_DUPLICATE', 'มีคำขอลาที่ส่งแล้วในคาบที่เลือก');
+      }
     }
 
-    // ซ้ำอยู่แล้วไม่ต้องเสีย OCR ตัวกันจริงคือ unique index ตอนสร้างคำขอ
-    if (await this.repo.hasActiveRequest(user.id, sessionId)) {
-      throw new AppError(
-        409,
-        'LEAVE_REQUEST_DUPLICATE',
-        'ส่งคำขอลาสำหรับคาบนี้แล้ว',
-      );
+    if (sessionIds.length > 1) {
+      const path = `${user.id}/${randomUUID()}.${EXTENSIONS[evidence.mimetype]}`;
+      await this.repo.uploadEvidence(path, evidence.buffer, evidence.mimetype);
+      let requests;
+      try {
+        requests = await this.repo.createBatch({
+          studentId: user.id,
+          sessionIds,
+          reason: cleanReason,
+          documentDetails: details,
+          ocrText: '',
+          ocrStatus: 'pending',
+          path,
+          fileName: evidence.originalname,
+          mime: evidence.mimetype,
+          size: evidence.size,
+        });
+      } catch (error) {
+        await this.repo.deleteEvidence(path).catch(() => undefined);
+        if (error instanceof Error && error.message === 'LEAVE_REQUEST_DUPLICATE') {
+          throw new AppError(409, 'LEAVE_REQUEST_DUPLICATE', 'มีคำขอลาที่ส่งแล้วในคาบที่เลือก');
+        }
+        throw error;
+      }
+      const requestIds = requests.map(({ id }) => id);
+      void this.readOcrLater(requestIds, evidence, user);
+      return { id: requestIds[0], requestIds, status: 'pending', ocrStatus: 'pending' };
     }
 
     let request;
@@ -185,18 +209,19 @@ export class LeaveService {
     }
 
     // OCR อ่านทั้งใบใช้เวลานาน ไม่ให้นักศึกษารอ อ่านต่อเบื้องหลังแล้วเก็บไว้ให้อาจารย์ดู
-    void this.readOcrLater(request.id, evidence, user);
+    void this.readOcrLater([request.id], evidence, user);
     return { id: request.id, status: 'pending', ocrStatus: 'pending' };
   }
 
-  private async readOcrLater(requestId: string, evidence: LeaveEvidence, user: AppUser) {
+  private async readOcrLater(requestIds: string[], evidence: LeaveEvidence, user: AppUser) {
     try {
       const ocr = await this.ocr.readLeaveDocument(evidence.buffer, evidence.mimetype);
       await writeOcrTextLog(user, 'ใบลา', ocr.lines.map((line) => line.text).join('\n'));
-      await this.repo.saveOcrResult(requestId, ocr.lines.map((line) => line.text).join('\n'), 'completed');
+      const text = ocr.lines.map((line) => line.text).join('\n');
+      await Promise.all(requestIds.map(id => this.repo.saveOcrResult(id, text, 'completed')));
     } catch {
       // OCR เป็นข้อมูลช่วยตรวจ อาจารย์ยังดูรูปหลักฐานเองได้เมื่อบริการล่ม
-      await this.repo.saveOcrResult(requestId, '', 'failed').catch(() => undefined);
+      await Promise.allSettled(requestIds.map(id => this.repo.saveOcrResult(id, '', 'failed')));
     }
   }
 

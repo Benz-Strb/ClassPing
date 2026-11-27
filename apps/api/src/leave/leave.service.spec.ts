@@ -49,6 +49,7 @@ function setup() {
     studentCanRequest: vi.fn(async () => true),
     hasActiveRequest: vi.fn(async () => false),
     createRequest: vi.fn(async () => ({ id: 'leave-1' })),
+    createBatch: vi.fn(async () => [{ id: 'leave-1' }, { id: 'leave-2' }]),
     deleteRequest: vi.fn(async () => undefined),
     saveOcrResult: vi.fn(async () => undefined),
     uploadEvidence: vi.fn(async () => undefined),
@@ -79,6 +80,19 @@ const evidence = {
 };
 
 describe('LeaveService', () => {
+  it('uploads evidence once for multiple sessions', async () => {
+    const { service, repo, ocr } = setup();
+    const ids = [SESSION_ID, '22222222-2222-4222-8222-222222222222'];
+    const buffer = Buffer.from('%PDF-test');
+    const evidence = { buffer, mimetype: 'application/pdf', originalname: 'leave.pdf', size: buffer.length };
+    await expect(service.submit(student, ids, 'ป่วย', evidence))
+      .resolves.toMatchObject({ requestIds: ['leave-1', 'leave-2'] });
+    expect(repo.uploadEvidence).toHaveBeenCalledTimes(1);
+    expect(repo.createBatch).toHaveBeenCalledTimes(1);
+    expect(ocr.readLeaveDocument).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(repo.saveOcrResult).toHaveBeenCalledTimes(2));
+  });
+
   it.each(['admin', 'teacher'] as const)('ปฏิเสธ %s แม้มีรหัสนักศึกษา', async (role) => {
     const { service, repo, ocr } = setup();
     const user = { ...student, role };

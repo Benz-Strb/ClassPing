@@ -86,6 +86,7 @@ export class LeaveController {
     @Body('reason') reason: string,
     @UploadedFile() evidence?: LeaveEvidence,
     @Body('documentDetails') rawDetails?: string,
+    @Body('sessionIds') rawSessionIds?: string,
   ) {
     let documentDetails: unknown;
     if (rawDetails !== undefined) {
@@ -93,7 +94,17 @@ export class LeaveController {
       catch { throw new AppError(400, 'BAD_REQUEST', 'ข้อมูลร่างเอกสารไม่ถูกต้อง'); }
       if (documentDetails === null) throw new AppError(400, 'BAD_REQUEST', 'ข้อมูลร่างเอกสารไม่ถูกต้อง');
     }
-    return this.leave.submit(user, sessionId, reason, evidence, documentDetails);
+    let selection: string | string[] = sessionId;
+    if (rawSessionIds !== undefined) {
+      try {
+        const value: unknown = JSON.parse(rawSessionIds);
+        if (!Array.isArray(value)) throw new Error();
+        selection = value;
+      } catch {
+        throw new AppError(400, 'BAD_REQUEST', 'รายการคาบเรียนไม่ถูกต้อง');
+      }
+    }
+    return this.leave.submit(user, selection, reason, evidence, documentDetails);
   }
 
   @Post(':id/review')

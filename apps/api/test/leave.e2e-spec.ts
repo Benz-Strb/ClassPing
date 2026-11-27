@@ -18,6 +18,7 @@ import { PreviewLimitGuard, SubmitLimitGuard } from './../src/leave/preview-limi
 import {
   LEAVE_REPO,
   type LeaveRepo,
+  type LeaveBatchInput,
   type LeaveRequestInput,
   type LeaveRequestView,
   type LeaveSessionOption,
@@ -37,6 +38,14 @@ const SESSION: LeaveSessionOption = {
   endsAt: '2026-10-28T05:00:00.000Z',
   roomName: 'LAB 1',
   cancelled: false,
+};
+
+const NEXT_SESSION: LeaveSessionOption = {
+  ...SESSION,
+  id: '11111111-1111-4111-8111-111111111112',
+  onDate: '2026-10-29',
+  startsAt: '2026-10-29T02:00:00.000Z',
+  endsAt: '2026-10-29T05:00:00.000Z',
 };
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]);
@@ -73,13 +82,21 @@ class MemoryLeaveRepo implements LeaveRepo {
   }
 
   async studentCanRequest(_studentId: string, sessionId: string) {
-    return sessionId === SESSION.id;
+    return sessionId === SESSION.id || sessionId === NEXT_SESSION.id;
   }
 
   async hasActiveRequest(_studentId: string, sessionId: string) {
     return this.requests.some(
       (item) => item.sessionId === sessionId && item.status !== 'rejected',
     );
+  }
+
+  async createBatch(input: LeaveBatchInput) {
+    return Promise.all(input.sessionIds.map(async sessionId => {
+      const request = await this.createRequest({ ...input, sessionId });
+      await this.createAttachment({ ...input, requestId: request.id });
+      return request;
+    }));
   }
 
   async createRequest(input: LeaveRequestInput) {
@@ -95,7 +112,7 @@ class MemoryLeaveRepo implements LeaveRepo {
     this.requests.push({
       id,
       sessionId: input.sessionId,
-      session: SESSION,
+      session: input.sessionId === NEXT_SESSION.id ? NEXT_SESSION : SESSION,
       student: {
         id: input.studentId,
         studentId: '66000001',
@@ -271,6 +288,20 @@ describe('ระบบลา (e2e)', () => {
       .attach('evidence', PNG, { filename: 'ใบรับรองแพทย์.png', contentType: 'image/png' })
       .expect(201);
     expect(repo.requests[0].attachments[0].fileName).toBe('ใบรับรองแพทย์.png');
+  });
+
+  it('ยื่นลาสองวันในคำขอเดียวและปฏิเสธทั้งชุดเมื่อมีคาบซ้ำ', async () => {
+    const submit = () => request(app.getHttpServer()).post('/leave-requests')
+      .set('x-role', 'student').field('sessionIds', JSON.stringify([SESSION.id, NEXT_SESSION.id]))
+      .field('reason', 'ลาป่วย')
+      .attach('evidence', PNG, { filename: 'leave.png', contentType: 'image/png' });
+
+    const response = await submit().expect(201);
+    expect(response.body.data.requestIds).toEqual(repo.requests.map(item => item.id));
+    expect(repo.requests.map(item => item.session.onDate)).toEqual([SESSION.onDate, NEXT_SESSION.onDate]);
+    expect(repo.requests.every(item => item.attachments.length === 1)).toBe(true);
+    await submit().expect(409);
+    expect(repo.requests).toHaveLength(2);
   });
 
   it('ยื่นคาบเดิมซ้ำได้ 409 แต่ยื่นใหม่ได้หลังถูกปฏิเสธ', async () => {

@@ -51,13 +51,17 @@ export function formatLeaveSession(session: LeaveSession) {
 }
 
 export async function submitLeave(
-  sessionId: string,
+  sessionIds: string[],
   reason: string,
   evidenceUri: string,
   documentDetails: DocumentDetails = EMPTY_DOCUMENT_DETAILS,
 ) {
   const form = new FormData();
-  form.append("sessionId", sessionId);
+  if (sessionIds.length === 1) {
+    form.append("sessionId", sessionIds[0]);
+  } else {
+    form.append("sessionIds", JSON.stringify(sessionIds));
+  }
   form.append("reason", reason);
   form.append("documentDetails", JSON.stringify(documentDetails));
   form.append("evidence", new File(evidenceUri));
